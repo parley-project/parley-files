@@ -49,11 +49,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
-import javax.swing.ProgressMonitor;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.FileSourceFilter;
+import us.bringardner.parley.files.FileSourceProgress;
 import us.bringardner.parley.files.FileSourceGroup;
 import us.bringardner.parley.files.FileSourceRandomAccessStream;
 import us.bringardner.parley.files.FileSourceUser;
@@ -991,10 +991,12 @@ public class MemoryFileSource implements FileSource {
 	}
 
 	@Override
-	public FileSource[] listFiles(ProgressMonitor progress) throws IOException {
+	public FileSource[] listFiles(FileSourceProgress progress) throws IOException {
 		// this will be instantaneous so no need for progress monitor
 		FileSource [] ret = listFiles();
-		progress.setProgress(progress.getMaximum());
+		if( progress != null ) {
+			progress.setProgress(progress.getMaximum());
+		}
 		return ret;
 	}
 

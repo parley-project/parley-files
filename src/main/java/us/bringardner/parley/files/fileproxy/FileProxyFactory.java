@@ -29,7 +29,6 @@
  */
 package us.bringardner.parley.files.fileproxy;
 
-import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -151,16 +150,6 @@ public class FileProxyFactory extends FileSourceFactory {
 		// Local FileSource is always connected.
 		return true;
 	}
-
-	/* (non-Javadoc)
-	 * @see us.bringardner.parley.files.FileSourceFactory#getEditPropertiesComponent()
-	 */
-	@Override
-	public Component getEditPropertiesComponent() {
-		// No properties are required
-		return null;
-	}
-
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSourceFactory#setProperties(java.net.URL)

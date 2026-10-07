@@ -38,7 +38,6 @@ import java.net.URL;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
 
-import javax.swing.ProgressMonitor;
 
 
 /**
@@ -490,7 +489,11 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public abstract String getTitle() throws IOException;
 
-	public abstract FileSource[] listFiles(ProgressMonitor progress) throws IOException;
+	/**
+	 * The files in this directory, reporting progress as they're listed.
+	 * @param progress told how far listing has got, and asked whether to stop; may be null
+	 */
+	public abstract FileSource[] listFiles(FileSourceProgress progress) throws IOException;
 
 	public abstract FileSource getLinkedTo() throws IOException;
 

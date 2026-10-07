@@ -29,7 +29,6 @@
  */
 package us.bringardner.parley.files.memory;
 
-import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
@@ -230,15 +229,6 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 	public boolean isConnected() {
 		return connected;
 	}
-
-	/* (non-Javadoc)
-	 * @see us.bringardner.parley.files.FileSourceFactory#getEditPropertiesComponent()
-	 */
-	@Override
-	public Component getEditPropertiesComponent() {
-		return null;
-	}
-
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSourceFactory#setProperties(java.net.URL)
