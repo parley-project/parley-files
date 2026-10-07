@@ -1,4 +1,11 @@
-# BjlFileSystem
+# parley-files
+
+> parley-files is part of **Parley**, a family of Java libraries for implementing internet protocols.
+> It was previously `us.bringardner:bjl_file_system` (BjlFileSystem), with packages under
+> `us.bringardner.io.filesource`. Moving over means changing the dependency, replacing
+> `us.bringardner.io.filesource` with `us.bringardner.parley.files` in imports, and renaming any
+> `META-INF/services/us.bringardner.io.filesource.FileSourceFactory` registration file to
+> `META-INF/services/us.bringardner.parley.files.FileSourceFactory`.
 
 **FileSource** is an interface that looks very much like `java.io.File`, but lets many implementations (local disk, in-memory, FTP, SFTP, a database, …) coexist in one program. Application code works with `FileSource` and doesn't need to know at compile time which kind of file system it's talking to.
 
@@ -13,7 +20,7 @@ The syntax deliberately stays close to `java.io.File`, so moving code between th
 ## Requirements
 
 - Java 11 or later
-- [BjlCore](https://github.com/tony-bringardner/BjlCore) and [BjlIo](https://github.com/tony-bringardner/BjlIo) (pulled in automatically by Maven)
+- [parley-core](https://github.com/tony-bringardner/parley-core) and [parley-io](https://github.com/tony-bringardner/parley-io) (pulled in automatically by Maven)
 
 ## Installation
 
@@ -21,27 +28,27 @@ The artifacts are published to GitHub Packages:
 
 ```xml
 <dependency>
-    <groupId>us.bringardner</groupId>
-    <artifactId>bjl_file_system</artifactId>
+    <groupId>us.bringardner.parley</groupId>
+    <artifactId>parley-files</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
 
-Add the package repositories to your `pom.xml` (BjlCore and BjlIo are published from their own repositories):
+Add the package repositories to your `pom.xml` (parley-core and parley-io are published from their own repositories):
 
 ```xml
 <repositories>
     <repository>
         <id>github</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/BjlFileSystem</url>
+        <url>https://maven.pkg.github.com/tony-bringardner/parley-files</url>
     </repository>
     <repository>
-        <id>github-bjlcore</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/BjlCore</url>
+        <id>github-parley-core</id>
+        <url>https://maven.pkg.github.com/tony-bringardner/parley-core</url>
     </repository>
     <repository>
-        <id>github-bjlio</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/BjlIo</url>
+        <id>github-parley-io</id>
+        <url>https://maven.pkg.github.com/tony-bringardner/parley-io</url>
     </repository>
 </repositories>
 ```
@@ -55,7 +62,7 @@ GitHub Packages requires authentication even for public packages. Create a perso
         <username>YOUR_GITHUB_USERNAME</username>
         <password>YOUR_TOKEN</password>
     </server>
-    <!-- repeat for github-bjlcore and github-bjlio -->
+    <!-- repeat for github-parley-core and github-parley-io -->
 </servers>
 ```
 
@@ -92,7 +99,9 @@ Built in:
 | `fileproxy` | `FileProxyFactory` / `FileProxy` | Local files, backed by `java.io.File` and `java.nio.file`. The default. |
 | `memory` | `MemoryFileSourceFactory` / `MemoryFileSource` | A virtual file system held in memory. Handy for tests. Thread-safe. |
 
-Separate projects, which plug in the same way once they're on the classpath:
+Separate projects, which plug in the same way once they're on the classpath. They are being
+moved to Parley as `parley-files-ftp`, `parley-files-sftp` and `parley-files-jdbc`; the versions below
+still work with `bjl_file_system`:
 
 | Project | Artifact | What it is |
 |---|---|---|
@@ -171,7 +180,7 @@ For remote file systems the lookup service only knows the connected user and tha
 
 1. Implement `FileSource` for your storage, and extend `FileSourceFactory`. The factory's `getTypeId()` is the id used in URLs and `getFileSourceFactory(...)`. The factory needs a public no-argument constructor.
 2. If you support random access, return a `FileSourceRandomAccessStream` from `getRandomAccessStream(mode)`. For remote storage, `AbstractRandomAccessIoController` handles chunked reads and writes for you.
-3. Register the factory in `META-INF/services/us.bringardner.io.filesource.FileSourceFactory` (see [`resources/META-INF/services`](resources/META-INF/services) in this project):
+3. Register the factory in `META-INF/services/us.bringardner.parley.files.FileSourceFactory` (see [`resources/META-INF/services`](resources/META-INF/services) in this project):
 
    ```
    com.example.MyFileSourceFactory

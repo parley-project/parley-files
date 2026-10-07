@@ -27,7 +27,7 @@
 
 	<!-- The default factory is a deliberately shared, replaceable setting. -->
 	<Match>
-		<Class name="us.bringardner.io.filesource.FileSourceFactory"/>
+		<Class name="us.bringardner.parley.files.FileSourceFactory"/>
 		<Method name="setDefaultFactory"/>
 		<Bug pattern="EI_EXPOSE_STATIC_REP2"/>
 	</Match>
@@ -38,7 +38,7 @@
 	  on purpose.
 	-->
 	<Match>
-		<Class name="us.bringardner.io.filesource.java.file.FileSourceFileSystemProvider"/>
+		<Class name="us.bringardner.parley.files.java.file.FileSourceFileSystemProvider"/>
 		<Or>
 			<Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
 			<Bug pattern="MS_EXPOSE_REP"/>
@@ -47,7 +47,7 @@
 
 	<!-- "/" is the root of every Unix-like file system, not a configurable location. -->
 	<Match>
-		<Class name="us.bringardner.io.filesource.fileproxy.FileProxyFactory"/>
+		<Class name="us.bringardner.parley.files.fileproxy.FileProxyFactory"/>
 		<Method name="listRoots"/>
 		<Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
 	</Match>
@@ -59,11 +59,11 @@
 	<Match>
 		<Or>
 			<And>
-				<Class name="us.bringardner.io.filesource.AbstractRandomAccessIoController"/>
+				<Class name="us.bringardner.parley.files.AbstractRandomAccessIoController"/>
 				<Field name="factory"/>
 			</And>
 			<And>
-				<Class name="us.bringardner.io.filesource.AbstractRandomAccessStream"/>
+				<Class name="us.bringardner.parley.files.AbstractRandomAccessStream"/>
 				<Field name="file"/>
 			</And>
 		</Or>
@@ -75,7 +75,7 @@
 	  means "look it up again", so nothing needs restoring.
 	-->
 	<Match>
-		<Class name="us.bringardner.io.filesource.fileproxy.FileProxy"/>
+		<Class name="us.bringardner.parley.files.fileproxy.FileProxy"/>
 		<Bug pattern="SE_TRANSIENT_FIELD_NOT_RESTORED"/>
 	</Match>
 </FindBugsFilter>
