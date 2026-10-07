@@ -700,6 +700,8 @@ public class Terminal extends BaseThread {
 							props.remove("Name");
 							String os = System.getProperty("os.name").toLowerCase();
 							if( !headless && (os.contains("mac") || os.contains("win"))) {
+								// the dialog starts from these values and leaves what was entered in the factory
+								tmp.setConnectionProperties(props);
 								FactoryPropertiesDialog dialog = new FactoryPropertiesDialog();
 								dialog.showDialog(tmp);
 								if( dialog.isCancel()) {
@@ -707,10 +709,11 @@ public class Terminal extends BaseThread {
 									return;
 								} 
 								tmp = dialog.getFactory();
+								props = tmp.getConnectProperties();
 							} else {
 
 								CommandLinePropertyEditor editor = new CommandLinePropertyEditor();
-								if( !editor.editProperties(name,props) ) {
+								if( !editor.editProperties(name,props,tmp.getConnectionSettings()) ) {
 									out.writeLine("Connect canceled by user");
 									return;
 								}

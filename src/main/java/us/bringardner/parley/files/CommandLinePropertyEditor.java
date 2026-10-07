@@ -26,7 +26,7 @@
 package us.bringardner.parley.files;
 
 import java.io.IOException;
-import java.util.Enumeration;
+import java.util.List;
 import java.util.Properties;
 
 import us.bringardner.parley.io.ILineReader;
@@ -64,68 +64,85 @@ public class CommandLinePropertyEditor {
 		this.out = out;
 	}
 
+	/**
+	 * Asks for each property in turn (they're described as text, or secrets by their names).
+	 * @return true if the user accepted the values (props1 then holds them); false if canceled
+	 */
 	public  boolean editProperties(String name1, Properties props1) throws IOException {
+		return editProperties(name1, props1, ConnectionSettings.describe(props1, null, FileSourceFactory::looksLikeSecret));
+	}
 
-		boolean cancel = false;
-		boolean accepted=false;
-		Properties props2 = new Properties();
-		for (Enumeration<?> e = props1.propertyNames(); e.hasMoreElements(); )   {
-			String key = (String)e.nextElement();
-			String value = props1.getProperty( key );
-			props2.setProperty(key, value);
-		}		
+	/**
+	 * Asks for each setting that applies, in turn, until the user enters 'ok' or 'done'
+	 * (accepted if the values are valid) or 'cancel' or 'exit'. Secrets are never shown.
+	 *
+	 * @param name1 a connection name: an empty value falls back to name1.key in props1, then
+	 *        in the system properties
+	 * @param props1 the values to start from; on acceptance, the values entered
+	 * @param settings what to ask for (from {@link FileSourceFactory#getConnectionSettings()})
+	 * @return true if accepted
+	 */
+	public  boolean editProperties(String name1, Properties props1, List<ConnectionSetting> settings) throws IOException {
 
-		out.writeLine("There are "+props1.size()+" Connection properties. ");
-		out.writeLine("Enter 'ok' or 'done' to when you are done editing.");
-		
-
-		while(!accepted && !cancel ) {
-			for(Object key : props2.keySet()) {
-				String name = key.toString();
-				String val = props2.getProperty(name);
+		Properties values = new Properties();
+		values.putAll(props1);
+		for(ConnectionSetting s : settings) {
+			String val = values.getProperty(s.key());
+			if( val == null || val.isEmpty()) {
+				val = props1.getProperty(name1+"."+s.key());
 				if( val == null || val.isEmpty()) {
-					val = props2.getProperty(name1+"."+name);
-					if( val == null || val.isEmpty()) {
-						val = System.getProperty(name1+"."+name);
-						if( val == null ) {
-							val = "";
-						}
+					val = System.getProperty(name1+"."+s.key());
+				}
+			}
+			values.setProperty(s.key(), val == null || val.isEmpty() ? s.defaultValue() : val);
+		}
+
+		out.writeLine("There are "+settings.size()+" connection settings.");
+		out.writeLine("Press enter to keep a value. Enter 'ok' or 'done' when you are done editing, 'cancel' to stop.");
+
+		while(true) {
+			for(ConnectionSetting s : settings) {
+				if( !ConnectionSettings.isVisible(s, settings, values)) {
+					continue;
+				}
+				String val = values.getProperty(s.key(), "");
+				String shown = s.isSecret() ? (val.isEmpty() ? "not set" : "set") : "'"+val+"'";
+				String prompt = "Enter "+s.label()
+					+(s.kind() == ConnectionSetting.Kind.CHOICE ? " ("+String.join(", ", s.choices())+")" : "")
+					+(s.description().isEmpty() ? "" : " - "+s.description())
+					+" or enter to keep "+shown;
+
+				while(true) {
+					out.writeLine(prompt);
+					String line = in.readLine();
+					if( line == null ) {
+						line = "exit";
 					}
-				}
-
-				out.writeLine("Enter value for "+name+" or enter to keep '" +val+"'");
-
-				String line = in.readLine();
-				if( line == null ) {
-					line = "exit";
-				}
-				
-				if( line.isEmpty()) {
-					line = val;
-				}
-				line = line.trim();
-				if( "cancel".equals(line) || "exit".equals(line)) {
-					cancel=true;
+					String cmd = line.trim();
+					if( "cancel".equals(cmd) || "exit".equals(cmd)) {
+						return false;
+					} else if( "done".equals(cmd) || "ok".equals(cmd)) {
+						List<String> problems = ConnectionSettings.validate(settings, values);
+						if( problems.isEmpty()) {
+							props1.putAll(ConnectionSettings.forConnect(settings, values));
+							return true;
+						}
+						for(String p : problems) {
+							out.writeLine(p);
+						}
+						continue;
+					}
+					String value = line.isEmpty() ? val : (s.kind() == ConnectionSetting.Kind.MULTILINE_SECRET ? line : cmd);
+					String problem = s.check(value);
+					if( problem != null ) {
+						out.writeLine(problem);
+						continue;
+					}
+					values.setProperty(s.key(), value);
 					break;
-				} else if( "done".equals(line) || "ok".equals(line)) {
-					accepted=true;
-					break;
-				} else {
-					props2.setProperty(name, line);
 				}
 			}
-
 		}
-
-		if( accepted) {
-			for (Enumeration<?> e = props1.propertyNames(); e.hasMoreElements(); )   {
-				String key = (String)e.nextElement();
-				String value = props2.getProperty( key );
-				props1.setProperty(key, value);
-			}
-		}
-
-		return accepted;
 	}
 
 	public static void main(String[] args) {

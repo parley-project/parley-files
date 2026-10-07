@@ -32,11 +32,7 @@
 package us.bringardner.parley.files;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
-import java.awt.Container;
 import java.awt.Cursor;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
@@ -44,8 +40,8 @@ import java.util.List;
 import java.util.Properties;
 
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -57,19 +53,17 @@ import javax.swing.SwingUtilities;
 public class FactoryPropertiesDialog extends javax.swing.JDialog {
 
 	private static final long serialVersionUID = 1L;
-	private boolean cancel;
+	private volatile boolean cancel;
 	private FileSourceFactory factory;
-	private Component edit;
-	private boolean testing;
+	private final ConnectionSettingsPanel settingsPanel = new ConnectionSettingsPanel();
+	private volatile boolean testing;
 	private boolean accepted;
-	private javax.swing.JButton cancelButton;
-	private javax.swing.JPanel centerPanel;
-	private javax.swing.JLabel jLabel1;
-	private javax.swing.JButton okButton;
-	private javax.swing.JPanel southPanel;
-	private javax.swing.JButton testButton;
-	private JPanel northPanel;
+	private JButton cancelButton;
+	private JButton okButton;
+	private JButton testButton;
 	private JComboBox<String> comboBox;
+	// true while the combo box is set from code, so it doesn't replace the factory
+	private boolean settingCombo;
 
 	
 	/** Creates new form ConnectioinPropertiesDialog */
@@ -95,67 +89,37 @@ public class FactoryPropertiesDialog extends javax.swing.JDialog {
 
 	private void initComponents() {
 
-		southPanel = new javax.swing.JPanel();
-		testButton = new javax.swing.JButton();
-		okButton = new javax.swing.JButton();
-		cancelButton = new javax.swing.JButton();
-		centerPanel = new javax.swing.JPanel();
-		jLabel1 = new JLabel();
+		JPanel southPanel = new JPanel();
+		testButton = new JButton("Test Connection");
+		okButton = new JButton("OK");
+		cancelButton = new JButton("Cancel");
 
 		setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
 
-		testButton.setText("Test Connection");
-		testButton.addActionListener(new java.awt.event.ActionListener() {
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				testButtonActionPerformed(evt);
-			}
-		});
+		testButton.addActionListener(e->testButtonActionPerformed());
 		southPanel.add(testButton);
-
-		okButton.setText("OK");
-		okButton.addActionListener(new java.awt.event.ActionListener() {
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				okButtonActionPerformed(evt);
-			}
-		});
+		okButton.addActionListener(e->okButtonActionPerformed());
 		southPanel.add(okButton);
-
-		cancelButton.setText("Cancel");
-		cancelButton.addActionListener(new java.awt.event.ActionListener() {
-			public void actionPerformed(java.awt.event.ActionEvent evt) {
-				cancelButtonActionPerformed(evt);
-			}
-		});
+		cancelButton.addActionListener(e->cancelButtonActionPerformed());
 		southPanel.add(cancelButton);
+		getContentPane().add(southPanel, BorderLayout.SOUTH);
 
-		getContentPane().add(southPanel, java.awt.BorderLayout.SOUTH);
+		getContentPane().add(settingsPanel, BorderLayout.CENTER);
 
-		centerPanel.setLayout(null);
-
-		jLabel1.setText("There are no connection properties for the FileSource Factory.");
-		centerPanel.add(jLabel1);
-		jLabel1.setBounds(70, 120, 325, 16);
-
-		getContentPane().add(centerPanel, java.awt.BorderLayout.CENTER);
-
-		northPanel = new JPanel();
+		JPanel northPanel = new JPanel();
 		getContentPane().add(northPanel, BorderLayout.NORTH);
 		northPanel.setLayout(new BorderLayout(0, 0));
 
 		comboBox = new JComboBox<String>();
-
 		comboBox.setModel(new DefaultComboBoxModel<String>(getFactories()));
-		comboBox.addActionListener(new ActionListener() {
-
-			@Override
-			public void actionPerformed(ActionEvent e) {				
+		comboBox.addActionListener(e->{
+			if( !settingCombo ) {
 				setFactory(FileSourceFactory.getFileSourceFactory(comboBox.getSelectedItem().toString()));
 			}
 		});
-
-
 		northPanel.add(comboBox, BorderLayout.WEST);
 
+		getRootPane().setDefaultButton(okButton);
 		pack();
 	}
 
@@ -180,138 +144,97 @@ public class FactoryPropertiesDialog extends javax.swing.JDialog {
 		return list.toArray(new String[list.size()]);
 	}
 
+	/** True if the values are usable; otherwise tells the user what's wrong. */
+	private boolean checkValues() {
+		List<String> problems = new ArrayList<>(settingsPanel.validateValues());
+		if( problems.isEmpty()) {
+			problems.addAll(factory.validateConnection(settingsPanel.getProperties()));
+		}
+		if( !problems.isEmpty()) {
+			JOptionPane.showMessageDialog(this, String.join("\n", problems), "Check the settings", JOptionPane.WARNING_MESSAGE);
+			return false;
+		}
+		return true;
+	}
 
-
-	private void testButtonActionPerformed(java.awt.event.ActionEvent evt) {
-		if( !testing ) {
-			if (edit instanceof IConnectionPropertiesEditor) {
-				IConnectionPropertiesEditor tmp = (IConnectionPropertiesEditor) edit;
-
-				testConnect(tmp.getProperties(),new Runnable() {
-
-					@Override
-					public void run() {
-						JOptionPane.showMessageDialog(FactoryPropertiesDialog.this, "Connected to "+factory.getTitle(), "", JOptionPane.INFORMATION_MESSAGE);
-					}
-				}, new Runnable() {
-
-					@Override
-					public void run() {
-						JOptionPane.showMessageDialog(FactoryPropertiesDialog.this, "Could not connect to "+factory.getTitle(),"", JOptionPane.ERROR_MESSAGE);
-
-					}
-				});
-			}
+	private void testButtonActionPerformed() {
+		if( !testing && checkValues()) {
+			testConnect(settingsPanel.getProperties(),
+					()->JOptionPane.showMessageDialog(this, "Connected to "+factory.getTitle(), "", JOptionPane.INFORMATION_MESSAGE),
+					()->JOptionPane.showMessageDialog(this, "Could not connect to "+factory.getTitle(),"", JOptionPane.ERROR_MESSAGE));
 		}
 	}
 
+	/** Connects in the background; ok or failed then runs on the event thread. */
 	private synchronized void testConnect(final Properties properties, final Runnable ok, final Runnable failed)  {
 		testing = true;
-		final Cursor cuurent = getCursor();
+		final Cursor current = getCursor();
 		setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-		new Thread(new Runnable() {
-
-			@Override
-			public void run() {
-
-				try {
-					if( factory.connect(properties)) {
-						factory.listRoots();
-						if( ok != null && !isCancel()) {
-							ok.run();
-						}
-					} else {
-						factory.disConnect();
-						if( failed != null && !isCancel()) {
-							failed.run();
-						}
-					}
-				}  catch (Exception e) {
-					if( !isCancel()) {
-						JOptionPane.showMessageDialog(FactoryPropertiesDialog.this, "Error:"+e, "Could not connect", JOptionPane.ERROR_MESSAGE);
-					}
-				}	
-
-				SwingUtilities.invokeLater(new Runnable() {
-
-					@Override
-					public void run() {
-						setCursor(cuurent);
-					}
-				});
-
-				testing = false;
+		new Thread(()->{
+			Runnable result;
+			try {
+				if( factory.connect(properties)) {
+					factory.listRoots();
+					result = ok;
+				} else {
+					factory.disConnect();
+					result = failed;
+				}
+			}  catch (Exception e) {
+				result = ()->JOptionPane.showMessageDialog(FactoryPropertiesDialog.this, "Error:"+e, "Could not connect", JOptionPane.ERROR_MESSAGE);
 			}
-		}).start();
-
+			Runnable r = result;
+			SwingUtilities.invokeLater(()->{
+				setCursor(current);
+				testing = false;
+				if( r != null && !isCancel()) {
+					r.run();
+				}
+			});
+		}, "Connect "+factory.getTypeId()).start();
 	}
 
 
 
-	private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {
+	private void cancelButtonActionPerformed() {
 		this.cancel = true;
 		dispose();
 	}
 
-	private void okButtonActionPerformed(java.awt.event.ActionEvent evt) {
-		if( !testing ) {
-			
-			if (edit instanceof IConnectionPropertiesEditor) {
-				IConnectionPropertiesEditor tmp = (IConnectionPropertiesEditor) edit;
-				testConnect(tmp.getProperties(),new Runnable() {
-
-					@Override
-					public void run() {
-						accepted = true;
-						dispose();
-					}
-				}, new Runnable() {
-
-					@Override
-					public void run() {
-						JOptionPane.showMessageDialog(FactoryPropertiesDialog.this, "Could not connect to "+factory.getTitle(),"", JOptionPane.ERROR_MESSAGE);
-					}
-				});
-
-			} else {
+	private void okButtonActionPerformed() {
+		if( !testing && checkValues()) {
+			testConnect(settingsPanel.getProperties(), ()->{
 				accepted = true;
 				dispose();
-			}
+			}, ()->JOptionPane.showMessageDialog(this, "Could not connect to "+factory.getTitle(),"", JOptionPane.ERROR_MESSAGE));
 		}
 	}
 
 
 	public void setFactory(FileSourceFactory factory) {
 		this.factory = factory;
-		Container content = getContentPane();
-
-		if( edit != null ) {
-			content.remove(edit);
-		} else {
-			content.remove(centerPanel);	
+		settingCombo = true;
+		try {
+			comboBox.setSelectedItem(factory.getTypeId());
+		} finally {
+			settingCombo = false;
 		}
-		edit = factory.getEditPropertiesComponent();
-
-		if (edit == null) {
-			PropertyPanel p = new PropertyPanel();
-			p.setProperties(factory);
-			edit = p;
-		}
-		content.add(edit, java.awt.BorderLayout.CENTER);
+		settingsPanel.setFactory(factory);
 		pack();
-		invalidate();
-
 	}
 
 	public void showDialog() {
 		showDialog(null);
 	}
-	
+
+	/** @param factory the factory to edit (with its current settings), or null to start with the first type */
 	public void showDialog(FileSourceFactory factory) {
-		this.factory = factory;
 		setLocationRelativeTo(null);
-		String[] fids = getFactories();
-		setFactory(FileSourceFactory.getFileSourceFactory(fids[0]));
+		if( factory == null ) {
+			String[] fids = getFactories();
+			factory = FileSourceFactory.getFileSourceFactory(fids[0]);
+		}
+		setFactory(factory);
 
 		addWindowListener(new WindowAdapter() {
 			@Override
@@ -325,11 +248,7 @@ public class FactoryPropertiesDialog extends javax.swing.JDialog {
 		});
 		setVisible(true);
 		if(!cancel) {
-			if (edit instanceof IConnectionPropertiesEditor) {
-				IConnectionPropertiesEditor tmp = (IConnectionPropertiesEditor) edit;
-				Properties prop = tmp.getProperties();
-				factory.setConnectionProperties(prop);
-			}
+			this.factory.setConnectionProperties(settingsPanel.getProperties());
 		}
 	}
 

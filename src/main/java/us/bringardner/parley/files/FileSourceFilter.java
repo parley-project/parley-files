@@ -29,7 +29,6 @@
  */
 package us.bringardner.parley.files;
 
-import javax.swing.filechooser.FileView;
 
 /**
  * @author Tony Bringardner
@@ -56,7 +55,7 @@ public interface FileSourceFilter {
      * when the filter is shown in a chooser.
      *
      * @return the description of this filter; "Filtered files" by default
-     * @see FileView#getName
+     * @see javax.swing.filechooser.FileView#getName
      */
     default String getDescription() {
         return "Filtered files";

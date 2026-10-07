@@ -29,7 +29,6 @@
  */
 package us.bringardner.parley.files;
 
-import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -687,10 +686,26 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	protected abstract boolean connectImpl() throws IOException;
 
 	/**
-	 * 
-	 * @return Component to edit connection properties or null if no properties are required.
+	 * The settings a connection needs, in the order a form shows them, so any UI (Swing,
+	 * JavaFX, a terminal) can ask for them. The default describes each of
+	 * {@link #getConnectProperties()} as text, or as a secret if {@link #isSecretProperty(String)}
+	 * says so, labelled without this factory's type id; factories override it to give labels,
+	 * defaults, numbers, choices and so on.
+	 *
+	 * @return the settings; empty if none are needed
 	 */
-	public abstract Component getEditPropertiesComponent();
+	public List<ConnectionSetting> getConnectionSettings() {
+		return ConnectionSettings.describe(getConnectProperties(), getTypeId(), this::isSecretProperty);
+	}
+
+	/**
+	 * What's wrong with these connection properties, checked before connecting: one message
+	 * per problem ("Port must be a whole number"), empty if there's none. The default checks
+	 * them against {@link #getConnectionSettings()}.
+	 */
+	public List<String> validateConnection(Properties properties) {
+		return ConnectionSettings.validate(getConnectionSettings(), properties);
+	}
 
 	/**
 	 * Disconnect from a remote FileSource
