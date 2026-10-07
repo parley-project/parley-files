@@ -17,4 +17,4 @@
 ## under the License.
 ##
 
-us.bringardner.io.filesource.java.file.FileSourceFileSystemProvider
+us.bringardner.parley.files.java.file.FileSourceFileSystemProvider
