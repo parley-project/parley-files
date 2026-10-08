@@ -16,7 +16,10 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
   `META-INF/services/us.bringardner.parley.files.FileSourceFactory`.
 - Module name (`Automatic-Module-Name`): `us.bringardner.parley.files` (none was set before).
 - Property names that start with a class name change with the package.
-- Dependencies: `bjl_core` and `bjl_io` are now `parley-core` and `parley-io`.
+- Dependencies: `bjl_core` and `bjl_io` are now `parley-core` and `parley-io`. parley-files also
+  depends on `us.bringardner:swing-widgets`: `RecentFileMenu` now extends its generic
+  `RecentItemsMenu`. Its public methods are unchanged, and it saves to the same preferences, so
+  existing recent lists carry over. The "Max Files" dialog's title is now "Max Items".
 - The `filesource:` URL handler moves to `us.bringardner.parley.files.filesource.Handler`. The JDK
   finds URL handlers as `<prefix>.<protocol>.Handler`, so it has to live in a package named
   `filesource`; one prefix, `us.bringardner.parley.files`, now finds it and the per-factory handlers
