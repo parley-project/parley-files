@@ -25,7 +25,6 @@
  */
 package us.bringardner.parley.files;
 
-import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -33,7 +32,6 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -45,15 +43,15 @@ import java.util.prefs.Preferences;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import javax.swing.JMenu;
-import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPasswordField;
 
 import us.bringardner.parley.files.fileproxy.FileProxyFactory;
+import us.bringardner.swing.menu.RecentItemsMenu;
 
 /**
- * A "Recent Files" menu, saved with java.util.prefs.Preferences.
+ * A "Recent Files" menu, saved with java.util.prefs.Preferences. The menu itself is
+ * swing-widgets' {@link RecentItemsMenu}; this class adds what is particular to file sources.
  * <p>
  * Each entry keeps its factory's connection properties so it can be reopened,
  * but secret values (the factory decides which, see
@@ -66,7 +64,7 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
  * derived from the user name and a fixed IV, which anyone could reverse. That list
  * is read once, saved again without its secrets, and removed.
  */
-public class RecentFileMenu extends JMenu {
+public class RecentFileMenu extends RecentItemsMenu<RecentFileMenu.ListEntry> {
 
 	/** Asks for the value of a secret connection property; returns null to cancel. */
 	@FunctionalInterface
@@ -85,8 +83,8 @@ public class RecentFileMenu extends JMenu {
 	/** Where 1.0.1 and earlier kept the encrypted list; migrated, then removed. */
 	public static final String PREF_LEGACY_RECENT_LIST = "RecentList";
 	/** The list: one entry per line, secret values left out. */
-	public static final String PREF_RECENT_LIST = "RecentFiles";
-	public static final String PREF_MAX_FILES = "MaxRecentFiles";
+	public static final String PREF_RECENT_LIST = RecentItemsMenu.PREF_RECENT_LIST;
+	public static final String PREF_MAX_FILES = RecentItemsMenu.PREF_MAX_ITEMS;
 
 	public static class ListEntry {
 		public String id;
@@ -283,9 +281,18 @@ public class RecentFileMenu extends JMenu {
 		}
 	}
 
-	private final Preferences prefs;
-	private List<ListEntry> recentFiles;
-	private int maxFiles = -1;
+	private static final Codec<ListEntry> CODEC = new Codec<ListEntry>() {
+		@Override
+		public String encode(ListEntry entry) {
+			return entry.toString();
+		}
+
+		@Override
+		public ListEntry decode(String line) {
+			return new ListEntry(line);
+		}
+	};
+
 	private SecretPrompter secretPrompter = this::askForSecret;
 
 	/**
@@ -301,9 +308,7 @@ public class RecentFileMenu extends JMenu {
 
 	/** Saves the list in the given preferences node. */
 	public RecentFileMenu(Preferences prefs) throws IOException {
-		super("Recent Files");
-		this.prefs = Objects.requireNonNull(prefs, "prefs");
-		buildRecentMenu();
+		super("Recent Files", migrateLegacyList(prefs), CODEC);
 	}
 
 	/** Sets how secrets are asked for; null restores the default (a password dialog). */
@@ -313,7 +318,7 @@ public class RecentFileMenu extends JMenu {
 
 	/** @return the entries, newest first, without connecting to anything */
 	public List<ListEntry> getRecentEntries() {
-		return Collections.unmodifiableList(recentFiles);
+		return getItems();
 	}
 
 	/**
@@ -349,8 +354,7 @@ public class RecentFileMenu extends JMenu {
 
 	private String askForSecret(ListEntry entry, String name) {
 		JPasswordField field = new JPasswordField(20);
-		String where = entry.isLocal ? entry.path : entry.id+":"+entry.path;
-		int answer = JOptionPane.showConfirmDialog(this, new Object[] {where, name, field},
+		int answer = JOptionPane.showConfirmDialog(this, new Object[] {getLabel(entry), name, field},
 				"Enter "+name, JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
 		if( answer != JOptionPane.OK_OPTION ) {
 			return null;
@@ -363,45 +367,60 @@ public class RecentFileMenu extends JMenu {
 		}
 	}
 
-	private List<ListEntry> readRecentList() throws IOException {
-		List<ListEntry> ret = parse(prefs.get(PREF_RECENT_LIST, null));
+	/**
+	 * Runs before the list is read: replaces the list 1.0.1 and earlier saved (encrypted,
+	 * secrets included) with one without secrets, and removes it.
+	 */
+	private static Preferences migrateLegacyList(Preferences prefs) throws IOException {
+		Objects.requireNonNull(prefs, "prefs");
 		String legacy = prefs.get(PREF_LEGACY_RECENT_LIST, null);
 		if( legacy != null ) {
-			if( ret.isEmpty() && !legacy.isEmpty() ) {
+			if( prefs.get(PREF_RECENT_LIST, "").isEmpty() && !legacy.isEmpty() ) {
 				try {
-					ret = parse(legacyDecrypt(legacy));
+					prefs.put(PREF_RECENT_LIST, withoutSecrets(legacyDecrypt(legacy)));
 				} catch (GeneralSecurityException | RuntimeException e) {
 					// unreadable (e.g. user.name changed): the old list is dropped
 				}
 			}
 			// save without secrets first, then remove the old value
-			store(ret);
+			flush(prefs);
 			prefs.remove(PREF_LEGACY_RECENT_LIST);
-			flush();
+			flush(prefs);
 		}
 
-		return ret;
+		return prefs;
 	}
 
-	private static List<ListEntry> parse(String text) {
-		List<ListEntry> ret = new ArrayList<>();
-		if( text != null ) {
-			for(String line : text.split(NL)) {
-				if( line.isEmpty() ) {
-					continue;
+	/** Parses an old list and writes it again: ListEntry.toString() leaves the secret values out. */
+	private static String withoutSecrets(String text) {
+		List<ListEntry> list = new ArrayList<>();
+		for(String line : text.split(NL)) {
+			if( line.isEmpty() ) {
+				continue;
+			}
+			try {
+				ListEntry e = new ListEntry(line);
+				if( !list.contains(e) ) {
+					list.add(e);
 				}
-				try {
-					ListEntry e = new ListEntry(line);
-					if( !ret.contains(e) ) {
-						ret.add(e);
-					}
-				} catch (RuntimeException e) {
-					// skip a malformed line rather than lose the list
-				}
+			} catch (RuntimeException e) {
+				// skip a malformed line rather than lose the list
 			}
 		}
+		StringBuilder buf = new StringBuilder();
+		for(ListEntry e : list) {
+			buf.append(e).append(NL);
+		}
 
-		return ret;
+		return buf.toString();
+	}
+
+	private static void flush(Preferences prefs) throws IOException {
+		try {
+			prefs.flush();
+		} catch (BackingStoreException e) {
+			throw new IOException("Can't save preferences", e);
+		}
 	}
 
 	/** Reads the list 1.0.1 and earlier saved (AES/CBC, key = SHA-256 of user.name, fixed IV). Migration only. */
@@ -420,7 +439,7 @@ public class RecentFileMenu extends JMenu {
 	 */
 	public List<FileSource> getRecentFiles() throws IOException {
 		List<FileSource> ret = new ArrayList<>();
-		for(ListEntry e : new ArrayList<>(recentFiles)) {
+		for(ListEntry e : new ArrayList<>(getItems())) {
 			FileSource file = openEntry(e);
 			if( file != null ) {
 				ret.add(file);
@@ -432,93 +451,34 @@ public class RecentFileMenu extends JMenu {
 	public void setRecentFiles(List<FileSource> list) throws IOException {
 		List<ListEntry> ret = new ArrayList<>();
 		for(FileSource file : list) {
-			ListEntry e = new ListEntry(file);
-			if( !ret.contains(e) ) {
-				ret.add(e);
-			}
+			ret.add(new ListEntry(file));
 		}
-		recentFiles = ret;
-		store(recentFiles);
-		buildRecentMenu();
+		setItems(ret);
 	}
 
 	public void setMaxFiles(int maxRecent) throws IOException {
-		maxFiles = maxRecent;
-		prefs.putInt(PREF_MAX_FILES, maxRecent);
-		flush();
+		setMaxItems(maxRecent);
 	}
 
-	private void store(List<ListEntry> list) throws IOException {
-		StringBuilder buf = new StringBuilder();
-		for(ListEntry e : list) {
-			String line = e.toString()+NL;
-			// a preference value is limited in length; the oldest entries that don't fit are dropped
-			if( buf.length()+line.length() > Preferences.MAX_VALUE_LENGTH ) {
-				break;
-			}
-			buf.append(line);
-		}
-		prefs.put(PREF_RECENT_LIST, buf.toString());
-		flush();
+	public int getMaxFiles() {
+		return getMaxItems();
 	}
 
-	private void flush() throws IOException {
-		try {
-			prefs.flush();
-		} catch (BackingStoreException e) {
-			throw new IOException("Can't save preferences", e);
-		}
+	public void addRecent(FileSource file) throws IOException {
+		addItem(new ListEntry(file));
 	}
 
-	private void buildRecentMenu() throws IOException {
-
-		removeAll();
-		final int mx = getMaxFiles();
-		JMenuItem item = new JMenuItem("Max Files:"+mx);
-		item.addActionListener((e)->{
-			String tmp = JOptionPane.showInputDialog("Max Files", mx);
-			if( tmp != null ) {
-				try {
-					setMaxFiles(Integer.parseInt(tmp.trim()));
-					buildRecentMenu();
-				} catch (NumberFormatException e2) {
-					// not a number: unchanged
-				} catch (IOException e2) {
-					showError("Can't save the maximum", e2);
-				}
-			}
-		});
-		add(item);
-		item = new JMenuItem("Clear Recent List");
-		item.addActionListener((e)->{
-			try {
-				setRecentFiles(new ArrayList<FileSource>());
-			} catch (IOException e1) {
-				showError("Can't clear the recent list",e1);
-			}
-		});
-		add(item);
-
-		if( recentFiles == null ) {
-			recentFiles = readRecentList();
-		}
-
-		// Local files that are gone are dropped. Remote entries aren't checked: that
-		// would connect to every server (and ask for passwords) just to draw the menu.
-		boolean changed = recentFiles.removeIf(RecentFileMenu::isMissingLocalFile);
-
-		for(ListEntry entry : recentFiles) {
-			item = new JMenuItem(entry.isLocal ? entry.path : entry.id+":"+entry.path);
-			item.addActionListener((e)->open(entry, e));
-			add(item);
-		}
-
-		if( changed ) {
-			store(recentFiles);
-		}
+	@Override
+	protected String getLabel(ListEntry entry) {
+		return entry.isLocal ? entry.path : entry.id+":"+entry.path;
 	}
 
-	private static boolean isMissingLocalFile(ListEntry entry) {
+	/**
+	 * Local files that are gone are dropped. Remote entries aren't checked: that
+	 * would connect to every server (and ask for passwords) just to draw the menu.
+	 */
+	@Override
+	protected boolean isStale(ListEntry entry) {
 		if( !entry.isLocal ) {
 			return false;
 		}
@@ -529,55 +489,21 @@ public class RecentFileMenu extends JMenu {
 		}
 	}
 
-	private void open(ListEntry entry, ActionEvent e) {
-		FileSource file;
-		try {
-			file = openEntry(entry);
-		} catch (IOException e1) {
-			showError("Can't open "+entry.path, e1);
-			return;
-		}
-		if( file == null ) {
-			return;
-		}
-		try {
-			addRecent(file);
-		} catch (IOException e1) {
-			showError("Can't save the recent list", e1);
-		}
-		e.setSource(file);
-		for(java.awt.event.ActionListener l : getActionListeners()) {
-			l.actionPerformed(e);
-		}
+	/** Keeps the secrets entered this session for the entry being replaced. */
+	@Override
+	protected ListEntry merge(ListEntry newer, ListEntry older) {
+		newer.keepSecretsFrom(older);
+		return newer;
 	}
 
-	private void showError(String string, Exception e1) {
-		JOptionPane.showMessageDialog(this, e1, string, JOptionPane.ERROR_MESSAGE);
+	/** Asks for missing secrets and connects; the event's source is the FileSource. */
+	@Override
+	protected Object openItem(ListEntry entry) throws IOException {
+		return openEntry(entry);
 	}
 
-	public void addRecent(FileSource file) throws IOException {
-		ListEntry entry = new ListEntry(file);
-		int idx = recentFiles.indexOf(entry);
-		if( idx >=0 ) {
-			entry.keepSecretsFrom(recentFiles.remove(idx));
-		}
-		recentFiles.add(0, entry);
-
-		int mx = getMaxFiles();
-
-		while(recentFiles.size()>mx && !recentFiles.isEmpty()) {
-			recentFiles.remove(recentFiles.size()-1);
-		}
-
-		store(recentFiles);
-		buildRecentMenu();
+	@Override
+	protected String getMaxItemsText(int max) {
+		return "Max Files:"+max;
 	}
-
-	public int getMaxFiles() {
-		if( maxFiles < 0 ) {
-			maxFiles = prefs.getInt(PREF_MAX_FILES, 10);
-		}
-		return maxFiles;
-	}
-
 }
