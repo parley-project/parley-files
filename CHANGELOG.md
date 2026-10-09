@@ -19,7 +19,7 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
 - Dependencies: `bjl_core` and `bjl_io` are now `parley-core` and `parley-io`.
 - The Swing user interface is a separate module, **parley-files-swing**, in the package
   `us.bringardner.parley.files.swing`, so parley-files no longer needs Swing or
-  `us.bringardner:swing-widgets`. It holds `FileSourceChooserDialog`, `ConnectionSettingsPanel`,
+  `us.bringardner:bringardner-swing-widgets`. It holds `FileSourceChooserDialog`, `ConnectionSettingsPanel`,
   `FactoryPropertiesDialog`, `RecentFileMenu`, `BackupDialog`, `FileSourceExamineDialog`,
   `FileSourceTransferable` and `ProgressMonitorProgress`. Add a dependency on parley-files-swing
   and change the imports.
