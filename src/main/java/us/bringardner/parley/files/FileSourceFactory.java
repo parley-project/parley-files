@@ -566,7 +566,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	/**
 	 * Whether the named connection property holds a secret (a password, a private key...).
 	 * Secrets are masked when edited, left out of session keys and never saved by
-	 * parley-files-swing's {@code RecentFileMenu}. A factory with secrets should override this to name them
+	 * recent files lists ({@link us.bringardner.parley.files.browse.RecentFile}). A factory with secrets should override this to name them
 	 * exactly; the default guesses from the name with {@link #looksLikeSecret(String)}.
 	 *
 	 * @param name a property name from {@link #getConnectProperties()}

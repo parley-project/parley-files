@@ -56,4 +56,9 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
   remote file system on every repaint), `DirectoryListing` (listing with progress and cancel, sort
   orders, hidden files, which entries can be picked for a `SelectionMode` and filter, a directory's
   ancestors) and `NavigationHistory` (back and forward). parley-files-fx is built on it.
+- `browse.RecentFile`: an entry in a recent files list, the UI-free part of parley-files-swing's and
+  parley-files-fx's `RecentFileMenu`: the saved form (secret values never saved), asking for
+  secrets and connecting (`open`, or `fillMissingSecrets` then `getFile` for a UI that connects in
+  the background), the label, dropping local files that are gone, and migrating the encrypted list
+  1.0.1 and earlier saved (`migrateLegacyList`). It was `RecentFileMenu.ListEntry`.
 
