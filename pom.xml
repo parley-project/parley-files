@@ -252,7 +252,7 @@
 		</dependency>
 		<dependency>
 			<groupId>us.bringardner</groupId>
-			<artifactId>swing-widgets</artifactId>
+			<artifactId>bringardner-swing-widgets</artifactId>
 			<!-- RecentFileMenu is built on its RecentItemsMenu -->
 			<version>1.0.0-SNAPSHOT</version>
 		</dependency>
