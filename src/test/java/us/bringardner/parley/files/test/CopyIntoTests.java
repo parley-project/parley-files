@@ -15,7 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import us.bringardner.parley.files.FileSource;
-import us.bringardner.parley.files.FileSourceChooserDialog;
+import us.bringardner.parley.files.browse.FileCopy;
 import us.bringardner.parley.files.memory.MemoryFileSourceFactory;
 
 /** BJL-24: copying a dropped or pasted file into a folder. */
@@ -52,44 +52,44 @@ public class CopyIntoTests {
 
 	@Test
 	public void aFileIsCopied() throws IOException {
-		assertEquals("/dst/a.txt", FileSourceChooserDialog.copyInto(at("/dst"), at("/src/a.txt")).getAbsolutePath());
+		assertEquals("/dst/a.txt", FileCopy.copyInto(at("/dst"), at("/src/a.txt")).getAbsolutePath());
 		assertEquals("A", read("/dst/a.txt"));
 		assertEquals("A", read("/src/a.txt"));
 	}
 
 	@Test
 	public void aFolderIsCopiedWithEverythingInIt() throws IOException {
-		FileSourceChooserDialog.copyInto(at("/dst"), at("/src/tree"));
+		FileCopy.copyInto(at("/dst"), at("/src/tree"));
 		assertEquals("C", read("/dst/tree/inner/c.txt"));
 	}
 
 	@Test
 	public void aFileAlreadyThereIsLeftAlone() throws IOException {
-		assertNull(FileSourceChooserDialog.copyInto(at("/src"), at("/src/a.txt")));
+		assertNull(FileCopy.copyInto(at("/src"), at("/src/a.txt")));
 		assertEquals("A", read("/src/a.txt"));
 	}
 
 	@Test
 	public void aFileFromASubfolderIsCopiedUp() throws IOException {
 		// skipped before BJL-24, because it is "inside" /src
-		FileSourceChooserDialog.copyInto(at("/src"), at("/src/sub/b.txt"));
+		FileCopy.copyInto(at("/src"), at("/src/sub/b.txt"));
 		assertEquals("B", read("/src/b.txt"));
 	}
 
 	@Test
 	public void aFolderCantBeCopiedIntoItself() throws IOException {
-		assertThrows(IOException.class, () -> FileSourceChooserDialog.copyInto(at("/src/tree"), at("/src/tree")));
-		assertThrows(IOException.class, () -> FileSourceChooserDialog.copyInto(at("/src/tree/inner"), at("/src/tree")));
+		assertThrows(IOException.class, () -> FileCopy.copyInto(at("/src/tree"), at("/src/tree")));
+		assertThrows(IOException.class, () -> FileCopy.copyInto(at("/src/tree/inner"), at("/src/tree")));
 		assertFalse(at("/src/tree/inner/tree").exists());
 		// a sibling with the same name prefix is fine
 		assertTrue(at("/src/treeX").mkdirs());
-		FileSourceChooserDialog.copyInto(at("/src/treeX"), at("/src/tree"));
+		FileCopy.copyInto(at("/src/treeX"), at("/src/tree"));
 		assertEquals("C", read("/src/treeX/tree/inner/c.txt"));
 	}
 
 	@Test
 	public void aMissingFileCopiesNothing() throws IOException {
-		assertNull(FileSourceChooserDialog.copyInto(at("/dst"), at("/src/missing.txt")));
+		assertNull(FileCopy.copyInto(at("/dst"), at("/src/missing.txt")));
 		assertFalse(at("/dst/missing.txt").exists());
 	}
 }
