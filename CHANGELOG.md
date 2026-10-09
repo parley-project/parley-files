@@ -38,7 +38,7 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
   with the first registered one).
 - `FileSource.listFiles(javax.swing.ProgressMonitor)` is now `listFiles(FileSourceProgress)`, so
   `FileSource` and the factories don't depend on Swing. `ProgressMonitorProgress` adapts a Swing
-  `ProgressMonitor`. The memory file system's version no longer fails when given `null`.
+  `ProgressMonitor`; it's built on swing-widgets' `ProgressMonitorUpdater`. The memory file system's version no longer fails when given `null`.
 - `CommandLinePropertyEditor` asks for the settings that apply, with their labels and choices, never
   shows a secret's value, and doesn't accept invalid values. `Terminal`'s connect dialog now connects
   with the values entered in it (they used to be replaced by the ones it started with).

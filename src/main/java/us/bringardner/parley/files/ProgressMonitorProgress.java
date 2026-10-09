@@ -26,34 +26,16 @@
 package us.bringardner.parley.files;
 
 import javax.swing.ProgressMonitor;
-import javax.swing.SwingUtilities;
 
-/** A Swing ProgressMonitor as a {@link FileSourceProgress}. */
-public class ProgressMonitorProgress implements FileSourceProgress {
+import us.bringardner.swing.progress.ProgressMonitorUpdater;
 
-	private final ProgressMonitor monitor;
+/**
+ * A Swing ProgressMonitor as a {@link FileSourceProgress}. The work is done by swing-widgets'
+ * {@link ProgressMonitorUpdater}, which lets the thread doing the listing update the monitor.
+ */
+public class ProgressMonitorProgress extends ProgressMonitorUpdater implements FileSourceProgress {
 
 	public ProgressMonitorProgress(ProgressMonitor monitor) {
-		this.monitor = monitor;
-	}
-
-	@Override
-	public void setMaximum(int max) {
-		SwingUtilities.invokeLater(()->monitor.setMaximum(max));
-	}
-
-	@Override
-	public int getMaximum() {
-		return monitor.getMaximum();
-	}
-
-	@Override
-	public void setProgress(int value) {
-		SwingUtilities.invokeLater(()->monitor.setProgress(value));
-	}
-
-	@Override
-	public boolean isCanceled() {
-		return monitor.isCanceled();
+		super(monitor);
 	}
 }
