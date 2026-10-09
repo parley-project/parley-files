@@ -25,7 +25,6 @@
  */
 package us.bringardner.parley.files;
 
-import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -41,8 +40,6 @@ import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.swing.JOptionPane;
-
 import us.bringardner.parley.core.BaseThread;
 import us.bringardner.parley.io.ILineReader;
 import us.bringardner.parley.io.ILineWriter;
@@ -54,7 +51,6 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 import us.bringardner.parley.io.IoUtils;
 
 
-//  System.setProperty("java.awt.headless", "true");
 public class Terminal extends BaseThread {
 
 	public static void main(String args[]) throws IOException {
@@ -698,25 +694,10 @@ public class Terminal extends BaseThread {
 
 
 							props.remove("Name");
-							String os = System.getProperty("os.name").toLowerCase();
-							if( !headless && (os.contains("mac") || os.contains("win"))) {
-								// the dialog starts from these values and leaves what was entered in the factory
-								tmp.setConnectionProperties(props);
-								FactoryPropertiesDialog dialog = new FactoryPropertiesDialog();
-								dialog.showDialog(tmp);
-								if( dialog.isCancel()) {
-									out.writeLine("Connect canceled by user");
-									return;
-								} 
-								tmp = dialog.getFactory();
-								props = tmp.getConnectProperties();
-							} else {
-
-								CommandLinePropertyEditor editor = new CommandLinePropertyEditor();
-								if( !editor.editProperties(name,props,tmp.getConnectionSettings()) ) {
-									out.writeLine("Connect canceled by user");
-									return;
-								}
+							CommandLinePropertyEditor editor = new CommandLinePropertyEditor();
+							if( !editor.editProperties(name,props,tmp.getConnectionSettings()) ) {
+								out.writeLine("Connect canceled by user");
+								return;
 							}
 							if( name != null ) {
 								props.setProperty("Name", name);
@@ -770,33 +751,6 @@ public class Terminal extends BaseThread {
 			out.writeLine("Exit Terminal");
 			*/
 			stop();
-		}
-
-	}
-
-	class  Headless implements CommandProcessor {
-
-		@Override
-		public String getName() {
-			return "headless";
-		}
-
-		@Override
-		public void proccess(String[] args) throws IOException {
-			if( args.length>1) {
-				boolean tmp = Boolean.parseBoolean(args[1]);
-				if(!tmp && GraphicsEnvironment.isHeadless()) {
-					showError("Can't set headless to true in a headless JVM", null);
-				}
-				headless = tmp;
-			} else {
-				out.writeLine("headless "+headless);
-			}			
-		}
-
-		@Override
-		public String help() {
-			return "Show the or set headless property.\n\tIf NOT running in a headless environment setting headless to false will enable the Terminal to use dialogs otherwise no GUI is availible.";
 		}
 
 	}
@@ -1279,15 +1233,12 @@ public class Terminal extends BaseThread {
 		}
 	}
 
+	/** Writes an error to the Terminal's output. */
 	public void showError(String msg, Throwable e) {
-		if( !headless) {
-			JOptionPane.showInternalMessageDialog(null, e, msg==null?"":msg, JOptionPane.ERROR_MESSAGE);
-		} else {
-			try {
-				out.writeLine(msg+":"+e);
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}		
+		try {
+			out.writeLine(e == null ? String.valueOf(msg) : msg+":"+e);
+		} catch (IOException e1) {
+			e1.printStackTrace();
 		}
 	}
 
@@ -1417,7 +1368,6 @@ public class Terminal extends BaseThread {
 	ILineReader in  = new LFLineReader(System.in);
 	ILineWriter out = new LFLineWriter(System.out);
 
-	boolean headless = GraphicsEnvironment.isHeadless();
 	List<String> history = new ArrayList<String>();
 
 	public int useOrAdd(FileSourceFactory factory) {
