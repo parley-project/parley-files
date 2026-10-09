@@ -42,4 +42,9 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
 - `CommandLinePropertyEditor` asks for the settings that apply, with their labels and choices, never
   shows a secret's value, and doesn't accept invalid values. `Terminal`'s connect dialog now connects
   with the values entered in it (they used to be replaced by the ones it started with).
+- New package `us.bringardner.parley.files.browse`, the UI-free part of a file chooser or browser,
+  shared by Swing and JavaFX UIs: `FileEntry` (a file's details, read once, so a view doesn't ask a
+  remote file system on every repaint), `DirectoryListing` (listing with progress and cancel, sort
+  orders, hidden files, which entries can be picked for a `SelectionMode` and filter, a directory's
+  ancestors) and `NavigationHistory` (back and forward). parley-files-fx is built on it.
 
