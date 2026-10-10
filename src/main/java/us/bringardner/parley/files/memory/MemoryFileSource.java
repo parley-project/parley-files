@@ -93,7 +93,8 @@ public class MemoryFileSource implements FileSource {
 	private int placeholderPurgeAt = 64;
 	private boolean canOwnerRead=true;
 	private boolean canOwnerWrite=true;
-	private boolean canExecute=true;
+	/** as a file created with the usual umask: only directories start executable */
+	private boolean canExecute=false;
 	private boolean canGroupRead=true;
 	private boolean canGroupWrite=true;
 	private boolean canGroupExecute=true;
@@ -114,6 +115,7 @@ public class MemoryFileSource implements FileSource {
 		if( parent == null ) {
 			fileType = FileType.Directory;
 			canOwnerRead = canOwnerWrite = true;
+			canExecute = true;
 		}
 
 	}
@@ -331,6 +333,7 @@ public class MemoryFileSource implements FileSource {
 			data = new byte[0];
 			fileType = FileType.File;
 			canOwnerRead = canOwnerWrite = true;
+			canExecute = false;
 			deleted = false;
 			lastModified = lastAccessed = createDate = System.currentTimeMillis();
 			updateRetention();
@@ -547,6 +550,7 @@ public class MemoryFileSource implements FileSource {
 			}
 			fileType = FileType.Directory;
 			canOwnerRead = canOwnerWrite = true;
+			canExecute = true;
 			updateRetention();
 
 			return true;
@@ -590,6 +594,10 @@ public class MemoryFileSource implements FileSource {
 	public boolean renameTo(FileSource dest) throws IOException {
 		synchronized (lock()) {
 			boolean ret = false;
+			if( exists() && !isRoot && dest != null && equals(dest) ) {
+				// as java.io.File: renaming a file to itself is a success that changes nothing
+				return true;
+			}
 			if( exists() && 
 					!isRoot && 
 					canOwnerWrite() )  {
@@ -598,6 +606,8 @@ public class MemoryFileSource implements FileSource {
 					// factory's tree would leave it with the wrong factory and lock)
 					MemoryFileSource newFile = (MemoryFileSource) dest;
 					if( !newFile.exists() && 
+							// as java.io.File: the directory it goes in has to be there (this made it)
+							newFile.parent != null && newFile.parent.isDirectory() &&
 							!equals(newFile) &&
 							!newFile.isRoot &&
 							!newFile.isDescendantOf(this) ) {
@@ -659,6 +669,10 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#setLastModified(long)
 	 */
 	public boolean setLastModifiedTime(long time) {
+		// as java.io.File.setLastModified: false for a path that doesn't exist
+		if( !exists() ) {
+			return false;
+		}
 		lastModified = time;
 		return true;
 	}
@@ -667,8 +681,12 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#setReadOnly()
 	 */
 	public boolean setReadOnly() {
-		canOwnerRead = true;
-		return canOwnerWrite=false;
+		// as java.io.File.setReadOnly: nobody can write it; false for a path that doesn't exist
+		if( !exists() ) {
+			return false;
+		}
+		canOwnerWrite = canGroupWrite = canOtherWrite = false;
+		return true;
 	}
 
 
@@ -711,6 +729,7 @@ public class MemoryFileSource implements FileSource {
 			};
 			fileType = FileType.File;
 			canOwnerRead = canOwnerWrite = true;
+			canExecute = false;
 			updateRetention();
 			lastAccessed = System.currentTimeMillis();
 			lastModified = System.currentTimeMillis();
@@ -735,6 +754,7 @@ public class MemoryFileSource implements FileSource {
 				data = new byte[0];
 				fileType = FileType.File;
 				canOwnerRead = canOwnerWrite = true;
+				canExecute = false;
 				updateRetention();
 			}
 
@@ -1177,43 +1197,68 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	// The java.io.File style setters: owner only unless ownerOnly is false, and false for a path
+	// that doesn't exist. (setExecutable(b) used to ignore b, and the two-argument forms set the
+	// group and other bits from a comparison, not from b.)
+
 	@Override
 	public boolean setExecutable(boolean b) {
-		canExecute = true;
-		return true;
+		return setExecutable(b, true);
 	}
 
 	@Override
 	public boolean setReadable(boolean b) {
-		canOwnerRead = b;
-		return true;
+		return setReadable(b, true);
 	}
 
 	@Override
 	public boolean setWritable(boolean b) {
-		canOwnerWrite = b;
-		return true;
+		return setWritable(b, true);
 	}
 
 	@Override
 	public boolean setExecutable(boolean b, boolean ownerOnly) {
-		canExecute =b;
-		canOtherExecute = canGroupExecute == !ownerOnly;
-		return true;
+		synchronized (lock()) {
+			if( !exists() ) {
+				return false;
+			}
+			canExecute = b;
+			if( !ownerOnly ) {
+				canGroupExecute = b;
+				canOtherExecute = b;
+			}
+			return true;
+		}
 	}
 
 	@Override
 	public boolean setReadable(boolean b, boolean ownerOnly) {
-		canOwnerRead = b;
-		canOtherRead = canGroupRead == !ownerOnly;
-		return true;
+		synchronized (lock()) {
+			if( !exists() ) {
+				return false;
+			}
+			canOwnerRead = b;
+			if( !ownerOnly ) {
+				canGroupRead = b;
+				canOtherRead = b;
+			}
+			return true;
+		}
 	}
 
 	@Override
 	public boolean setWritable(boolean b, boolean ownerOnly) {
-		setWritable(b);
-		canOtherWrite = canGroupWrite == !ownerOnly;
-		return true;
+		synchronized (lock()) {
+			if( !exists() ) {
+				return false;
+			}
+			canOwnerWrite = b;
+			if( !ownerOnly ) {
+				canGroupWrite = b;
+				canOtherWrite = b;
+			}
+			return true;
+		}
 	}
 
 	@Override
