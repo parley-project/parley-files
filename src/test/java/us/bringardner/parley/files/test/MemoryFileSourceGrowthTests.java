@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -88,14 +89,23 @@ public class MemoryFileSourceGrowthTests {
 		assertEquals(4, f.length());
 	}
 
-	/** Writing below a directory that was never created still keeps the file (as before). */
+	/**
+	 * Writing below a directory that was never created fails, as a FileOutputStream does, and leaves
+	 * nothing behind; once the directories are made the file is kept.
+	 */
 	@Test
-	public void fileUnderUncreatedDirectoryIsRetained() throws IOException {
+	public void fileUnderUncreatedDirectoryIsRefusedThenRetainedOnceCreated() throws IOException {
+		FileSource f = factory.createFileSource("/orphan/sub/f.txt");
+		assertThrows(java.io.FileNotFoundException.class, () -> f.getOutputStream().close());
+		assertThrows(java.io.FileNotFoundException.class, () -> f.getOutputStream(true).close());
+		assertFalse(f.exists());
+
+		assertTrue(factory.createFileSource("/orphan/sub").mkdirs());
 		write("/orphan/sub/f.txt", "data");
 		assertTrue(collected(new WeakReference<>(new Object())));
-		FileSource f = factory.createFileSource("/orphan/sub/f.txt");
-		assertTrue(f.isFile());
-		try (InputStream in = f.getInputStream()) {
+		FileSource again = factory.createFileSource("/orphan/sub/f.txt");
+		assertTrue(again.isFile());
+		try (InputStream in = again.getInputStream()) {
 			assertEquals("data", new String(in.readAllBytes(), "UTF-8"));
 		}
 	}

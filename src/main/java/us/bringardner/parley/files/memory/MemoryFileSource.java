@@ -79,9 +79,17 @@ public class MemoryFileSource implements FileSource {
 	private FileSourceGroup group;
 	private FileSourceUser owner;
 	private volatile MemoryFileSource parent;
-	volatile FileSource linkedTo;
-	/** For a symbolic link: the file it points to (hard links leave this null). */
+	/**
+	 * For a symbolic link: the file it points to, which may not exist (a hard link leaves this
+	 * null). Nodes are per path, so a link to a path that is deleted and made again follows it.
+	 */
 	volatile MemoryFileSource symlinkTarget;
+	/**
+	 * For a hard link: the node that holds the content this is one more name for. The names
+	 * that point at a node that holds content are listed in {@link #hardLinks}.
+	 */
+	volatile MemoryFileSource hardTarget;
+	private List<MemoryFileSource> hardLinks = new ArrayList<>();
 	/** Children that exist (or have existing descendants / are links). Held strongly. */
 	private Map<String,MemoryFileSource> kidsMap = new TreeMap<>();
 	/**
@@ -153,9 +161,141 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/** This node is a link: a symbolic link (which may point at nothing), or one more name for a file. */
+	private boolean isLinkEntry() {
+		return symlinkTarget != null || hardTarget != null;
+	}
+
+	/** This node is in its directory's list: it exists, or it is a link. */
+	private boolean isEntry() {
+		return fileType != FileType.Undefined || isLinkEntry();
+	}
+
+	/** The child of this node with this name, made (as a lookup that doesn't exist) if it isn't there. */
+	MemoryFileSource childNamed(String childName) {
+		synchronized (lock()) {
+			MemoryFileSource kid = getChildByName(childName);
+			if( kid == null ) {
+				kid = new MemoryFileSource(this, childName, theCreator);
+				addChild(kid);
+			}
+			return kid;
+		}
+	}
+
+	/**
+	 * The node whose state answers for this one. For a symbolic link it is what it points to; for
+	 * a hard link the node that holds the content; for a path below a linked directory the same
+	 * path below the directory it links to. A node that is none of those answers for itself, and
+	 * so does every node until the first link is made. (Such a node keeps its own path, name and
+	 * place in its directory; only what is in the file, what it is and who may use it come from
+	 * the resolved one.) A loop of links resolves to the node it started at, which doesn't exist.
+	 */
+	private MemoryFileSource resolve() {
+		return resolve(0);
+	}
+
+	private MemoryFileSource resolve(int depth) {
+		if( theCreator == null || !theCreator.hasLinks || depth > 40 ) {
+			return this;
+		}
+		synchronized (lock()) {
+			MemoryFileSource t = symlinkTarget;
+			if( t != null ) {
+				return t.resolve(depth+1);
+			}
+			t = hardTarget;
+			if( t != null ) {
+				return t;
+			}
+			if( parent == null ) {
+				return this;
+			}
+			MemoryFileSource p = parent.resolve(depth+1);
+			if( p == parent ) {
+				return this;
+			}
+			return p.childNamed(name).resolve(depth+1);
+		}
+	}
+
+	/** Makes this a link to existing (see {@link MemoryFileSourceFactory#createLink}). */
+	void makeLinkTo(MemoryFileSource existing, boolean hard) throws IOException {
+		synchronized (lock()) {
+			if( existing.lock() != lock() ) {
+				throw new IOException("Can't link to a file in another memory file system: " + existing.getAbsolutePath());
+			}
+			if( theCreator != null ) {
+				theCreator.hasLinks = true;
+			}
+			if( isRoot || parent == null || exists() || isLinkEntry() ) {
+				throw new java.nio.file.FileAlreadyExistsException(getAbsolutePath());
+			}
+			if( !parent.isDirectory() ) {
+				throw new java.nio.file.NoSuchFileException(getAbsolutePath());
+			}
+			if( hard ) {
+				MemoryFileSource owner = existing.resolve();
+				if( !owner.isFile() ) {
+					throw new java.nio.file.NoSuchFileException(existing.getAbsolutePath());
+				}
+				hardTarget = owner;
+				owner.hardLinks.add(this);
+			} else {
+				symlinkTarget = existing;
+			}
+			updateRetention();
+		}
+	}
+
+	/** Takes this link out of its directory: the file it points to, or shares, is untouched. */
+	private void removeLinkEntry() {
+		if( hardTarget != null ) {
+			hardTarget.hardLinks.remove(this);
+			hardTarget = null;
+		}
+		symlinkTarget = null;
+		updateRetention();
+	}
+
+	/**
+	 * Called when this node's content is going away (deleted or moved): if other names share
+	 * it, the first of them takes it over, so the file outlives the name that held it.
+	 */
+	private void passContentToAHardLink() {
+		if( hardLinks.isEmpty() ) {
+			return;
+		}
+		MemoryFileSource heir = hardLinks.remove(0);
+		heir.hardTarget = null;
+		heir.data = data;
+		heir.fileType = fileType;
+		heir.canOwnerRead = canOwnerRead;
+		heir.canOwnerWrite = canOwnerWrite;
+		heir.canExecute = canExecute;
+		heir.canGroupRead = canGroupRead;
+		heir.canGroupWrite = canGroupWrite;
+		heir.canGroupExecute = canGroupExecute;
+		heir.canOtherRead = canOtherRead;
+		heir.canOtherWrite = canOtherWrite;
+		heir.canOtherExecute = canOtherExecute;
+		heir.owner = owner;
+		heir.group = group;
+		heir.lastModified = lastModified;
+		heir.lastAccessed = lastAccessed;
+		heir.createDate = createDate;
+		heir.deleted = false;
+		for(MemoryFileSource other : hardLinks) {
+			other.hardTarget = heir;
+			heir.hardLinks.add(other);
+		}
+		hardLinks.clear();
+		heir.updateRetention();
+	}
+
 	/** A node is kept in its parent's tree only if it exists, is a link, or has kept children. */
 	private boolean shouldRetain() {
-		return parent == null || isRoot || fileType != FileType.Undefined || linkedTo != null || !kidsMap.isEmpty();
+		return parent == null || isRoot || fileType != FileType.Undefined || isLinkEntry() || !kidsMap.isEmpty();
 	}
 
 	/**
@@ -256,46 +396,46 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean canOwnerRead() throws IOException {
-		return canOwnerRead;
+		return resolve().canOwnerRead;
 	}
 
 	@Override
 	public boolean canOwnerWrite() throws IOException {
-		return  canOwnerWrite;
+		return resolve().canOwnerWrite;
 	}
 
 	@Override
 	public boolean canOwnerExecute() throws IOException {
-		return canExecute;
+		return resolve().canExecute;
 	}
 
 	@Override
 	public boolean canGroupRead() throws IOException {
-		return canGroupRead;
+		return resolve().canGroupRead;
 	}
 
 	@Override
 	public boolean canGroupWrite() throws IOException {
-		return canGroupWrite;
+		return resolve().canGroupWrite;
 	}
 	@Override
 	public boolean canGroupExecute() throws IOException {
-		return canGroupExecute;
+		return resolve().canGroupExecute;
 	}
 
 
 	@Override
 	public boolean canOtherRead() throws IOException {
-		return canOtherRead;
+		return resolve().canOtherRead;
 	}
 
 	@Override
 	public boolean canOtherWrite() throws IOException {
-		return canOtherWrite;
+		return resolve().canOtherWrite;
 	}
 	@Override
 	public boolean canOtherExecute() throws IOException {
-		return canOtherExecute;
+		return resolve().canOtherExecute;
 	}
 
 
@@ -324,6 +464,13 @@ public class MemoryFileSource implements FileSource {
 		synchronized (lock()) {
 			// Same contract as java.io.File.createNewFile(): false if it already
 			// exists, IOException if the parent directory doesn't exist.
+			if( isLinkEntry() ) {
+				return false;   // a link (even one that points at nothing) is already there
+			}
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.createNewFile();   // below a linked directory
+			}
 			if( exists() ) {
 				return false;
 			}
@@ -352,24 +499,27 @@ public class MemoryFileSource implements FileSource {
 			if( isRoot || parent == null ) {
 				return false;
 			}
-			if( !exists() ) {
-				if( linkedTo == null ) {
-					return false;
-				}
-				linkedTo = null;           // deleting a link removes the link itself
-				symlinkTarget = null;
-				updateRetention();
+			if( isLinkEntry() ) {
+				// deleting a link removes the link itself, never what it points to
+				removeLinkEntry();
 				return true;
+			}
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.delete();   // below a linked directory
+			}
+			if( !exists() ) {
+				return false;
 			}
 			if( isDirectory() ) {
 				for(MemoryFileSource kid : kidsMap.values()) {
-					if( kid.fileType != FileType.Undefined || !kid.kidsMap.isEmpty() ) {
-						return false;   // not empty
+					if( kid.isEntry() || !kid.kidsMap.isEmpty() ) {
+						return false;   // not empty (a link in it counts)
 					}
 				}
-				// Only link entries are left (they never show in listFiles()); they go with the directory.
 				kidsMap.clear();
 			}
+			passContentToAHardLink();
 			deleted = true;
 			data = null;
 			fileType = FileType.Undefined;
@@ -382,7 +532,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#exists()
 	 */
 	public boolean exists() {
-		return fileType != FileType.Undefined;
+		return resolve().fileType != FileType.Undefined;
 	}
 
 	/**
@@ -467,21 +617,22 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#isDirectory()
 	 */
 	public boolean isDirectory() {
-		return fileType == FileType.Directory;
+		return resolve().fileType == FileType.Directory;
 	}
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#isFile()
 	 */
 	public boolean isFile() {
-		return fileType == FileType.File;
+		return resolve().fileType == FileType.File;
 	}
 
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#length()
 	 */
 	public long length() {
-		return data == null ? 0 : data.length;
+		byte[] bytes = resolve().data;
+		return bytes == null ? 0 : bytes.length;
 	}
 
 	/* (non-Javadoc)
@@ -489,7 +640,23 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public long lastModified() {
 		// as java.io.File: 0 for a path that doesn't exist (the field is only a start value then)
-		return exists() ? lastModified : 0L;
+		MemoryFileSource r = resolve();
+		return r.fileType != FileType.Undefined ? r.lastModified : 0L;
+	}
+
+	/**
+	 * What is in this directory: what exists, and the links (also those that point at nothing). A
+	 * linked directory lists what is in the directory it links to, under its own path.
+	 */
+	private List<MemoryFileSource> entries() {
+		MemoryFileSource r = resolve();
+		List<MemoryFileSource> ret = new ArrayList<>();
+		for(MemoryFileSource kid : r.kidsMap.values()) {
+			if( kid.isEntry() ) {
+				ret.add(r == this ? kid : childNamed(kid.getName()));
+			}
+		}
+		return ret;
 	}
 
 	/* (non-Javadoc)
@@ -515,12 +682,9 @@ public class MemoryFileSource implements FileSource {
 			MemoryFileSource [] ret = null;
 			ArrayList<MemoryFileSource> list = new ArrayList<MemoryFileSource>();
 
-
-			for(MemoryFileSource file : kidsMap.values() ) {
-				if( file.fileType != FileType.Undefined) {
-					if(filter==null || filter.accept(file)){
-						list.add(file);
-					}
+			for(MemoryFileSource file : entries() ) {
+				if(filter==null || filter.accept(file)){
+					list.add(file);
 				}
 			}
 
@@ -541,6 +705,13 @@ public class MemoryFileSource implements FileSource {
 		synchronized (lock()) {
 			// as java.io.File: false if it already exists (this also reset an
 			// existing directory's owner permissions)
+			if( isLinkEntry() ) {
+				return false;   // a link is already there, even one that points at nothing
+			}
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.mkdir();   // below a linked directory
+			}
 			if( isFile() || isDirectory() ) {
 				return false;
 			}
@@ -574,6 +745,13 @@ public class MemoryFileSource implements FileSource {
 	/** True if there is a directory at this path afterwards: it was there, or it and its parents were made. */
 	private boolean ensureDirectory() throws IOException {
 		synchronized (lock()) {
+			if( isLinkEntry() ) {
+				return isDirectory();
+			}
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.ensureDirectory();
+			}
 			if( isDirectory() ) {
 				return true;
 			}
@@ -594,6 +772,13 @@ public class MemoryFileSource implements FileSource {
 	public boolean renameTo(FileSource dest) throws IOException {
 		synchronized (lock()) {
 			boolean ret = false;
+			if( isLinkEntry() ) {
+				return renameLinkEntry(dest);
+			}
+			MemoryFileSource below = resolve();
+			if( below != this ) {
+				return below.renameTo(dest);   // below a linked directory
+			}
 			if( exists() && !isRoot && dest != null && equals(dest) ) {
 				// as java.io.File: renaming a file to itself is a success that changes nothing
 				return true;
@@ -605,7 +790,7 @@ public class MemoryFileSource implements FileSource {
 					// (only within one memory file system; moving a node into another
 					// factory's tree would leave it with the wrong factory and lock)
 					MemoryFileSource newFile = (MemoryFileSource) dest;
-					if( !newFile.exists() && 
+					if( !newFile.exists() && !newFile.isLinkEntry() &&
 							// as java.io.File: the directory it goes in has to be there (this made it)
 							newFile.parent != null && newFile.parent.isDirectory() &&
 							!equals(newFile) &&
@@ -628,8 +813,6 @@ public class MemoryFileSource implements FileSource {
 						newFile.lastAccessed = lastAccessed;
 						newFile.createDate = createDate;
 						newFile.owner = owner;
-						newFile.linkedTo = linkedTo;
-						newFile.symlinkTarget = symlinkTarget;
 						newFile.isRoot = isRoot;
 						newFile.deleted = false;
 
@@ -647,9 +830,14 @@ public class MemoryFileSource implements FileSource {
 						}
 						placeholders().clear();
 
+						// other names for this file now share the new one
+						for(MemoryFileSource other : hardLinks) {
+							other.hardTarget = newFile;
+							newFile.hardLinks.add(other);
+						}
+						hardLinks.clear();
+
 						data = null;
-						linkedTo = null;
-						symlinkTarget = null;
 						fileType = FileType.Undefined;
 						canOwnerRead = canOwnerWrite = false;
 						newFile.updateRetention();
@@ -665,11 +853,41 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/** Moves a link to another name; what it points at or shares is untouched. */
+	private boolean renameLinkEntry(FileSource dest) {
+		if( !(dest instanceof MemoryFileSource) ) {
+			return false;
+		}
+		MemoryFileSource newFile = (MemoryFileSource) dest;
+		if( newFile == this || equals(newFile) ) {
+			return true;
+		}
+		if( newFile.lock() != lock() || newFile.isRoot || newFile.parent == null || newFile.exists()
+				|| newFile.isLinkEntry() || !newFile.parent.isDirectory() ) {
+			return false;
+		}
+		newFile.symlinkTarget = symlinkTarget;
+		if( hardTarget != null ) {
+			newFile.hardTarget = hardTarget;
+			hardTarget.hardLinks.remove(this);
+			hardTarget.hardLinks.add(newFile);
+		}
+		symlinkTarget = null;
+		hardTarget = null;
+		newFile.updateRetention();
+		updateRetention();
+		return true;
+	}
+
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#setLastModified(long)
 	 */
 	public boolean setLastModifiedTime(long time) {
 		// as java.io.File.setLastModified: false for a path that doesn't exist
+		MemoryFileSource r = resolve();
+		if( r != this ) {
+			return r.setLastModifiedTime(time);
+		}
 		if( !exists() ) {
 			return false;
 		}
@@ -682,6 +900,10 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public boolean setReadOnly() {
 		// as java.io.File.setReadOnly: nobody can write it; false for a path that doesn't exist
+		MemoryFileSource r = resolve();
+		if( r != this ) {
+			return r.setReadOnly();
+		}
 		if( !exists() ) {
 			return false;
 		}
@@ -695,8 +917,9 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public InputStream getInputStream() throws IOException {
 		synchronized (lock()) {
-			if( !exists() && linkedTo != null ) {
-				return linkedTo.getInputStream();
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.getInputStream();
 			}
 			checkReadable();
 			ByteArrayInputStream ret = new ByteArrayInputStream(data == null ? new byte[0] : data);
@@ -706,11 +929,30 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/** A FileOutputStream doesn't make the directories above the file, and a file isn't one. */
+	private void checkParentIsDirectory() throws FileNotFoundException {
+		try {
+			FileSource parent = getParentFile();
+			if( parent != null && !parent.isDirectory() ) {
+				throw new FileNotFoundException(getAbsolutePath() + " (No such file or directory)");
+			}
+		} catch (FileNotFoundException e) {
+			throw e;
+		} catch (IOException e) {
+			throw new FileNotFoundException(getAbsolutePath() + " (" + e.getMessage() + ")");
+		}
+	}
+
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#getOutputStream()
 	 */
 	public OutputStream getOutputStream() throws FileNotFoundException {
 		synchronized (lock()) {
+			checkParentIsDirectory();
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.getOutputStream();
+			}
 			if(fileType != FileType.Undefined &&  !canOwnerWrite ) {
 				throw new FileNotFoundException(getAbsolutePath()+" (Permission denied)");
 			}
@@ -742,7 +984,16 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#getOutputStream(boolean)
 	 */
 	public OutputStream getOutputStream(boolean append) throws FileNotFoundException {
+		if( !append ) {
+			// as a FileOutputStream does: replace what is there
+			return getOutputStream();
+		}
 		synchronized (lock()) {
+			checkParentIsDirectory();
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.getOutputStream(true);
+			}
 			if( exists() && fileType==FileType.Directory) {
 				throw new FileNotFoundException(getAbsolutePath()+" (Is a directory)");
 			}
@@ -892,10 +1143,8 @@ public class MemoryFileSource implements FileSource {
 			}
 			// Only list children that exist (same set as listFiles()).
 			ArrayList<String> ret = new ArrayList<String>();
-			for (MemoryFileSource kid : kidsMap.values()) {
-				if( kid.fileType != FileType.Undefined) {
-					ret.add(kid.getName());
-				}
+			for (MemoryFileSource kid : entries()) {
+				ret.add(kid.getName());
 			}
 
 			return ret.toArray(new String[ret.size()]); 
@@ -942,19 +1191,21 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public FileSourceUser getOwner() throws IOException {
-		if(owner == null ) {
-			owner = theCreator.whoAmI();
+		MemoryFileSource r = resolve();
+		if(r.owner == null ) {
+			r.owner = theCreator.whoAmI();
 		}
 
-		return owner;
+		return r.owner;
 	}
 
 	@Override
 	public FileSourceGroup getGroup() throws IOException {
-		if( group == null ) {
-			group = getOwner().getGroup(); 
+		MemoryFileSource r = resolve();
+		if( r.group == null ) {
+			r.group = r.getOwner().getGroup(); 
 			}
-		return group;
+		return r.group;
 	}
 
 	/* (non-Javadoc)
@@ -995,8 +1246,9 @@ public class MemoryFileSource implements FileSource {
 
 	public InputStream getInputStream(long startingPos) throws IOException {
 		synchronized (lock()) {
-			if( !exists() && linkedTo != null ) {
-				return linkedTo.getInputStream(startingPos);
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.getInputStream(startingPos);
 			}
 			// (This used to turn a missing file into an existing, empty one.)
 			checkReadable();
@@ -1056,7 +1308,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public FileSource getLinkedTo() {
-		return linkedTo;
+		return symlinkTarget;
 	}
 
 	@Override
@@ -1069,8 +1321,9 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public ISeekableInputStream getSeekableInputStream() throws IOException {
 		synchronized (lock()) {
-			if( !exists() && linkedTo != null ) {
-				return linkedTo.getSeekableInputStream();
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.getSeekableInputStream();
 			}
 			checkReadable();
 			final byte[] snapshot = data == null ? new byte[0] : data;
@@ -1219,6 +1472,10 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public boolean setExecutable(boolean b, boolean ownerOnly) {
 		synchronized (lock()) {
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.setExecutable(b, ownerOnly);
+			}
 			if( !exists() ) {
 				return false;
 			}
@@ -1234,6 +1491,10 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public boolean setReadable(boolean b, boolean ownerOnly) {
 		synchronized (lock()) {
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.setReadable(b, ownerOnly);
+			}
 			if( !exists() ) {
 				return false;
 			}
@@ -1249,6 +1510,10 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public boolean setWritable(boolean b, boolean ownerOnly) {
 		synchronized (lock()) {
+			MemoryFileSource r = resolve();
+			if( r != this ) {
+				return r.setWritable(b, ownerOnly);
+			}
 			if( !exists() ) {
 				return false;
 			}
@@ -1263,75 +1528,75 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean setOwnerReadable(boolean b) throws IOException {
-		canOwnerRead = b;
+		resolve().canOwnerRead = b;
 		return true;
 	}
 
 	@Override
 	public boolean setOtherWritable(boolean b) throws IOException {
-		canOtherWrite = b;
+		resolve().canOtherWrite = b;
 		return true;
 	}
 
 	@Override
 	public boolean setOwnerWritable(boolean b) throws IOException {
-		canOwnerWrite = b;
+		resolve().canOwnerWrite = b;
 		return true;
 	}
 
 	@Override
 	public boolean setGroupExecutable(boolean b) throws IOException {
-		canGroupExecute = b;
+		resolve().canGroupExecute = b;
 		return true;
 	}
 	@Override
 	public boolean setGroupReadable(boolean b) throws IOException {
-		canGroupRead = b;
+		resolve().canGroupRead = b;
 		return true;
 	}
 
 	@Override
 	public boolean setGroupWritable(boolean b) throws IOException {
-		canGroupWrite = b;
+		resolve().canGroupWrite = b;
 		return true;
 	}
 
 	@Override
 	public boolean setOtherExecutable(boolean b) throws IOException {
-		canOtherExecute = b;
+		resolve().canOtherExecute = b;
 		return true;
 	}
 	@Override
 	public boolean setOtherReadable(boolean b) throws IOException {
-		canOtherRead = b;
+		resolve().canOtherRead = b;
 		return true;
 	}
 	@Override
 	public boolean setOwnerExecutable(boolean b) throws IOException {
-		canExecute = b;
+		resolve().canExecute = b;
 		return true;
 	}
 
 	@Override
 	public long lastAccessTime() throws IOException {		
-		return lastAccessed;
+		return resolve().lastAccessed;
 	}
 
 	@Override
 	public long creationTime() throws IOException {
-		return createDate;
+		return resolve().createDate;
 	}
 
 
 	@Override
 	public boolean setLastAccessTime(long time) throws IOException {
-		lastAccessed = time;
+		resolve().lastAccessed = time;
 		return true;
 	}
 
 	@Override
 	public boolean setCreateTime(long time) throws IOException {
-		createDate = time;
+		resolve().createDate = time;
 		return true;
 	}
 
@@ -1341,7 +1606,7 @@ public class MemoryFileSource implements FileSource {
 		if (group1 instanceof FileSourceGroup) {
 			// was also getOwner().setGroup(group), which changed the owner's
 			// primary group, and so the group of every file it owns
-			group = (FileSourceGroup) group1;
+			resolve().group = (FileSourceGroup) group1;
 			ret = true;
 		}
 		
@@ -1352,7 +1617,7 @@ public class MemoryFileSource implements FileSource {
 	public boolean setOwner(UserPrincipal owner1) throws IOException {
 		boolean ret = false;
 		if (owner1 instanceof FileSourceUser) {
-			owner = (FileSourceUser) owner1;
+			resolve().owner = (FileSourceUser) owner1;
 			ret = true;
 		}
 		
@@ -1361,7 +1626,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public IRandomAccessStream getRandomAccessStream(String mode) throws IOException {
-		return new FileSourceRandomAccessStream(new MemoryRandomAccessIoController(this), mode);
+		return new FileSourceRandomAccessStream(new MemoryRandomAccessIoController(resolve()), mode);
 	}
 
 }
