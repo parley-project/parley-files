@@ -45,6 +45,20 @@ import java.nio.file.attribute.UserPrincipal;
  *  This is intended to define an interface that can be used to represent 
  *  an object that can replace a 'java.io.File' object.  
  *  
+ * <h2>Equality</h2>
+ * Like {@code java.io.File}, a FileSource is a name for a file, not the file itself, so two
+ * objects that name the same file are {@link Object#equals(Object) equal} and have the same
+ * {@link Object#hashCode() hash code}: they can be put in a {@code Set} or used as a {@code Map}
+ * key. Every implementation follows the same rule:
+ * <ul>
+ * <li>they are the same kind of FileSource,</li>
+ * <li>their factories are the same file system
+ *     ({@link FileSourceFactory#isSameFileSystem(FileSourceFactory)}: the same server and account,
+ *     or the same database), and</li>
+ * <li>their absolute paths are equal.</li>
+ * </ul>
+ * Equality never reads or changes the file, and it doesn't depend on whether the file exists or
+ * on how the object was reached (a path given to a factory, or a child of its parent).
  */
 
 public interface FileSource extends Serializable, Comparable<Object> {
