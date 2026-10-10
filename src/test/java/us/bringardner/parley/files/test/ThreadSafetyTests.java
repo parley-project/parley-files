@@ -221,7 +221,9 @@ public class ThreadSafetyTests {
 		assertFalse(a.exists());
 		c.deleteOnExit();
 
-		assertThrows(NoSuchFileException.class, () -> local(a).renameTo(local(new File(dir, "d.txt"))), "real error, not false");
+		// as java.io.File.renameTo: a source that isn't there is false, not an exception (this
+		// used to be a NoSuchFileException, to show the real cause)
+		assertFalse(local(a).renameTo(local(new File(dir, "d.txt"))), "the source is gone");
 	}
 
 	/** A memory node moved into another memory file system would keep the wrong factory (and lock). */

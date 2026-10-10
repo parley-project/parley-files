@@ -646,11 +646,10 @@ public class FileProxy implements FileSource {
 	 * (FTP, memory ...) into a same-named local path, and on an error printed
 	 * the stack trace and returned false.
 	 * 
-	 * @return false if dest isn't a local file or already exists
-	 *         (renaming never replaces a file; use Files.move with
-	 *         REPLACE_EXISTING for that)
-	 * @throws IOException for any other failure (source missing, no
-	 *         permission, ...), with the real cause
+	 * @return true if it was renamed. False, as java.io.File.renameTo does, when it wasn't:
+	 *         dest isn't a local file, it already exists (renaming never replaces a file; use
+	 *         Files.move with REPLACE_EXISTING for that), the source is missing, or dest's
+	 *         directory is.
 	 */
 	public boolean renameTo(FileSource dest) throws IOException {
 		if( !(dest instanceof FileProxy) ) {
@@ -658,7 +657,10 @@ public class FileProxy implements FileSource {
 		}
 		try {
 			Files.move(target.toPath(), ((FileProxy) dest).target.toPath());
-		} catch (FileAlreadyExistsException e) {
+		} catch (IOException e) {
+			// as java.io.File.renameTo: any failure (it is already there, the source isn't, the
+			// directory isn't, no permission) is "false", not an exception. This used to throw
+			// for all but "already there".
 			return false;
 		}
 		name = null;
