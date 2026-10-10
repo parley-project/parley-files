@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import us.bringardner.parley.files.FileSource;
+import us.bringardner.parley.files.FileSourceCopy;
 
 /**
  * Copying a dropped or pasted file into a folder, the same way in every UI. It was a static
@@ -76,9 +77,8 @@ public final class FileCopy {
 				}
 			}
 		} else {
-			try(InputStream in = file.getInputStream(); OutputStream out = newFile.getOutputStream()) {
-				in.transferTo(out);
-			}
+			// in blocks that suit the two ends (transferTo used the JDK's own 16 KB)
+			FileSourceCopy.copy(file, newFile);
 		}
 		return newFile;
 	}
