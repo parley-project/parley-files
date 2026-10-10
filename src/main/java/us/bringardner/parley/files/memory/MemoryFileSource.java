@@ -236,6 +236,22 @@ public class MemoryFileSource implements FileSource {
 	}
 
 	
+	/** As java.io.File: nothing can be read from, written to or run at a path that doesn't exist. */
+	@Override
+	public boolean canRead() throws IOException {
+		return exists() && FileSource.super.canRead();
+	}
+
+	@Override
+	public boolean canWrite() throws IOException {
+		return exists() && FileSource.super.canWrite();
+	}
+
+	@Override
+	public boolean canExecute() throws IOException {
+		return exists() && FileSource.super.canExecute();
+	}
+
 	@Override
 	public boolean canOwnerRead() throws IOException {
 		return canOwnerRead;
@@ -469,8 +485,8 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#lastModified()
 	 */
 	public long lastModified() {
-		long ret = lastModified;
-		return ret;
+		// as java.io.File: 0 for a path that doesn't exist (the field is only a start value then)
+		return exists() ? lastModified : 0L;
 	}
 
 	/* (non-Javadoc)
@@ -485,6 +501,10 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public FileSource[] listFiles(FileSourceFilter filter) throws IOException {
 		synchronized (lock()) {
+			// as java.io.File: null when this isn't a directory (missing, or a plain file)
+			if( !isDirectory() ) {
+				return null;
+			}
 			if( !canRead() ) {
 				// was IllegalAccessError, a java.lang.Error that callers' catch (Exception) misses
 				throw new AccessDeniedException(getAbsolutePath());
@@ -521,7 +541,8 @@ public class MemoryFileSource implements FileSource {
 			if( isFile() || isDirectory() ) {
 				return false;
 			}
-			if(parent!=null && !parent.exists()) {
+			// a directory can only go in a directory (a plain file "exists" too)
+			if(parent!=null && !parent.isDirectory()) {
 				return false;
 			}
 			fileType = FileType.Directory;
@@ -537,20 +558,29 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public boolean mkdirs() throws IOException {
 		synchronized (lock()) {
+			// as java.io.File: true only if it was created (with any parents it needed); false when
+			// there is already a directory, or a file, at the path
+			if( exists() ) {
+				return false;
+			}
+			return ensureDirectory();
+		}
+	}
+
+	/** True if there is a directory at this path afterwards: it was there, or it and its parents were made. */
+	private boolean ensureDirectory() throws IOException {
+		synchronized (lock()) {
 			if( isDirectory() ) {
 				return true;
 			}
-			boolean ret = false;
-			if( parent != null ) {
-				ret = parent.mkdirs();			
-			} else {
-				ret = true;
+			if( exists() ) {
+				// a file is in the way
+				return false;
 			}
-
-			if( ret ) {
-				ret = mkdir();
+			if( parent != null && !parent.ensureDirectory() ) {
+				return false;
 			}
-			return ret;
+			return mkdir();
 		}
 	}
 
@@ -836,6 +866,10 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public String[] list() {
 		synchronized (lock()) {
+			// as java.io.File: null when this isn't a directory (missing, or a plain file)
+			if( !isDirectory() ) {
+				return null;
+			}
 			// Only list children that exist (same set as listFiles()).
 			ArrayList<String> ret = new ArrayList<String>();
 			for (MemoryFileSource kid : kidsMap.values()) {
