@@ -165,7 +165,10 @@ public class Terminal extends BaseThread {
 			final String name = from.getName();
 
 
-			InputStream in = new MonitoredInputStream( from.getInputStream(),(1024*10),new IStreamMonitor() {
+			// the block that suits the two ends, and streams opened with it (this was a 10 KB buffer)
+			final int block = FileSourceCopy.blockSizeFor(from, to);
+			final StreamOptions options = FileSourceCopy.optionsFor(block);
+			InputStream in = new MonitoredInputStream( from.getInputStream(options),(1024*10),new IStreamMonitor() {
 
 				public void update(long total, long transfered) {
 					double perc = ((double)total/(double)size1)*100.0; 
@@ -204,11 +207,11 @@ public class Terminal extends BaseThread {
 					parent.mkdirs();
 				}
 
-				OutputStream out2 = to.getOutputStream();
+				OutputStream out2 = to.getOutputStream(false, options);
 				long start = System.currentTimeMillis();
 				int size = 0;
 				try {
-					byte data[] = new byte[10*1024];
+					byte data[] = new byte[block];
 					int got = 0;
 
 					while((got=in.read(data)) >=0 ) {

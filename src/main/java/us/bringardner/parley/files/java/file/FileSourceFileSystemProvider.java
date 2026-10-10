@@ -80,6 +80,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 import us.bringardner.parley.files.FileSource;
+import us.bringardner.parley.files.FileSourceCopy;
 import us.bringardner.parley.files.FileSourceFactory;
 
 
@@ -88,7 +89,6 @@ import us.bringardner.parley.files.FileSourceFactory;
 public class FileSourceFileSystemProvider extends FileSystemProvider {
 
 
-	private int streamBufferSize = 10240;
 
 	public FileSourceFileSystemProvider() {
 
@@ -703,17 +703,8 @@ public class FileSourceFileSystemProvider extends FileSystemProvider {
 			}
 
 		} else {
-			try(InputStream in = sf.getInputStream()) {
-				try(OutputStream out = tf.getOutputStream()) {
-					byte [] data = new byte[streamBufferSize];
-					int got = 0;
-					while( (got=in.read(data)) >= 0) {
-						if( got > 0 ) {
-							out.write(data,0,got);
-						}
-					}
-				}							
-			}
+			// in blocks that suit the two ends (this was a fixed 10 KB)
+			FileSourceCopy.copy(sf, tf);
 		}
 
 		if( copyAttributes ) {
