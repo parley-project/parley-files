@@ -464,6 +464,57 @@ public interface FileSource extends Serializable, Comparable<Object> {
 		throw new IOException("Not supported");
 	}
 
+	// ---- streams with their own sizes
+	//
+	// The buffer size and chunk size belong to the stream that uses them, so they are given
+	// when it is opened. A source uses the ones that mean something to it and ignores the
+	// rest, so these default to the plain methods: a source that hasn't been taught about
+	// StreamOptions behaves as it always did. null means StreamOptions.NONE.
+
+	/**
+	 * The options this source does something with. A caller can check before relying on one,
+	 * or list them for a tool; an option that isn't in it is ignored when a stream is
+	 * opened. The default is none.
+	 */
+	default java.util.Set<StreamOption<?>> supportedStreamOptions() {
+		return java.util.Collections.emptySet();
+	}
+
+	/**
+	 * What streams from this source use when they are opened without options: the values the
+	 * source (its connection, usually) was configured with, with every one it has a value for
+	 * set. A loop that copies this source can use {@code getStreamDefaults().bufferSize()}.
+	 * The default is {@link StreamOptions#NONE}: nothing is known.
+	 */
+	default StreamOptions getStreamDefaults() {
+		return StreamOptions.NONE;
+	}
+
+	/** {@link #getInputStream()} with the sizes in options (null: the defaults). */
+	default InputStream getInputStream(StreamOptions options) throws IOException {
+		return getInputStream();
+	}
+
+	/** {@link #getInputStream(long)} with the sizes in options (null: the defaults). */
+	default InputStream getInputStream(long startingPosition, StreamOptions options) throws IOException {
+		return getInputStream(startingPosition);
+	}
+
+	/** {@link #getOutputStream(boolean)} with the sizes in options (null: the defaults). */
+	default OutputStream getOutputStream(boolean append, StreamOptions options) throws IOException {
+		return getOutputStream(append);
+	}
+
+	/** {@link #getRandomAccessStream(String)} with the sizes in options (null: the defaults). */
+	default IRandomAccessStream getRandomAccessStream(String mode, StreamOptions options) throws IOException {
+		return getRandomAccessStream(mode);
+	}
+
+	/** {@link #getSeekableInputStream()} with the sizes in options (null: the defaults). */
+	default ISeekableInputStream getSeekableInputStream(StreamOptions options) throws IOException {
+		return getSeekableInputStream();
+	}
+
 	public URL toURL() throws MalformedURLException;
 
 	//  These are supported by JdbcFile but not a normal Java File
