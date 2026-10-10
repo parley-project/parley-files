@@ -1,6 +1,7 @@
 package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.OutputStream;
@@ -8,7 +9,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +41,17 @@ public abstract class FileLikeBehaviorTests {
 	 * root is the same for every call of one test, and a different one for each test.
 	 */
 	protected abstract FileSource sourceFor(String relative) throws Exception;
+
+	/**
+	 * Whether canRead/canWrite/canExecute of paths that exist can be compared with a java.io.File's.
+	 * A File answers for the user running the test. A remote backend answers for the user it logged
+	 * in as, from the permission bits the server lists; if the test can't log in as the user who owns
+	 * the files, those answers legitimately differ and a backend says so by returning false. (A path
+	 * that doesn't exist is always compared: nothing can be done to it.)
+	 */
+	protected boolean permissionsOfExistingPathsAreComparable() {
+		return true;
+	}
 
 	/** Called before each test, to give the backend an empty tree to work in. */
 	protected abstract void newTree() throws Exception;
@@ -85,10 +100,27 @@ public abstract class FileLikeBehaviorTests {
 		}
 	}
 
+	/** Every difference a test finds, so one run shows all of them and not just the first. */
+	private final List<String> differences = new ArrayList<>();
+
 	private void same(String relative, String method) throws Exception {
+		if( (method.equals("canRead") || method.equals("canWrite") || method.equals("canExecute"))
+				&& oracle(relative).exists() && !permissionsOfExistingPathsAreComparable() ) {
+			return;
+		}
 		String expected = answer(oracle(relative), method);
 		String got = answer(sourceFor(relative), method);
-		assertEquals(expected, got, relative + "." + method + "() on a java.io.File and on the FileSource");
+		if( !expected.equals(got) ) {
+			differences.add(relative + "." + method + "(): java.io.File " + expected + ", FileSource " + got);
+		}
+	}
+
+	@AfterEach
+	void noDifferences() {
+		if( !differences.isEmpty() ) {
+			fail("A FileSource must answer as a java.io.File does; " + differences.size() + " difference(s):\n  "
+					+ String.join("\n  ", differences));
+		}
 	}
 
 	// ------------------------------------------------------------ what a missing path says
