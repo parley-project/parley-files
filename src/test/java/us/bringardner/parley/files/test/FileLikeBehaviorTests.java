@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import us.bringardner.parley.files.FileSource;
+import us.bringardner.parley.files.FileSourceFactory;
 
 /**
  * A FileSource acts like a java.io.File: it can do more, never less, so every question a File
@@ -51,6 +52,19 @@ public abstract class FileLikeBehaviorTests {
 	 * that doesn't exist is always compared: nothing can be done to it.)
 	 */
 	protected boolean permissionsOfExistingPathsAreComparable() {
+		return true;
+	}
+
+	/**
+	 * Whether the backend can create symbolic links ({@link FileSourceFactory#createSymbolicLink}).
+	 * A backend whose protocol has no links says false, and the link tests are skipped for it.
+	 */
+	protected boolean supportsSymbolicLinks() {
+		return true;
+	}
+
+	/** Whether the backend can create hard links ({@link FileSourceFactory#createLink}). */
+	protected boolean supportsHardLinks() {
 		return true;
 	}
 
@@ -445,6 +459,337 @@ public abstract class FileLikeBehaviorTests {
 			if( !expected.equals(got) ) {
 				differences.add("getName() of '" + r + "': java.io.File '" + expected + "', FileSource '" + got + "'");
 			}
+		}
+	}
+
+	// ------------------------------------------------------------ streams
+
+	/** What running something yields, or the kind of exception it threw, comparable between a File and a FileSource. */
+	private static String outcome(java.util.concurrent.Callable<String> what) {
+		try {
+			return what.call();
+		} catch (java.io.IOException e) {
+			return "throws IOException";
+		} catch (Exception e) {
+			return "throws " + e.getClass().getSimpleName();
+		}
+	}
+
+	private void streamsAgree(String label, java.util.concurrent.Callable<String> onFile, java.util.concurrent.Callable<String> onSource) {
+		String expected = outcome(onFile);
+		String got = outcome(onSource);
+		if( !expected.equals(got) ) {
+			differences.add(label + ": java.io.File [" + expected + "], FileSource [" + got + "]");
+		}
+	}
+
+	private static String hex(byte[] b) {
+		StringBuilder sb = new StringBuilder();
+		for(byte x : b) {
+			sb.append(String.format("%02x", x & 0xff));
+		}
+		return sb.toString();
+	}
+
+	@Test
+	void openingForReadWhatCantBeRead() throws Exception {
+		for(String r : new String[] {"nope.txt", "dir", "nodir/x.txt", "plain.txt/under"}) {
+			streamsAgree("open '" + r + "' for reading", () -> {
+				try (java.io.InputStream in = new java.io.FileInputStream(oracle(r))) {
+					return "opened";
+				}
+			}, () -> {
+				try (java.io.InputStream in = sourceFor(r).getInputStream()) {
+					return "opened";
+				}
+			});
+		}
+	}
+
+	@Test
+	void openingForWriteWhatCantBeWritten() throws Exception {
+		for(String r : new String[] {"dir", "nodir/x.txt", "plain.txt/under"}) {
+			streamsAgree("open '" + r + "' for writing", () -> {
+				try (OutputStream out = new java.io.FileOutputStream(oracle(r))) {
+					return "opened";
+				}
+			}, () -> {
+				try (OutputStream out = sourceFor(r).getOutputStream()) {
+					return "opened";
+				}
+			});
+			streamsAgree("open '" + r + "' for appending", () -> {
+				try (OutputStream out = new java.io.FileOutputStream(oracle(r), true)) {
+					return "opened";
+				}
+			}, () -> {
+				try (OutputStream out = sourceFor(r).getOutputStream(true)) {
+					return "opened";
+				}
+			});
+		}
+	}
+
+	@Test
+	void writingCreatesTruncatesAndAppends() throws Exception {
+		byte[] all = new byte[256];
+		for(int i = 0; i < 256; i++) {
+			all[i] = (byte) i;
+		}
+		// a new file, and one open and closed with nothing written
+		for(String r : new String[] {"made.bin", "empty.bin"}) {
+			byte[] data = r.equals("empty.bin") ? new byte[0] : all;
+			streamsAgree("write new '" + r + "'", () -> {
+				try (OutputStream out = new java.io.FileOutputStream(oracle(r))) {
+					out.write(data);
+				}
+				return "exists " + oracle(r).exists() + ", length " + oracle(r).length() + ", " + hex(Files.readAllBytes(oracle(r).toPath()));
+			}, () -> {
+				FileSource f = sourceFor(r);
+				try (OutputStream out = f.getOutputStream()) {
+					out.write(data);
+				}
+				FileSource again = sourceFor(r);
+				try (java.io.InputStream in = again.getInputStream()) {
+					return "exists " + again.exists() + ", length " + again.length() + ", " + hex(in.readAllBytes());
+				}
+			});
+		}
+		// five.txt exists: replacing it truncates, appending keeps what is there
+		streamsAgree("truncate then append", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("five.txt"))) {
+				out.write(new byte[] {1, 2});
+			}
+			try (OutputStream out = new java.io.FileOutputStream(oracle("five.txt"), true)) {
+				out.write(new byte[] {3, 4});
+			}
+			return hex(Files.readAllBytes(oracle("five.txt").toPath())) + ", length " + oracle("five.txt").length();
+		}, () -> {
+			try (OutputStream out = sourceFor("five.txt").getOutputStream()) {
+				out.write(new byte[] {1, 2});
+			}
+			try (OutputStream out = sourceFor("five.txt").getOutputStream(true)) {
+				out.write(new byte[] {3, 4});
+			}
+			FileSource f = sourceFor("five.txt");
+			try (java.io.InputStream in = f.getInputStream()) {
+				return hex(in.readAllBytes()) + ", length " + f.length();
+			}
+		});
+	}
+
+	@Test
+	void openingWithAppendFalseReplaces() throws Exception {
+		streamsAgree("append=false onto five.txt", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("five.txt"), false)) {
+				out.write(new byte[] {7});
+			}
+			return hex(Files.readAllBytes(oracle("five.txt").toPath()));
+		}, () -> {
+			try (OutputStream out = sourceFor("five.txt").getOutputStream(false)) {
+				out.write(new byte[] {7});
+			}
+			try (java.io.InputStream in = sourceFor("five.txt").getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+	}
+
+	@Test
+	void readingTheEdges() throws Exception {
+		byte[] data = new byte[300];
+		for(int i = 0; i < data.length; i++) {
+			data[i] = (byte) (i * 7);
+		}
+		data[10] = (byte) 0xFF;
+		data[11] = (byte) 0x80;
+		Files.write(oracle("edges.bin").toPath(), data);
+		try (OutputStream out = sourceFor("edges.bin").getOutputStream()) {
+			out.write(data);
+		}
+		java.util.function.Function<java.util.concurrent.Callable<java.io.InputStream>, String> probe = open -> outcome(() -> {
+			StringBuilder sb = new StringBuilder();
+			try (java.io.InputStream in = open.call()) {
+				sb.append("zero ").append(in.read(new byte[4], 0, 0)).append(";");
+				sb.append("skip3 ").append(in.skip(3)).append(";");
+				sb.append("next ").append(in.read()).append(";");
+				byte[] block = new byte[16];
+				int n = in.read(block, 2, 10);
+				sb.append("block ").append(n).append(" ").append(hex(java.util.Arrays.copyOfRange(block, 2, 2 + n))).append(";");
+				sb.append("rest ").append(in.readAllBytes().length).append(";");
+				sb.append("eof ").append(in.read()).append(",").append(in.read(new byte[4])).append(";");
+				sb.append("skipAtEof ").append(in.skip(5) <= 5).append(";");
+				sb.append("stillEof ").append(in.read());
+			}
+			return sb.toString();
+		});
+		String expected = probe.apply(() -> new java.io.FileInputStream(oracle("edges.bin")));
+		String got = probe.apply(() -> sourceFor("edges.bin").getInputStream());
+		if( !expected.equals(got) ) {
+			differences.add("reading edges.bin: java.io.File [" + expected + "], FileSource [" + got + "]");
+		}
+	}
+
+	@Test
+	void closingTwiceAndTwoReadersAtOnce() throws Exception {
+		Files.write(oracle("two.bin").toPath(), new byte[] {9, 8, 7, 6});
+		try (OutputStream out = sourceFor("two.bin").getOutputStream()) {
+			out.write(new byte[] {9, 8, 7, 6});
+		}
+		streamsAgree("close twice", () -> {
+			java.io.InputStream in = new java.io.FileInputStream(oracle("two.bin"));
+			in.close();
+			in.close();
+			return "ok";
+		}, () -> {
+			java.io.InputStream in = sourceFor("two.bin").getInputStream();
+			in.close();
+			in.close();
+			return "ok";
+		});
+		streamsAgree("two readers at once", () -> {
+			try (java.io.InputStream a = new java.io.FileInputStream(oracle("two.bin")); java.io.InputStream b = new java.io.FileInputStream(oracle("two.bin"))) {
+				return a.read() + "," + b.read() + "," + a.read() + "," + b.read();
+			}
+		}, () -> {
+			try (java.io.InputStream a = sourceFor("two.bin").getInputStream(); java.io.InputStream b = sourceFor("two.bin").getInputStream()) {
+				return a.read() + "," + b.read() + "," + a.read() + "," + b.read();
+			}
+		});
+	}
+
+	// ------------------------------------------------------------ links
+
+	private FileSource symlink(String link, String target) throws Exception {
+		FileSource t = sourceFor(target);
+		return t.getFileSourceFactory().createSymbolicLink(sourceFor(link), t);
+	}
+
+	private FileSource hardlink(String link, String target) throws Exception {
+		FileSource t = sourceFor(target);
+		return t.getFileSourceFactory().createLink(sourceFor(link), t);
+	}
+
+	private void oracleSymlink(String link, String target) throws Exception {
+		Files.createSymbolicLink(oracle(link).toPath(), oracle(target).toPath());
+	}
+
+	@Test
+	void aSymbolicLinkToAFileActsLikeTheFile() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		oracleSymlink("ln.txt", "five.txt");
+		symlink("ln.txt", "five.txt");
+		for(String m : new String[] {"exists", "isFile", "isDirectory", "length", "getName"}) {
+			same("ln.txt", m);
+		}
+		// what is read through the link is what is in the target
+		try (OutputStream out = sourceFor("five.txt").getOutputStream()) {
+			out.write(new byte[] {4, 5, 6});
+		}
+		Files.write(oracle("five.txt").toPath(), new byte[] {4, 5, 6});
+		streamsAgree("read through the link", () -> hex(Files.readAllBytes(oracle("ln.txt").toPath())), () -> {
+			try (java.io.InputStream in = sourceFor("ln.txt").getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+		same("ln.txt", "length");
+		// writing through it changes the target
+		streamsAgree("write through the link", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("ln.txt"))) {
+				out.write(new byte[] {9});
+			}
+			return hex(Files.readAllBytes(oracle("five.txt").toPath()));
+		}, () -> {
+			try (OutputStream out = sourceFor("ln.txt").getOutputStream()) {
+				out.write(new byte[] {9});
+			}
+			try (java.io.InputStream in = sourceFor("five.txt").getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+	}
+
+	@Test
+	void aSymbolicLinkToADirectoryActsLikeTheDirectory() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		oracleSymlink("lndir", "dir");
+		symlink("lndir", "dir");
+		for(String m : new String[] {"exists", "isFile", "isDirectory", "list"}) {
+			same("lndir", m);
+		}
+		same("lndir/inner", "isDirectory");
+		streamsAgree("list through the link", () -> new java.util.TreeSet<>(java.util.Arrays.asList(oracle("lndir").list())).toString(),
+				() -> new java.util.TreeSet<>(java.util.Arrays.asList(sourceFor("lndir").list())).toString());
+	}
+
+	@Test
+	void aSymbolicLinkIsItsOwnEntry() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		oracleSymlink("ln.txt", "five.txt");
+		symlink("ln.txt", "five.txt");
+		// it is in its parent's list, and says where it points; the target says it points nowhere
+		streamsAgree("link is listed", () -> new java.util.TreeSet<>(java.util.Arrays.asList(oracle("").list())).toString(),
+				() -> new java.util.TreeSet<>(java.util.Arrays.asList(sourceFor("").list())).toString());
+		FileSource linked = sourceFor("ln.txt").getLinkedTo();
+		if( linked == null ) {
+			differences.add("ln.txt.getLinkedTo(): a symbolic link to five.txt, FileSource null");
+		} else if( !linked.getName().equals("five.txt") ) {
+			differences.add("ln.txt.getLinkedTo(): java.io.File five.txt, FileSource " + linked.getName());
+		}
+		if( sourceFor("five.txt").getLinkedTo() != null ) {
+			differences.add("five.txt.getLinkedTo(): not a link, FileSource not null");
+		}
+		// deleting the link leaves the target; deleting the target leaves a link that points at nothing
+		same("ln.txt", "delete");
+		same("ln.txt", "exists");
+		same("five.txt", "exists");
+		oracleSymlink("ln2.txt", "plain.txt");
+		symlink("ln2.txt", "plain.txt");
+		same("plain.txt", "delete");
+		same("ln2.txt", "exists");
+		same("ln2.txt", "isFile");
+	}
+
+	@Test
+	void aSymbolicLinkMayPointAtNothing() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		oracleSymlink("dangling", "nope.txt");
+		symlink("dangling", "nope.txt");
+		for(String m : new String[] {"exists", "isFile", "isDirectory", "length"}) {
+			same("dangling", m);
+		}
+		same("dangling", "delete");
+		same("dangling", "exists");
+	}
+
+	@Test
+	void aHardLinkIsAnotherNameForTheSameFile() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsHardLinks());
+		Files.createLink(oracle("hard.txt").toPath(), oracle("five.txt").toPath());
+		hardlink("hard.txt", "five.txt");
+		for(String m : new String[] {"exists", "isFile", "length"}) {
+			same("hard.txt", m);
+		}
+		streamsAgree("write through a hard link", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("hard.txt"))) {
+				out.write(new byte[] {1, 2, 3, 4, 5, 6, 7});
+			}
+			return oracle("five.txt").length() + " " + hex(Files.readAllBytes(oracle("five.txt").toPath()));
+		}, () -> {
+			try (OutputStream out = sourceFor("hard.txt").getOutputStream()) {
+				out.write(new byte[] {1, 2, 3, 4, 5, 6, 7});
+			}
+			FileSource t = sourceFor("five.txt");
+			try (java.io.InputStream in = t.getInputStream()) {
+				return t.length() + " " + hex(in.readAllBytes());
+			}
+		});
+		// deleting one name leaves the other
+		same("five.txt", "delete");
+		same("hard.txt", "exists");
+		same("hard.txt", "length");
+		if( sourceFor("hard.txt").getLinkedTo() != null ) {
+			differences.add("hard.txt.getLinkedTo(): a hard link is not a symbolic link, FileSource not null");
 		}
 	}
 }

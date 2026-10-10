@@ -52,41 +52,12 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 
 	private static final long serialVersionUID = 1L;
 
-	private static class Link implements InvocationHandler, java.io.Serializable {
-		private static final long serialVersionUID = 1L;
+	/**
+	 * Set when the first link is made. Until then no node has to look for a link above it, so a
+	 * file system that never makes one costs nothing for them.
+	 */
+	volatile boolean hasLinks;
 
-		@SuppressWarnings("unused")
-		boolean hardLink = true;
-		MemoryFileSource existing;
-		MemoryFileSource link;
-		
-		public Link(MemoryFileSource source,MemoryFileSource link,boolean hardLink) {
-			this.existing = source;
-			this.link = link;
-			this.hardLink = hardLink;
-		}
-		
-		@Override
-		public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-			String mname = method.getName();
-			Object target = existing;
-			if(mname.equals("getLinkedTo") && !hardLink) {
-				target = link;
-			} else if(mname.equals("getName") || mname.equals("toString") || mname.equals("getCanonicalPath")) {
-				target = link;
-			}
-			try {
-				return method.invoke(target, args);
-			} catch (InvocationTargetException e) {
-				// Rethrow what the method threw. Without this, an IOException
-				// reached callers as UndeclaredThrowableException.
-				throw e.getCause();
-			}
-		}
-		
-	}
-
-	
 	public static final String FACTORY_ID = "memory";
 
 	private static final String PROP_NAME = "name";
@@ -347,15 +318,6 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 		return '/';
 	}
 
-	FileSource getProxy(MemoryFileSource source,MemoryFileSource target,boolean hardLink) {
-		FileSource ret = (FileSource) Proxy.newProxyInstance(
-				  getClass().getClassLoader(), 
-				  new Class[] { FileSource.class }, 
-				  new Link(source,target,hardLink));
-
-		return ret;
-	}
-	
 	@Override
 	public FileSource createSymbolicLink(FileSource newLink, FileSource existing) throws IOException {
 		FileSource ret = createLink(newLink, existing, false);
@@ -369,20 +331,17 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 		return ret;
 	}
 
-	private FileSource createLink(FileSource newLink, FileSource existing,boolean hardLink) throws IOException {
-		FileSource ret = newLink;
-		if (newLink instanceof MemoryFileSource) {
-			MemoryFileSource nfs = (MemoryFileSource) newLink;
-			if (existing instanceof MemoryFileSource) {
-				MemoryFileSource efs = (MemoryFileSource) existing;
-				ret = getProxy(efs, nfs, hardLink);
-				nfs.linkedTo = ret;
-				// a symbolic link's canonical path is its target's (as java.io.File)
-				nfs.symlinkTarget = hardLink ? null : efs;
-				nfs.updateRetention();
-			}
+	/**
+	 * Links are nodes of the tree, as on a real file system: the link looks up by its own path
+	 * and answers for what it points to (see MemoryFileSource). The link must not exist, and for
+	 * a hard link what it is made for must be a file.
+	 */
+	private FileSource createLink(FileSource newLink, FileSource existing, boolean hardLink) throws IOException {
+		if( !(newLink instanceof MemoryFileSource) || !(existing instanceof MemoryFileSource) ) {
+			throw new IOException("A link in the memory file system has to be made between memory files");
 		}
-		return ret;
+		((MemoryFileSource) newLink).makeLinkTo((MemoryFileSource) existing, hardLink);
+		return newLink;
 	}
 
 }
