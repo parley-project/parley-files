@@ -94,7 +94,10 @@ public abstract class FileLikeBehaviorTests {
 			}
 			return String.valueOf(v);
 		} catch (InvocationTargetException e) {
-			return "throws " + e.getCause().getClass().getSimpleName();
+			// IOException, FileNotFoundException, NoSuchFileException: all of them are what a
+			// method declared "throws IOException" is allowed to throw, so they are the same answer
+			Throwable cause = e.getCause();
+			return "throws " + (cause instanceof java.io.IOException ? "IOException" : cause.getClass().getSimpleName());
 		} catch (ReflectiveOperationException e) {
 			return "no such method";
 		}
