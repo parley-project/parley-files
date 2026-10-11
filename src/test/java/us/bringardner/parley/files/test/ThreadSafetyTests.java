@@ -121,17 +121,17 @@ public class ThreadSafetyTests {
 			int t = ids.getAndIncrement();
 			for (int i = 0; i < 2000; i++) {
 				FileSourceFactory.addMimeType("x"+t+"-"+i, "type/"+t+"-"+i);
-				FileSourceFactory.getType("x"+t+"-"+(i/2));
+				FileSourceFactory.getMimeType("x"+t+"-"+(i/2));
 			}
 			return null;
 		});
 		for (int t = 0; t < THREADS; t++) {
 			for (int i = 0; i < 2000; i++) {
-				assertEquals("type/"+t+"-"+i, FileSourceFactory.getType("x"+t+"-"+i));
+				assertEquals("type/"+t+"-"+i, FileSourceFactory.getMimeType("x"+t+"-"+i));
 			}
 		}
-		assertEquals("text/html", FileSourceFactory.getType("html"));
-		assertEquals(null, FileSourceFactory.getType(null));
+		assertEquals("text/html", FileSourceFactory.getMimeType("html"));
+		assertEquals(null, FileSourceFactory.getMimeType(null));
 	}
 
 	/** setPosixPermision was an unsynchronized read-modify-write, so concurrent updates could be lost. */

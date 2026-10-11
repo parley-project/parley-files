@@ -772,7 +772,7 @@ public class FileProxy implements FileSource {
 			int idx=name.lastIndexOf('.');
 			if( idx > 0 ){
 				String ext = name.substring(idx+1);
-				ret = FileProxyFactory.getType(ext);
+				ret = FileProxyFactory.getMimeType(ext);
 			}
 		}
 

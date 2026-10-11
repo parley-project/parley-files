@@ -1621,7 +1621,8 @@ public abstract class FileLikeBehaviorTests {
 	@Test
 	void theContentTypeComesFromTheNameAndIsNullWhenUnknown() throws Exception {
 		for(String name : new String[] {"a.txt", "page.html", "data.json", "image.png", "archive.tar.gz", "noextension",
-				".hidden", "trailingdot.", "two.dots.txt", "with space.txt", "dir", "plain.txt", "missing.txt", "x.unknownext"}) {
+				".hidden", "trailingdot.", "two.dots.txt", "with space.txt", "dir", "plain.txt", "missing.txt", "x.unknownext",
+				"IMG_0001.JPG", "Report.PdF", "UPPER.TXT", "config.yaml", "font.woff2", "mail.eml"}) {
 			String expected = us.bringardner.parley.files.fileproxy.FileProxy.getContentType(name);
 			FileSource f = sourceFor(name);
 			String got = f.getContentType();
