@@ -1096,7 +1096,26 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		FileSource ret=null;
 
 		try {
-			URI uri = url.toURI();
+			URI uri;
+			try {
+				uri = url.toURI();
+			} catch (URISyntaxException e) {
+				//  A path written as the platform writes it ("filesource:C:\dir\a file.txt?...") is
+				//  not a valid URI: use '/' and quote what a URI can't hold.
+				String s = url.toString();
+				int colon = s.indexOf(':');
+				String ssp = colon < 0 ? "" : s.substring(colon+1).replace('\\', '/');
+				String fragment = null;
+				int hash = ssp.indexOf('#');
+				if( hash >= 0 ) {
+					fragment = ssp.substring(hash+1);
+					ssp = ssp.substring(0, hash);
+				}
+				if( colon < 0 ) {
+					throw e;
+				}
+				uri = new URI(s.substring(0, colon), ssp, fragment);
+			}
 			FileSourceFactory factory = getFileSourceFactory(uri);
 			if( factory == null ) {
 				throw new IOException("No Filesource Factory avilible for id="+url);
