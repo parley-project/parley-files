@@ -234,6 +234,9 @@ public abstract class FileLikeBehaviorTests {
 	void aDirectory() throws Exception {
 		for(String m : new String[] {"exists", "isFile", "isDirectory", "list", "listFiles", "mkdir",
 				"mkdirs", "canRead", "canWrite", "canExecute"}) {
+			if( m.equals("canExecute") && onWindows() && !(sourceFor("dir").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory) ) {
+				continue;   // java.io.File on Windows says yes to every file; a POSIX file system does not
+			}
 			same("dir", m);
 		}
 		// not empty, so it can't be deleted
@@ -1022,6 +1025,8 @@ public abstract class FileLikeBehaviorTests {
 	@Test
 	void aHeldHandleSeesPermissionsChange() throws Exception {
 		org.junit.jupiter.api.Assumptions.assumeTrue(permissionsOfExistingPathsAreComparable());
+		//  java.io.File on Windows is the read-only attribute; a POSIX file system behind another factory is not
+		org.junit.jupiter.api.Assumptions.assumeFalse(onWindows() && !(sourceFor("five.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory));
 		File heldFile = oracle("five.txt");
 		FileSource held = sourceFor("five.txt");
 		heldAgree("before", heldFile, held, "canRead", "canWrite");
