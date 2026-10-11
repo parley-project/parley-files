@@ -362,11 +362,21 @@ public class FileProxy implements FileSource {
 
 	private synchronized	Set<PosixFilePermission> getPosixPermissions() throws IOException {
 		Set<PosixFilePermission> ret = new HashSet<PosixFilePermission>() ;
-		PosixFileAttributeView view2 = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
+		// As java.io.File, stat and chmod do: a symbolic link has the permissions of what it
+		// leads to. (They were the link's own, which is rwxr-xr-x or rwxrwxrwx whatever the file
+		// is, and setting one bit wrote the link's bits onto the file.) Only a link that
+		// points at nothing has nothing to follow, and has its own.
+		PosixFileAttributeView view2 = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class);
 		if (view2 != null) {
-			PosixFileAttributes at = view2.readAttributes();
+			PosixFileAttributes at;
+			try {
+				at = view2.readAttributes();
+			} catch (java.nio.file.NoSuchFileException e) {
+				PosixFileAttributeView own = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+				at = own == null ? null : own.readAttributes();
+			}
 			if( at != null ) {
-				ret = at.permissions();
+				ret = new HashSet<PosixFilePermission>(at.permissions());
 			}
 		}
 
