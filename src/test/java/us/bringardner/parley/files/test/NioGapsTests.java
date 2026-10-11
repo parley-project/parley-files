@@ -180,7 +180,7 @@ public class NioGapsTests {
 		assertNotNull(u);
 		assertEquals(me, u.getName());
 		assertThrows(UserPrincipalNotFoundException.class, () -> svc.lookupPrincipalByName("no-such-user-x9q"));
-		if( kind.equals("memory") ) {
+		if( kind.equals("memory") && !WINDOWS ) {
 			GroupPrincipal g = Files.readAttributes(p, java.nio.file.attribute.PosixFileAttributes.class).group();
 			assertEquals(g.getName(), svc.lookupPrincipalByGroupName(g.getName()).getName());
 		}

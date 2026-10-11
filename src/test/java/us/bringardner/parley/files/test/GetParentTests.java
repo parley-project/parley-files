@@ -21,19 +21,24 @@ public class GetParentTests {
 	public void parentIsAPath(String type) throws IOException {
 		FileSourceFactory factory = FileSourceFactory.getFileSourceFactory(type);
 		factory.connect();
-		File tmp = Files.createTempDirectory("parent").toFile();
+		//  A virtual file system has paths of its own: a host path (C:\Users\x) isn't one on Windows
+		boolean memory = type.equals("memory");
+		File tmp = memory ? null : Files.createTempDirectory("parent").toFile();
+		String base = memory ? "/parent" + System.nanoTime() : tmp.getAbsolutePath();
 		try {
-			FileSource dir = factory.createFileSource(tmp.getAbsolutePath());
+			FileSource dir = factory.createFileSource(base);
 			dir.mkdirs();
 			FileSource child = dir.getChild("sub").getChild("x.txt");
-			String expected = new File(new File(tmp, "sub"), "x.txt").getParent();
+			String expected = memory ? base + "/sub" : new File(new File(tmp, "sub"), "x.txt").getParent();
 			assertEquals(expected, child.getParent());
 			assertEquals(child.getParentFile().getAbsolutePath(), child.getParent());
-			assertEquals(tmp.getParent(), dir.getParent());
+			assertEquals(memory ? "/" : tmp.getParent(), dir.getParent());
 			FileSource root = factory.listRoots()[0];
 			assertNull(root.getParent());
 		} finally {
-			tmp.delete();
+			if( tmp != null ) {
+				tmp.delete();
+			}
 		}
 	}
 }
