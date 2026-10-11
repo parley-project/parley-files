@@ -154,6 +154,50 @@ try {
 
 `IRandomAccessStream` has the same methods as `java.io.RandomAccessFile` (`seek`, `getFilePointer`, `read`, `readFully`, `readInt`, `writeUTF`, `setLength`, …). For read-only access with seeking, use `getSeekableInputStream()`.
 
+## Links
+
+Symbolic links and hard links are made through the factory, and a link acts like what it leads to, as it
+does with `java.io.File` and `java.nio.file.Files`:
+
+```java
+FileSourceFactory f = file.getFileSourceFactory();
+FileSource link = f.createSymbolicLink(f.createFileSource("/shared/current"), file);   // a symbolic link to file
+FileSource same = f.createLink(f.createFileSource("/shared/copy"), file);              // a hard link: another name for it
+
+link.getLinkedTo();    // the FileSource it points to; null if this isn't a symbolic link (also null for a hard link)
+link.isFile();         // what the link leads to: exists, isFile, isDirectory, length, list, permissions, streams
+link.delete();         // deletes the link, never what it leads to
+link.getCanonicalPath();   // the path of what it leads to
+```
+
+- **A link looks up by its own path.** `createFileSource("/shared/current")` is the link, in every file system
+  that has links, and everything below a linked directory works too.
+- **`delete()` and `renameTo()` act on the link.** The file it leads to is untouched.
+- **A write through a link changes the file it leads to**, as a `FileOutputStream` does on a symbolic link
+  (checked on every implementation that has links). The link stays a link. A *protocol* that can't see
+  links has to decide what a write means for itself: the FTP server in
+  [parley-ftp](https://github.com/tony-bringardner/parley-ftp#links) hides links from its clients and
+  replaces the link with a regular file instead. That is the FTP server's rule, not this API's.
+- **A link that leads nowhere** is there (it is listed and can be deleted) but `exists()` is false, and
+  writing through it creates the target. Its canonical path is its own path, as `java.io.File`'s is.
+- **A hard link shares the data.** Deleting the name that held it leaves the file in the others.
+- **A directory with a link in it isn't empty.**
+- **A new link must not already exist**, its directory must, and a hard link must be to a file; otherwise
+  the call throws an `IOException` (the memory and JDBC file systems throw `FileAlreadyExistsException` and
+  `NoSuchFileException`, as `java.nio.file.Files` does).
+- **`getCanonicalPath()` resolves links**, so two names for one file have one canonical path, and
+  `isChildOfMine()` sees that a link inside a directory that leads outside it isn't a child.
+
+| Implementation | Symbolic links | Hard links | Notes |
+|---|---|---|---|
+| `fileproxy` | yes | yes | The operating system's. A link has the permissions of what it leads to. |
+| `memory` | yes | yes | Links are nodes of the tree. |
+| SFTP | yes | yes | The server's `symlink` and `hardlink` requests. |
+| JDBC | yes | yes | Rows of type `link` and `hard`; the schema is unchanged. |
+| FTP | no | no | The protocol has no command for it (`UnsupportedOperationException`). A server that says an entry is a link makes `getLinkedTo()` work, and a link answers for what it leads to. `getCanonicalPath()` is lexical. |
+
+These are checked, link by link, against `java.nio.file.Files`, by `FileLikeBehaviorTests` in the tests jar.
+
 ## NIO file system provider
 
 `file.toPath()` returns a `java.nio.file.Path` (a `FileSourcePath`) for any FileSource. The provider is registered for the `filesource` scheme, so `Paths.get(URI)` works too:
@@ -187,6 +231,13 @@ For remote file systems the lookup service only knows the connected user and tha
    ```
 
 The unit tests in `src/test/java`, starting with `AbstractTestClass`, are the best worked examples of what an implementation has to support.
+
+A `FileSource` is meant to look and act like a `java.io.File`: it can have more, never less. The tests jar has
+`FileLikeBehaviorTests`, which runs the same cases on a `java.io.File` and on your implementation and fails
+on any difference (names, creating and deleting, renaming, permissions, times, streams and their errors,
+links, random access, listings with a filter, file sizes around the usual block sizes). Extend it and give it
+a tree to work in (`newTree()` and `sourceFor(path)`). The hooks, such as `supportsSymbolicLinks()` and
+`supportsRandomAccess()`, say what your file system can't do.
 
 ## Migrating from File to FileSource
 
