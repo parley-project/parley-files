@@ -1331,17 +1331,18 @@ public class MemoryFileSource implements FileSource {
 			final MemoryFileSource owner = this;
 
 			return new ISeekableInputStream() {
-				int filePointer = 0;
+				long filePointer = 0;
 
 				byte [] myData = Arrays.copyOf(snapshot, snapshot.length);
 				@Override
 				public void seek(long pos) throws IOException {
 					// Same rules as RandomAccessFile: negative is an error, and seeking
-					// at or past the end is allowed (the next read returns -1).
+					// at or past the end is allowed: the pointer is where it was put and
+					// the next read returns -1.
 					if( pos < 0 ) {
 						throw new IOException("Negative seek offset");
 					}
-					filePointer = (int) Math.min(pos, myData.length);
+					filePointer = pos;
 				}
 
 				@Override
@@ -1356,12 +1357,12 @@ public class MemoryFileSource implements FileSource {
 					if( len == 0 ) {
 						return 0;
 					}
-					int available = myData.length - filePointer;
+					long available = myData.length - filePointer;
 					if( available <= 0 ) {
 						return -1;
 					}
-					int count = Math.min(len, available);
-					System.arraycopy(myData, filePointer, data, off, count);
+					int count = (int) Math.min(len, available);
+					System.arraycopy(myData, (int) filePointer, data, off, count);
 					filePointer += count;
 					return count;
 				}
@@ -1370,7 +1371,7 @@ public class MemoryFileSource implements FileSource {
 				public int read() throws IOException {
 					int ret = -1;
 					if( filePointer < myData.length) {
-						ret = myData[filePointer++] & 0xFF;  // unsigned, so bytes >= 0x80 aren't mistaken for EOF
+						ret = myData[(int) filePointer++] & 0xFF;  // unsigned, so bytes >= 0x80 aren't mistaken for EOF
 					}
 					return ret;
 				}
@@ -1402,7 +1403,7 @@ public class MemoryFileSource implements FileSource {
 
 						@Override
 						public long skip(long n) throws IOException {
-							int remaining = Math.max(0, myData.length - filePointer);
+							long remaining = Math.max(0, myData.length - filePointer);
 							if( n <= 0 || remaining == 0 ) {
 								return 0;
 							}
@@ -1413,7 +1414,7 @@ public class MemoryFileSource implements FileSource {
 
 						@Override
 						public int available() {
-							return Math.max(0, myData.length - filePointer);
+							return (int) Math.max(0, myData.length - filePointer);
 						}
 
 						@Override
