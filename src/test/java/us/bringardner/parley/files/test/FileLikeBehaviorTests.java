@@ -438,6 +438,9 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void permissionSetters() throws Exception {
+		//  java.io.File on Windows cannot clear a read or execute permission (it answers and changes
+		//  nothing), so it is no oracle for a file system with POSIX permissions.
+		org.junit.jupiter.api.Assumptions.assumeFalse(onWindows() && !(sourceFor("five.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory));
 		permissionCase("setWritable(false)", "five.txt", f -> f.setWritable(false), f -> f.setWritable(false));
 		permissionCase("setWritable(false, true)", "five.txt", f -> f.setWritable(false, true), f -> f.setWritable(false, true));
 		permissionCase("setReadOnly()", "five.txt", f -> f.setReadOnly(), f -> f.setReadOnly());
