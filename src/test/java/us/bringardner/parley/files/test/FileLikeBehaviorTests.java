@@ -1,6 +1,7 @@
 package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
@@ -74,6 +75,15 @@ public abstract class FileLikeBehaviorTests {
 	 */
 	protected boolean supportsRandomAccess() {
 		return true;
+	}
+
+	/**
+	 * The smallest step of time the backend can store for a file, in milliseconds. A java.io.File's
+	 * depends on the file system, a millisecond on this one. SFTP (version 3) and FTP store whole
+	 * seconds, and say so with 1000: a time set is then stored truncated to a multiple of it.
+	 */
+	protected long modifiedTimeResolutionMillis() {
+		return 1;
 	}
 
 	/** Called before each test, to give the backend an empty tree to work in. */
@@ -1299,6 +1309,231 @@ public abstract class FileLikeBehaviorTests {
 		assertEquals(1000, sourceFor("seek.bin").length(), "the file was changed by a seek");
 		if( !expected.equals(got) ) {
 			differences.add("seekable stream: java.io.RandomAccessFile [" + expected + "], FileSource [" + got + "]");
+		}
+	}
+
+	// ------------------------------------------------------------ filters
+
+	private void both(String relative, String... names) throws Exception {
+		for(String n : names) {
+			String full = relative.isEmpty() ? n : relative + "/" + n;
+			if( n.endsWith("/") ) {
+				oracle(full).mkdir();
+				sourceFor(full.substring(0, full.length()-1)).mkdir();
+			} else {
+				Files.write(oracle(full).toPath(), n.equals("big.dat") ? new byte[2000] : new byte[3]);
+				try (OutputStream out = sourceFor(full).getOutputStream()) {
+					out.write(n.equals("big.dat") ? new byte[2000] : new byte[3]);
+				}
+			}
+		}
+	}
+
+	private static String sorted(java.util.Collection<String> names) {
+		return names == null ? "null" : new java.util.TreeSet<>(names).toString();
+	}
+
+	@Test
+	void filteringAListing() throws Exception {
+		both("dir", "a.txt", "b.log", "c.txt", "sub/", ".hidden", "big.dat");
+		java.util.List<String[]> cases = new java.util.ArrayList<>();
+		// name, then a description used in the label
+		cases.add(new String[] {".txt files", "txt"});
+		cases.add(new String[] {"directories", "dir"});
+		cases.add(new String[] {"nothing", "none"});
+		cases.add(new String[] {"everything", "all"});
+		cases.add(new String[] {"large files", "big"});
+		for(String[] c : cases) {
+			String kind = c[1];
+			java.util.function.Predicate<File> onFile = f -> {
+				switch(kind) {
+				case "txt": return f.getName().endsWith(".txt");
+				case "dir": return f.isDirectory();
+				case "none": return false;
+				case "big": return f.isFile() && f.length() > 1000;
+				default: return true;
+				}
+			};
+			java.util.function.Predicate<FileSource> onSource = f -> {
+				try {
+					switch(kind) {
+					case "txt": return f.getName().endsWith(".txt");
+					case "dir": return f.isDirectory();
+					case "none": return false;
+					case "big": return f.isFile() && f.length() > 1000;
+					default: return true;
+					}
+				} catch (IOException e) {
+					throw new java.io.UncheckedIOException(e);
+				}
+			};
+			streamsAgree("listFiles(filter) of " + c[0], () -> {
+				File[] r = oracle("dir").listFiles(f -> onFile.test(f));
+				return sorted(r == null ? null : java.util.Arrays.stream(r).map(File::getName).collect(java.util.stream.Collectors.toList()));
+			}, () -> {
+				FileSource[] r = sourceFor("dir").listFiles((us.bringardner.parley.files.FileSourceFilter) f -> onSource.test(f));
+				return sorted(r == null ? null : java.util.Arrays.stream(r).map(FileSource::getName).collect(java.util.stream.Collectors.toList()));
+			});
+			streamsAgree("list(filter) of " + c[0], () -> {
+				String[] r = oracle("dir").list((d, n) -> onFile.test(new File(d, n)));
+				return sorted(r == null ? null : java.util.Arrays.asList(r));
+			}, () -> {
+				String[] r = sourceFor("dir").list((us.bringardner.parley.files.FileSourceFilter) f -> onSource.test(f));
+				return sorted(r == null ? null : java.util.Arrays.asList(r));
+			});
+		}
+		// no filter at all lists everything
+		streamsAgree("listFiles(null)", () -> sorted(java.util.Arrays.stream(oracle("dir").listFiles((java.io.FileFilter) null)).map(File::getName).collect(java.util.stream.Collectors.toList())),
+				() -> sorted(java.util.Arrays.stream(sourceFor("dir").listFiles((us.bringardner.parley.files.FileSourceFilter) null)).map(FileSource::getName).collect(java.util.stream.Collectors.toList())));
+		streamsAgree("list(null)", () -> sorted(java.util.Arrays.asList(oracle("dir").list((java.io.FilenameFilter) null))),
+				() -> sorted(java.util.Arrays.asList(sourceFor("dir").list((us.bringardner.parley.files.FileSourceFilter) null))));
+		// a filter on what isn't a directory
+		for(String r : new String[] {"plain.txt", "missing"}) {
+			streamsAgree("listFiles(filter) of " + r, () -> {
+				File[] x = oracle(r).listFiles(f -> true);
+				return x == null ? "null" : "array of " + x.length;
+			}, () -> {
+				FileSource[] x = sourceFor(r).listFiles((us.bringardner.parley.files.FileSourceFilter) f -> true);
+				return x == null ? "null" : "array of " + x.length;
+			});
+		}
+	}
+
+	// ------------------------------------------------------------ larger files, written and read as streams
+
+	private static String digest(byte[] b, int from, int to) {
+		try {
+			java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+			md.update(b, from, to - from);
+			return hex(md.digest()).substring(0, 16);
+		} catch (java.security.NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
+	@Test
+	void largerFilesWrittenAndReadAsStreams() throws Exception {
+		// sizes around the buffers and rows backends use: 1 KB, 32 KB, 64 KB, 100 KB, 256 KB
+		int[] sizes = {0, 1, 1023, 1024, 1025, 32767, 32768, 32769, 65535, 65536, 65537, 102399, 102400, 102401, 262145};
+		for(int n : sizes) {
+			byte[] data = new byte[n];
+			new java.util.Random(n).nextBytes(data);
+			String name = "large" + n + ".bin";
+			// written in pieces that never line up with a block
+			FileSource sf = sourceFor(name);
+			try (OutputStream out = sf.getOutputStream()) {
+				int at = 0;
+				int[] pieces = {1, 4093, 999, 20011, 65537};
+				int i = 0;
+				while( at < n ) {
+					int len = Math.min(pieces[i++ % pieces.length], n - at);
+					out.write(data, at, len);
+					at += len;
+				}
+			}
+			StringBuilder got = new StringBuilder();
+			FileSource again = sourceFor(name);
+			got.append("length ").append(again.length());
+			try (java.io.InputStream in = again.getInputStream()) {
+				byte[] all = in.readAllBytes();
+				got.append(" read ").append(all.length).append(' ').append(digest(all, 0, all.length));
+			}
+			StringBuilder expected = new StringBuilder("length " + n + " read " + n + " " + digest(data, 0, n));
+			for(long pos : new long[] {0, 1, n / 2, Math.max(0, n - 1), n, n + 10L}) {
+				int from = (int) Math.min(pos, n);
+				expected.append(" from ").append(pos).append(' ').append(n - from).append(' ').append(digest(data, from, n));
+				try (java.io.InputStream in = again.getInputStream(pos)) {
+					byte[] tail = in.readAllBytes();
+					got.append(" from ").append(pos).append(' ').append(tail.length).append(' ').append(digest(tail, 0, tail.length));
+				}
+			}
+			// skip, then read: the stream's own skip across whatever block it uses
+			if( n > 4 ) {
+				try (java.io.InputStream in = again.getInputStream()) {
+					long skipped = in.skip(n / 2);
+					byte[] rest = in.readAllBytes();
+					got.append(" skip ").append(skipped + rest.length);
+					expected.append(" skip ").append(n);
+				}
+			}
+			// appended to, then replaced by something shorter
+			try (OutputStream out = sourceFor(name).getOutputStream(true)) {
+				out.write(new byte[] {1, 2, 3, 4, 5});
+			}
+			got.append(" appended ").append(sourceFor(name).length());
+			expected.append(" appended ").append(n + 5);
+			try (OutputStream out = sourceFor(name).getOutputStream()) {
+				out.write(data, 0, n / 2);
+			}
+			try (java.io.InputStream in = sourceFor(name).getInputStream()) {
+				byte[] half = in.readAllBytes();
+				got.append(" replaced ").append(half.length).append(' ').append(digest(half, 0, half.length));
+			}
+			expected.append(" replaced ").append(n / 2).append(' ').append(digest(data, 0, n / 2));
+			if( !expected.toString().equals(got.toString()) ) {
+				differences.add("a file of " + n + " bytes: expected [" + expected + "], FileSource [" + got + "]");
+			}
+		}
+	}
+
+	// ------------------------------------------------------------ modified times
+
+	@Test
+	void modifiedTimeKeepsWhatTheFileSystemCanStore() throws Exception {
+		long resolution = modifiedTimeResolutionMillis();
+		long when = 1_600_000_000_123L;       // has milliseconds
+		resetTrees();
+		File of = oracle("five.txt");
+		assertTrue(of.setLastModified(when));
+		long expectedFile = of.lastModified();      // what this file system keeps of it
+		FileSource sf = sourceFor("five.txt");
+		assertTrue(sf.setLastModified(when));
+		long got = sourceFor("five.txt").lastModified();
+		// What java.io.File keeps depends on the file system under it (whole seconds on some). A
+		// backend may keep less (its own resolution), or exactly what was set, which is more; it
+		// never gives some other time.
+		long floor = expectedFile - (expectedFile % resolution);
+		if( got != expectedFile && got != floor && got != when ) {
+			differences.add("lastModified after setLastModified(" + when + "): java.io.File " + expectedFile
+					+ ", FileSource " + got + " (resolution " + resolution + " ms)");
+		}
+	}
+
+	@Test
+	void modifiedTimeFollowsWrites() throws Exception {
+		long resolution = Math.max(modifiedTimeResolutionMillis(), 1);
+		long before = System.currentTimeMillis() - 2000;
+		both("", "stamp.txt");
+		long made = sourceFor("stamp.txt").lastModified();
+		long after = System.currentTimeMillis() + 2000 + resolution;
+		if( made < before || made > after ) {
+			differences.add("lastModified of a file just made: " + made + " is not within 2 s of now (" + before + ".." + after + ")");
+		}
+		// set it to the past, write, and it is now
+		assertTrue(sourceFor("stamp.txt").setLastModified(1_600_000_000_000L));
+		assertEquals(1_600_000_000_000L, sourceFor("stamp.txt").lastModified());
+		try (OutputStream out = sourceFor("stamp.txt").getOutputStream()) {
+			out.write(new byte[] {1, 2, 3, 4});
+		}
+		long written = sourceFor("stamp.txt").lastModified();
+		if( written < before ) {
+			differences.add("lastModified after a write is " + written + ", which is not recent");
+		}
+	}
+
+	@Test
+	void aDirectoryIsModifiedWhenAChildIsAdded() throws Exception {
+		// java.io.File does this on the file systems that matter; a backend with its own rows may not
+		resetTrees();
+		File od = oracle("dir");
+		od.setLastModified(1_600_000_000_000L);
+		sourceFor("dir").setLastModified(1_600_000_000_000L);
+		new File(od, "child.txt").createNewFile();
+		sourceFor("dir/child.txt").createNewFile();
+		boolean expected = od.lastModified() > 1_600_000_000_000L;
+		boolean got = sourceFor("dir").lastModified() > 1_600_000_000_000L;
+		if( expected != got ) {
+			differences.add("a directory's lastModified after a child was added: java.io.File changed " + expected + ", FileSource changed " + got);
 		}
 	}
 }
