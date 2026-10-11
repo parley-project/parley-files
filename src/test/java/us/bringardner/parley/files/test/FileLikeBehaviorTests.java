@@ -211,10 +211,18 @@ public abstract class FileLikeBehaviorTests {
 
 	// ------------------------------------------------------------ a file is not a directory
 
+	/** java.io.File on Windows: every file is executable, and getCanonicalPath doesn't resolve links. */
+	private static boolean onWindows() {
+		return System.getProperty("os.name", "").toLowerCase().startsWith("windows");
+	}
+
 	@Test
 	void aPlainFile() throws Exception {
 		for(String m : new String[] {"exists", "isFile", "isDirectory", "length", "list", "listFiles",
 				"mkdir", "mkdirs", "createNewFile", "canRead", "canWrite", "canExecute"}) {
+			if( m.equals("canExecute") && onWindows() && !(sourceFor("plain.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory) ) {
+				continue;   // a virtual file system has POSIX permissions; java.io.File on Windows says yes to all
+			}
 			same("plain.txt", m);
 		}
 		same("five.txt", "length");
@@ -758,6 +766,11 @@ public abstract class FileLikeBehaviorTests {
 		oracleSymlink("dangling", "nope.txt");
 		symlink("dangling", "nope.txt");
 		for(String r : new String[] {"five.txt", "dir", "dir/inner", "ln.txt", "ln2.txt", "lndir", "lndir/inner", "dangling", "nope.txt"}) {
+			if( onWindows() ) {
+				//  java.io.File does not resolve symbolic links on Windows, so it is no oracle for this;
+				//  the two assertions below check the contract directly.
+				break;
+			}
 			String expected = canonicalFromTree(true, r);
 			String got = canonicalFromTree(false, r);
 			if( !expected.equals(got) ) {

@@ -26,6 +26,8 @@ import us.bringardner.parley.files.fileproxy.FileProxy;
 public class FileCompatTests {
 
 	private File tmp;
+	//  The directory's absolute path in the file system's own form
+	private String base;
 
 	@AfterEach
 	public void cleanup() {
@@ -40,8 +42,16 @@ public class FileCompatTests {
 	private FileSource dir(String type) throws IOException {
 		FileSourceFactory factory = FileSourceFactory.getFileSourceFactory(type);
 		factory.connect();
-		tmp = Files.createTempDirectory("compat").toFile();
-		FileSource dir = factory.createFileSource(tmp.getAbsolutePath());
+		if( type.equals("memory") ) {
+			//  A virtual file system has paths of its own ("/..."): a host path such as C:\Users\x
+			//  is not one of them on Windows.
+			tmp = null;
+			base = "/compat" + System.nanoTime();
+		} else {
+			tmp = Files.createTempDirectory("compat").toFile();
+			base = tmp.getAbsolutePath();
+		}
+		FileSource dir = factory.createFileSource(base);
 		dir.mkdirs();
 		return dir;
 	}
@@ -54,9 +64,10 @@ public class FileCompatTests {
 		f.createNewFile();
 
 		assertTrue(f.isAbsolute());
-		assertEquals(new File(tmp, "a.txt").getPath(), f.getPath());
+		assertEquals(type.equals("memory") ? base + "/a.txt" : new File(tmp, "a.txt").getPath(), f.getPath());
 		assertSame(f, f.getAbsoluteFile());
-		assertEquals(f.getCanonicalPath(), f.getCanonicalFile().getAbsolutePath());
+		//  A local file's canonical path uses '/', its absolute path the platform's separator
+		assertEquals(f.getCanonicalPath().replace('\\', '/'), f.getCanonicalFile().getAbsolutePath().replace('\\', '/'));
 		assertTrue(f.getCanonicalFile().exists());
 	}
 

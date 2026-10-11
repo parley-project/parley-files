@@ -33,7 +33,7 @@ public class TempFileTests {
 		FileSource tmpDir = f.getTempDirectory();
 		assertTrue(tmpDir.isDirectory());
 		if( type.equals("fileproxy") ) {
-			assertEquals(new File(System.getProperty("java.io.tmpdir")).getCanonicalPath(), tmpDir.getCanonicalPath());
+			assertEquals(new File(System.getProperty("java.io.tmpdir")).getCanonicalPath().replace('\\', '/'), tmpDir.getCanonicalPath());
 		} else {
 			assertEquals("/tmp", tmpDir.getAbsolutePath());
 		}
