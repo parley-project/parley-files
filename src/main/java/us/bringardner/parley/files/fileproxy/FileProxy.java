@@ -513,7 +513,43 @@ public class FileProxy implements FileSource {
 	 */
 	public String getCanonicalPath() throws IOException {
 
-		return target.getCanonicalPath().replace('\\','/');
+		return canonicalPath(target).replace('\\','/');
+	}
+
+	/**
+	 * java.io.File.getCanonicalPath(), plus symbolic links resolved on Windows, where File leaves
+	 * them alone (so a link inside a directory that leads outside it looked like it was inside:
+	 * isChildOfMine() relies on the canonical path being the real one).
+	 */
+	private static String canonicalPath(File f) throws IOException {
+		String c = f.getCanonicalPath();
+		if( File.separatorChar != '\\' ) {
+			return c;
+		}
+		try {
+			//  Real path of the nearest part that exists, then the rest of the name as it is.
+			java.nio.file.Path existing = java.nio.file.Paths.get(c);
+			java.util.ArrayDeque<String> rest = new java.util.ArrayDeque<>();
+			while( existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS) ) {
+				java.nio.file.Path n = existing.getFileName();
+				if( n == null ) {
+					return c;
+				}
+				rest.addFirst(n.toString());
+				existing = existing.getParent();
+			}
+			if( existing == null ) {
+				return c;
+			}
+			java.nio.file.Path real = existing.toRealPath();
+			for(String s : rest) {
+				real = real.resolve(s);
+			}
+			return real.toString();
+		} catch (IOException | RuntimeException e) {
+			//  A link that leads nowhere, or a name Windows can't read: what File says
+			return c;
+		}
 	}
 
 	/* (non-Javadoc)
@@ -747,7 +783,15 @@ public class FileProxy implements FileSource {
 		} catch (IOException e) {
 			throw new MalformedURLException("Can't get path");
 		}
-		ret = new URL(FileSourceFactory.FILE_SOURCE_PROTOCOL+":"+path+"?"+FileSourceFactory.QUERY_STRING_SOURCE_TYPE+"="+FileProxyFactory.FACTORY_ID);
+		//  '/' in the URL and quoted characters, as toURI() does: a raw Windows path (C:\dir\file, or
+		//  one with a space) is not a valid URI, so getFileSource(URL) could not read this URL back.
+		String query = FileSourceFactory.QUERY_STRING_SOURCE_TYPE+"="+FileProxyFactory.FACTORY_ID;
+		try {
+			ret = new URL(new java.net.URI(FileSourceFactory.FILE_SOURCE_PROTOCOL,
+					path.replace(File.separatorChar, '/')+"?"+query, null).toString());
+		} catch (java.net.URISyntaxException e) {
+			throw new MalformedURLException("Can't make a URL for "+path+": "+e.getMessage());
+		}
 
 		return ret;
 	}
