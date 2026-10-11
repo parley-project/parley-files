@@ -86,6 +86,14 @@ public abstract class FileLikeBehaviorTests {
 		return 1;
 	}
 
+	/**
+	 * Whether the backend has {@link FileSource#getSeekableInputStream()}, a read-only stream that
+	 * can be moved. True unless a backend says otherwise, also when it has no random access.
+	 */
+	protected boolean supportsSeekableInputStream() {
+		return true;
+	}
+
 	/** Called before each test, to give the backend an empty tree to work in. */
 	protected abstract void newTree() throws Exception;
 
@@ -1253,7 +1261,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSeekableInputStreamActsLikeAReadOnlyRandomAccessFile() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsRandomAccess());
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSeekableInputStream());
 		byte[] data = new byte[1000];
 		new java.util.Random(5).nextBytes(data);
 		data[0] = (byte) 0xFF;
