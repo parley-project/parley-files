@@ -68,6 +68,28 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
  */
 public abstract class FileSourceFactory extends BaseObject implements URLStreamHandlerFactory, Serializable {
 
+	private final java.util.concurrent.atomic.AtomicLong changeCount = new java.util.concurrent.atomic.AtomicLong();
+
+	/**
+	 * A number that goes up each time something is changed through this factory: a file made,
+	 * written, moved, deleted, or its attributes set.
+	 * <p>
+	 * A java.io.File asks the file system every time, so a File made before a change sees it. A
+	 * FileSource of a remote file system remembers what it was told (attributes, a listing) so it
+	 * doesn't ask again for every question; it compares this number with the one it saw when it
+	 * remembered, and asks again when it is different. So a change made through any FileSource
+	 * of the same factory is seen at once by all of them. (A change made by someone else is
+	 * seen when the remembered answer expires, as it is configured for the backend.)
+	 */
+	public final long getChangeCount() {
+		return changeCount.get();
+	}
+
+	/** Called by a FileSource after it changed something; see {@link #getChangeCount()}. */
+	public final void noteChange() {
+		changeCount.incrementAndGet();
+	}
+
 	public static void main(String [] args) throws IOException {
 		getDefaultFactory().whoAmI();
 	}
