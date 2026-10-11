@@ -736,6 +736,38 @@ public abstract class FileLikeBehaviorTests {
 	}
 
 	@Test
+	void aSymbolicLinkHasThePermissionsOfWhatItLeadsTo() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		org.junit.jupiter.api.Assumptions.assumeTrue(permissionsOfExistingPathsAreComparable());
+		// a mode that no link has of its own on any system, so it can't be mistaken for the link's
+		FileSource target = sourceFor("five.txt");
+		assertTrue(target.setOwnerReadable(true));
+		assertTrue(target.setOwnerWritable(true));
+		assertTrue(target.setOwnerExecutable(false));
+		assertTrue(target.setGroupReadable(true));
+		assertTrue(target.setGroupWritable(false));
+		assertTrue(target.setGroupExecutable(false));
+		assertTrue(target.setOtherReadable(false));
+		assertTrue(target.setOtherWritable(false));
+		assertTrue(target.setOtherExecutable(false));
+		FileSource link = symlink("ln.txt", "five.txt");
+		FileSource viaPath = sourceFor("ln.txt");
+		for(FileSource l : new FileSource[] {link, viaPath}) {
+			StringBuilder expected = new StringBuilder();
+			StringBuilder got = new StringBuilder();
+			for(String m : new String[] {"canOwnerRead", "canOwnerWrite", "canOwnerExecute", "canGroupRead", "canGroupWrite",
+					"canGroupExecute", "canOtherRead", "canOtherWrite", "canOtherExecute"}) {
+				expected.append(m).append('=').append(answer(target, m)).append(' ');
+				got.append(m).append('=').append(answer(l, m)).append(' ');
+			}
+			if( !expected.toString().equals(got.toString()) ) {
+				differences.add("a symbolic link's permissions: the file it leads to [" + expected.toString().trim()
+						+ "], the link [" + got.toString().trim() + "]");
+			}
+		}
+	}
+
+	@Test
 	void aSymbolicLinkToADirectoryActsLikeTheDirectory() throws Exception {
 		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
 		oracleSymlink("lndir", "dir");
