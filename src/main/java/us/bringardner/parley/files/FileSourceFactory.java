@@ -229,14 +229,92 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 			logger.logInfo("A URLStreamHandlerFactory is already installed ("+e.getMessage()
 					+ "); using "+PROP_JAVA_PROTOCOL_HANDLER_PKGS+" for FileSource URLs");
 		}
-		// register some basic types
-		types.put("htm","text/html");
-		types.put("html","text/html");
-		types.put("css","text/css");
-		types.put("js","text/javascript");
-		types.put("jpg","image/jpeg");
-		types.put("gif","image/gif");
-		types.put("txt","text/plain");
+		registerBasicTypes();
+	}
+
+	/**
+	 * The MIME types FileSources know by extension, until {@link #addMimeType(String, String)}
+	 * adds or replaces one. A short list of what files are usually: text, web, images, documents,
+	 * archives, audio, video, fonts and mail. (It was seven entries, so a .png or a .json file had
+	 * no type.)
+	 */
+	private static void registerBasicTypes() {
+		register("text/plain", "txt", "text", "log", "conf", "ini", "properties");
+		register("text/html", "htm", "html");
+		register("text/css", "css");
+		register("text/csv", "csv");
+		register("text/markdown", "md", "markdown");
+		register("text/javascript", "js", "mjs");
+		register("text/calendar", "ics");
+		register("text/vcard", "vcf");
+		register("application/json", "json");
+		register("application/xml", "xml");
+		register("application/yaml", "yaml", "yml");
+		register("application/pdf", "pdf");
+		register("application/rtf", "rtf");
+		register("application/wasm", "wasm");
+		register("application/octet-stream", "bin");
+		register("application/x-sh", "sh");
+		register("message/rfc822", "eml");
+
+		register("image/jpeg", "jpg", "jpeg", "jpe");
+		register("image/png", "png");
+		register("image/gif", "gif");
+		register("image/svg+xml", "svg");
+		register("image/webp", "webp");
+		register("image/bmp", "bmp");
+		register("image/tiff", "tif", "tiff");
+		register("image/x-icon", "ico");
+		register("image/avif", "avif");
+		register("image/heic", "heic");
+
+		register("application/zip", "zip");
+		register("application/gzip", "gz");
+		register("application/x-tar", "tar");
+		register("application/x-bzip2", "bz2");
+		register("application/x-7z-compressed", "7z");
+		register("application/java-archive", "jar");
+
+		register("application/msword", "doc");
+		register("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx");
+		register("application/vnd.ms-excel", "xls");
+		register("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx");
+		register("application/vnd.ms-powerpoint", "ppt");
+		register("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx");
+
+		register("audio/mpeg", "mp3");
+		register("audio/wav", "wav");
+		register("audio/ogg", "ogg", "oga");
+		register("audio/flac", "flac");
+		register("audio/aac", "aac");
+		register("audio/mp4", "m4a");
+
+		register("video/mp4", "mp4", "m4v");
+		register("video/webm", "webm");
+		register("video/quicktime", "mov");
+		register("video/x-msvideo", "avi");
+		register("video/mpeg", "mpg", "mpeg");
+		register("video/ogg", "ogv");
+
+		register("font/woff", "woff");
+		register("font/woff2", "woff2");
+		register("font/ttf", "ttf");
+		register("font/otf", "otf");
+	}
+
+	private static void register(String type, String... extensions) {
+		for(String extension : extensions) {
+			types.put(extension, type);
+		}
+	}
+
+	/** An extension as the table keys it: no leading dot, lower case. Null if there is none. */
+	private static String typeKey(String extension) {
+		if( extension == null ) {
+			return null;
+		}
+		String key = extension.startsWith(".") ? extension.substring(1) : extension;
+		return key.isEmpty() ? null : key.toLowerCase(java.util.Locale.ROOT);
 	}
 
 	private FileSourceUser localPrinciple;
@@ -958,12 +1036,30 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 
 	/*
 	 */
-	public static String getType(String extention){
-		return extention == null ? null : types.get(extention);
+	/**
+	 * The counterpart of {@link #addMimeType(String, String)}.
+	 *
+	 * @param extension a file name's extension, without the dot (a leading dot is allowed). The
+	 * case doesn't matter: a camera's IMG_0001.JPG is an image/jpeg as img.jpg is.
+	 * @return the MIME type, or null if the extension isn't known
+	 */
+	public static String getMimeType(String extension){
+		String key = typeKey(extension);
+		return key == null ? null : types.get(key);
 	}
 
+	/**
+	 * Adds a type, or replaces the one the extension had. The case of the extension doesn't
+	 * matter, and neither does a leading dot.
+	 *
+	 * @throws IllegalArgumentException if there is no extension, or no type
+	 */
 	public static void addMimeType(String extension, String type){
-		types.put(extension,type);
+		String key = typeKey(extension);
+		if( key == null || type == null ) {
+			throw new IllegalArgumentException("A MIME type needs an extension and a type: "+extension+" "+type);
+		}
+		types.put(key,type);
 	}
 
 	/**

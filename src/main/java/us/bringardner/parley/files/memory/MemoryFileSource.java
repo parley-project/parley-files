@@ -1141,7 +1141,7 @@ public class MemoryFileSource implements FileSource {
 			int idx=name.lastIndexOf('.');
 			if( idx > 0 ){
 				String ext = name.substring(idx+1);
-				ret = MemoryFileSourceFactory.getType(ext);
+				ret = MemoryFileSourceFactory.getMimeType(ext);
 			}
 		}
 
