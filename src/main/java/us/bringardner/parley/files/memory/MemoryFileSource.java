@@ -588,9 +588,11 @@ public class MemoryFileSource implements FileSource {
 			throw new IOException("Too many levels of symbolic links: "+lexicalPath());
 		}
 		MemoryFileSource target = symlinkTarget;
-		if( target != null ) {
+		if( target != null && exists() ) {
 			return target.canonicalPath(depth+1);
 		}
+		// (a link that leads nowhere is not resolved, and keeps its own name, as java.io.File's
+		// canonical path does: the part that can be resolved is, and the rest is left as it is)
 		if( parent == null ) {
 			return "/";
 		}

@@ -735,6 +735,40 @@ public abstract class FileLikeBehaviorTests {
 		});
 	}
 
+	/** The canonical path of oracle(relative), or of the backend's, relative to its test tree. */
+	private String canonicalFromTree(boolean oracle, String relative) throws Exception {
+		String root = oracle ? oracleRoot.toRealPath().toString() : sourceFor("").getCanonicalPath();
+		String path = oracle ? oracle(relative).getCanonicalPath() : sourceFor(relative).getCanonicalPath();
+		if( path.equals(root) ) {
+			return ".";
+		}
+		String prefix = root.endsWith("/") ? root : root + "/";
+		return path.startsWith(prefix) ? path.substring(prefix.length()) : "OUTSIDE " + path;
+	}
+
+	@Test
+	void aSymbolicLinkHasTheCanonicalPathOfWhatItLeadsTo() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		oracleSymlink("ln.txt", "five.txt");
+		symlink("ln.txt", "five.txt");
+		oracleSymlink("ln2.txt", "ln.txt");            // a link to a link
+		symlink("ln2.txt", "ln.txt");
+		oracleSymlink("lndir", "dir");
+		symlink("lndir", "dir");
+		oracleSymlink("dangling", "nope.txt");
+		symlink("dangling", "nope.txt");
+		for(String r : new String[] {"five.txt", "dir", "dir/inner", "ln.txt", "ln2.txt", "lndir", "lndir/inner", "dangling", "nope.txt"}) {
+			String expected = canonicalFromTree(true, r);
+			String got = canonicalFromTree(false, r);
+			if( !expected.equals(got) ) {
+				differences.add("getCanonicalPath() of '" + r + "': java.io.File [" + expected + "], FileSource [" + got + "]");
+			}
+		}
+		// two names for one file are one canonical file, and the canonical file is the target
+		assertEquals(sourceFor("five.txt").getCanonicalPath(), sourceFor("ln2.txt").getCanonicalPath());
+		assertEquals(sourceFor("five.txt").getCanonicalPath(), sourceFor("ln.txt").getCanonicalFile().getCanonicalPath());
+	}
+
 	@Test
 	void aSymbolicLinkHasThePermissionsOfWhatItLeadsTo() throws Exception {
 		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
