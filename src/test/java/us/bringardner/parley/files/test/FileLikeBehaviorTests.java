@@ -68,6 +68,14 @@ public abstract class FileLikeBehaviorTests {
 		return true;
 	}
 
+	/**
+	 * Whether the backend has {@link FileSource#getRandomAccessStream(String)} and
+	 * {@link FileSource#getSeekableInputStream()}; the FTP protocol can't write in the middle of a file.
+	 */
+	protected boolean supportsRandomAccess() {
+		return true;
+	}
+
 	/** Called before each test, to give the backend an empty tree to work in. */
 	protected abstract void newTree() throws Exception;
 
@@ -926,5 +934,371 @@ public abstract class FileLikeBehaviorTests {
 			sourceFor("five.txt").setWritable(true);
 		}
 		heldAgree("after it was made writable again", heldFile, held, "canWrite");
+	}
+
+	// ------------------------------------------------------------ random access
+
+	/** What a scenario can do to a RandomAccessFile or to the backend's stream, the same way. */
+	private interface Ra {
+		int read() throws java.io.IOException;
+		int read(byte[] b, int off, int len) throws java.io.IOException;
+		void write(int b) throws java.io.IOException;
+		void write(byte[] b, int off, int len) throws java.io.IOException;
+		void seek(long pos) throws java.io.IOException;
+		long length() throws java.io.IOException;
+		void setLength(long len) throws java.io.IOException;
+		long getFilePointer() throws java.io.IOException;
+		java.io.DataInput in();
+		java.io.DataOutput out();
+		void close() throws java.io.IOException;
+	}
+
+	private interface Scenario {
+		String run(Ra ra) throws Exception;
+	}
+
+	private static Ra of(java.io.RandomAccessFile f) {
+		return new Ra() {
+			public int read() throws java.io.IOException { return f.read(); }
+			public int read(byte[] b, int off, int len) throws java.io.IOException { return f.read(b, off, len); }
+			public void write(int b) throws java.io.IOException { f.write(b); }
+			public void write(byte[] b, int off, int len) throws java.io.IOException { f.write(b, off, len); }
+			public void seek(long pos) throws java.io.IOException { f.seek(pos); }
+			public long length() throws java.io.IOException { return f.length(); }
+			public void setLength(long len) throws java.io.IOException { f.setLength(len); }
+			public long getFilePointer() throws java.io.IOException { return f.getFilePointer(); }
+			public java.io.DataInput in() { return f; }
+			public java.io.DataOutput out() { return f; }
+			public void close() throws java.io.IOException { f.close(); }
+		};
+	}
+
+	private static Ra of(us.bringardner.parley.files.IRandomAccessStream f) {
+		return new Ra() {
+			public int read() throws java.io.IOException { return f.read(); }
+			public int read(byte[] b, int off, int len) throws java.io.IOException { return f.read(b, off, len); }
+			public void write(int b) throws java.io.IOException { f.write(b); }
+			public void write(byte[] b, int off, int len) throws java.io.IOException { f.write(b, off, len); }
+			public void seek(long pos) throws java.io.IOException { f.seek(pos); }
+			public long length() throws java.io.IOException { return f.length(); }
+			public void setLength(long len) throws java.io.IOException { f.setLength(len); }
+			public long getFilePointer() throws java.io.IOException { return f.getFilePointer(); }
+			public java.io.DataInput in() { return f; }
+			public java.io.DataOutput out() { return f; }
+			public void close() throws java.io.IOException { f.close(); }
+		};
+	}
+
+	private int raCount;
+
+	/** Ten bytes 0..9. */
+	private static byte[] ten() {
+		byte[] b = new byte[10];
+		for(int i = 0; i < b.length; i++) {
+			b[i] = (byte) i;
+		}
+		return b;
+	}
+
+	/**
+	 * Runs a scenario on a RandomAccessFile and on the backend's stream, over the same starting
+	 * file (none if initial is null), and compares what each did and the file each left.
+	 */
+	private void randomAccess(String label, byte[] initial, String mode, Scenario scenario) throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsRandomAccess());
+		String name = "ra" + (++raCount) + ".bin";
+		File of = oracle(name);
+		FileSource sf = sourceFor(name);
+		if( initial != null ) {
+			Files.write(of.toPath(), initial);
+			try (OutputStream out = sf.getOutputStream()) {
+				out.write(initial);
+			}
+		}
+		String expected = outcome(() -> {
+			Ra ra;
+			try {
+				ra = of(new java.io.RandomAccessFile(of, mode));
+			} catch (java.io.IOException e) {
+				return "open throws IOException";
+			}
+			String r;
+			try {
+				r = scenario.run(ra);
+			} catch (java.io.IOException e) {
+				r = "throws IOException";
+			}
+			try {
+				ra.close();
+			} catch (java.io.IOException e) {
+				// reported by the file below
+			}
+			return r + " | file " + (of.exists() ? of.length() + " " + hex(Files.readAllBytes(of.toPath())) : "missing");
+		});
+		String got = outcome(() -> {
+			Ra ra;
+			try {
+				ra = of(sf.getRandomAccessStream(mode));
+			} catch (java.io.IOException e) {
+				return "open throws IOException";
+			}
+			String r;
+			try {
+				r = scenario.run(ra);
+			} catch (java.io.IOException e) {
+				r = "throws IOException";
+			}
+			try {
+				ra.close();
+			} catch (java.io.IOException e) {
+				// reported by the file below
+			}
+			FileSource again = sourceFor(name);
+			String content = "missing";
+			if( again.exists() ) {
+				try (java.io.InputStream in = again.getInputStream()) {
+					content = again.length() + " " + hex(in.readAllBytes());
+				}
+			}
+			return r + " | file " + content;
+		});
+		if( !expected.equals(got) ) {
+			differences.add("random access, " + label + ": java.io.RandomAccessFile [" + expected + "], FileSource [" + got + "]");
+		}
+	}
+
+	@Test
+	void randomAccessOpening() throws Exception {
+		randomAccess("read mode, missing file", null, "r", ra -> "opened");
+		randomAccess("rw mode, missing file", null, "rw", ra -> "opened, length " + ra.length());
+		randomAccess("rw mode, missing file, write", null, "rw", ra -> { ra.write(7); return "length " + ra.length(); });
+		randomAccess("read mode, existing", ten(), "r", ra -> "length " + ra.length() + " at " + ra.getFilePointer());
+		randomAccess("rw mode, existing keeps its content", ten(), "rw", ra -> "length " + ra.length());
+		randomAccess("write in read mode", ten(), "r", ra -> { ra.write(1); return "wrote"; });
+		randomAccess("setLength in read mode", ten(), "r", ra -> { ra.setLength(3); return "ok"; });
+		randomAccess("a directory, read", null, "r", ra -> "opened");
+		// a directory and a missing parent
+		for(String r : new String[] {"dir", "nodir/x.bin", "plain.txt/under"}) {
+			for(String mode : new String[] {"r", "rw"}) {
+				streamsAgree("random access '" + mode + "' on '" + r + "'", () -> {
+					try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(oracle(r), mode)) {
+						return "opened";
+					}
+				}, () -> {
+					org.junit.jupiter.api.Assumptions.assumeTrue(supportsRandomAccess());
+					try (us.bringardner.parley.files.IRandomAccessStream f = sourceFor(r).getRandomAccessStream(mode)) {
+						return "opened";
+					}
+				});
+			}
+		}
+	}
+
+	@Test
+	void randomAccessReadingTheEnd() throws Exception {
+		randomAccess("read at the end", ten(), "r", ra -> { ra.seek(10); return ra.read() + " " + ra.read(new byte[4], 0, 4) + " " + ra.getFilePointer(); });
+		randomAccess("read past the end", ten(), "r", ra -> { ra.seek(25); return ra.read() + " at " + ra.getFilePointer() + " length " + ra.length(); });
+		randomAccess("a short read at the end", ten(), "r", ra -> {
+			byte[] b = new byte[10];
+			ra.seek(7);
+			int n = ra.read(b, 0, 10);
+			return n + " " + hex(java.util.Arrays.copyOf(b, Math.max(n, 0))) + " at " + ra.getFilePointer();
+		});
+		randomAccess("zero length read", ten(), "r", ra -> "" + ra.read(new byte[4], 0, 0));
+		randomAccess("readFully past the end", ten(), "r", ra -> { ra.seek(8); ra.in().readFully(new byte[5]); return "read"; });
+		randomAccess("readInt with too few bytes", ten(), "r", ra -> { ra.seek(8); return "" + ra.in().readInt(); });
+		randomAccess("unsigned bytes", new byte[] {(byte) 0xFF, (byte) 0x80, 0x7F, 0}, "r", ra -> ra.read() + " " + ra.read() + " " + ra.read() + " " + ra.read() + " " + ra.read());
+		randomAccess("skipBytes", ten(), "r", ra -> {
+			DataInputHelper h = new DataInputHelper(ra);
+			return h.skip(3) + " " + ra.getFilePointer() + " " + h.skip(100) + " " + ra.getFilePointer() + " " + h.skip(5) + " " + h.skip(-2);
+		});
+	}
+
+	/** skipBytes is on DataInput, so the scenarios reach it through here. */
+	private static final class DataInputHelper {
+		private final Ra ra;
+
+		DataInputHelper(Ra ra) {
+			this.ra = ra;
+		}
+
+		int skip(int n) throws java.io.IOException {
+			return ra.in().skipBytes(n);
+		}
+	}
+
+	@Test
+	void randomAccessSeekingAndGrowing() throws Exception {
+		randomAccess("seek negative", ten(), "rw", ra -> { ra.seek(-1); return "seeked"; });
+		randomAccess("seek past the end does not grow", ten(), "rw", ra -> { ra.seek(15); return "at " + ra.getFilePointer() + " length " + ra.length(); });
+		randomAccess("write after a seek past the end", ten(), "rw", ra -> { ra.seek(15); ra.write(7); return "at " + ra.getFilePointer() + " length " + ra.length(); });
+		randomAccess("write a block after a seek past the end", ten(), "rw", ra -> {
+			ra.seek(12);
+			ra.write(new byte[] {1, 2, 3}, 0, 3);
+			return "at " + ra.getFilePointer() + " length " + ra.length();
+		});
+		randomAccess("overwrite in the middle", ten(), "rw", ra -> { ra.seek(3); ra.write(new byte[] {(byte) 0xAA, (byte) 0xBB}, 0, 2); return "at " + ra.getFilePointer() + " length " + ra.length(); });
+		randomAccess("setLength shorter", ten(), "rw", ra -> { ra.setLength(4); return "length " + ra.length() + " at " + ra.getFilePointer(); });
+		randomAccess("setLength shorter than the pointer", ten(), "rw", ra -> { ra.seek(8); ra.setLength(4); return "length " + ra.length() + " at " + ra.getFilePointer(); });
+		randomAccess("setLength longer is zeros", ten(), "rw", ra -> { ra.setLength(14); return "length " + ra.length() + " at " + ra.getFilePointer(); });
+		randomAccess("shrink then grow", ten(), "rw", ra -> { ra.setLength(3); ra.setLength(8); ra.seek(0); return hexRead(ra, 8); });
+		randomAccess("setLength zero", ten(), "rw", ra -> { ra.setLength(0); return "length " + ra.length() + " read " + ra.read(); });
+		randomAccess("write extends and reads back", new byte[0], "rw", ra -> {
+			ra.write(new byte[] {5, 6, 7}, 0, 3);
+			ra.seek(0);
+			return hexRead(ra, 3) + " length " + ra.length();
+		});
+	}
+
+	private static String hexRead(Ra ra, int n) throws java.io.IOException {
+		byte[] b = new byte[n];
+		int got = 0;
+		while( got < n ) {
+			int r = ra.read(b, got, n - got);
+			if( r < 0 ) {
+				break;
+			}
+			got += r;
+		}
+		return got + ":" + hex(java.util.Arrays.copyOf(b, got));
+	}
+
+	@Test
+	void randomAccessTypedData() throws Exception {
+		randomAccess("typed values round trip and are big-endian", new byte[0], "rw", ra -> {
+			java.io.DataOutput o = ra.out();
+			o.writeInt(0x01020304);
+			o.writeLong(0x1122334455667788L);
+			o.writeShort(-2);
+			o.writeBoolean(true);
+			o.writeByte(200);
+			o.writeChar('Z');
+			o.writeFloat(1.5f);
+			o.writeDouble(-2.25);
+			o.writeUTF("h\u00e9llo");
+			o.writeBytes("ab");
+			o.writeChars("cd");
+			ra.seek(0);
+			java.io.DataInput i = ra.in();
+			return i.readInt() + " " + i.readLong() + " " + i.readShort() + " " + i.readBoolean() + " " + i.readUnsignedByte()
+					+ " " + i.readChar() + " " + i.readFloat() + " " + i.readDouble() + " " + i.readUTF()
+					+ " " + (char) i.readByte() + (char) i.readByte() + i.readChar() + i.readChar() + " at " + ra.getFilePointer();
+		});
+		randomAccess("readLine", "ab\r\ncd\nef".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), "r", ra -> {
+			java.io.DataInput i = ra.in();
+			return "[" + i.readLine() + "][" + i.readLine() + "][" + i.readLine() + "][" + i.readLine() + "]";
+		});
+		randomAccess("readUnsignedShort and readUnsignedByte", new byte[] {(byte) 0xFF, (byte) 0xFE, (byte) 0xFD}, "r", ra ->
+				ra.in().readUnsignedShort() + " " + ra.in().readUnsignedByte());
+	}
+
+	@Test
+	void randomAccessAcrossManyBlocks() throws Exception {
+		// larger than any one chunk or buffer a backend uses, written and read in odd sized pieces
+		byte[] big = new byte[300_000];
+		new java.util.Random(11).nextBytes(big);
+		randomAccess("write odd sized pieces, read pieces back", new byte[0], "rw", ra -> {
+			int at = 0;
+			int[] sizes = {1, 7, 4093, 65_537, 99, 131_071};
+			int i = 0;
+			while( at < big.length ) {
+				int n = Math.min(sizes[i++ % sizes.length], big.length - at);
+				ra.write(big, at, n);
+				at += n;
+			}
+			StringBuilder sb = new StringBuilder("length " + ra.length());
+			for(long pos : new long[] {0, 99, 100, 4093, 65_535, 65_536, 299_999}) {
+				ra.seek(pos);
+				sb.append(' ').append(hexRead(ra, 5));
+			}
+			return sb.toString();
+		});
+		randomAccess("overwrite across a block edge", big, "rw", ra -> {
+			ra.seek(65_534);
+			ra.write(new byte[] {1, 2, 3, 4, 5, 6}, 0, 6);
+			ra.seek(65_530);
+			return hexRead(ra, 16) + " length " + ra.length();
+		});
+	}
+
+	@Test
+	void randomAccessUseAfterClose() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsRandomAccess());
+		Files.write(oracle("closed.bin").toPath(), ten());
+		try (OutputStream out = sourceFor("closed.bin").getOutputStream()) {
+			out.write(ten());
+		}
+		streamsAgree("read after close", () -> {
+			java.io.RandomAccessFile f = new java.io.RandomAccessFile(oracle("closed.bin"), "r");
+			f.close();
+			f.close();
+			return "" + f.read();
+		}, () -> {
+			us.bringardner.parley.files.IRandomAccessStream f = sourceFor("closed.bin").getRandomAccessStream("r");
+			f.close();
+			f.close();
+			return "" + f.read();
+		});
+	}
+
+	@Test
+	void aSeekableInputStreamActsLikeAReadOnlyRandomAccessFile() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsRandomAccess());
+		byte[] data = new byte[1000];
+		new java.util.Random(5).nextBytes(data);
+		data[0] = (byte) 0xFF;
+		Files.write(oracle("seek.bin").toPath(), data);
+		try (OutputStream out = sourceFor("seek.bin").getOutputStream()) {
+			out.write(data);
+		}
+		java.util.function.Function<Object, String> probe = o -> outcome(() -> {
+			StringBuilder sb = new StringBuilder();
+			if( o instanceof java.io.RandomAccessFile ) {
+				java.io.RandomAccessFile f = (java.io.RandomAccessFile) o;
+				sb.append("length ").append(f.length());
+				sb.append(" first ").append(f.read());
+				f.seek(500);
+				byte[] b = new byte[8];
+				sb.append(" at500 ").append(f.read(b, 0, 8)).append(' ').append(hex(b)).append(" ptr ").append(f.getFilePointer());
+				byte[] c = new byte[10];
+				f.seek(100);
+				sb.append(" offset ").append(f.read(c, 3, 5)).append(' ').append(hex(c)).append(" ptr ").append(f.getFilePointer());
+				f.seek(995);
+				sb.append(" tail ").append(f.read(new byte[20], 0, 20)).append(" ptr ").append(f.getFilePointer());
+				f.seek(2000);
+				sb.append(" past ").append(f.read()).append(" ptr ").append(f.getFilePointer());
+			} else {
+				us.bringardner.parley.files.ISeekableInputStream f = (us.bringardner.parley.files.ISeekableInputStream) o;
+				sb.append("length ").append(f.length());
+				sb.append(" first ").append(f.read());
+				f.seek(500);
+				byte[] b = new byte[8];
+				sb.append(" at500 ").append(f.read(b, 0, 8)).append(' ').append(hex(b)).append(" ptr ").append(f.getFilePointer());
+				byte[] c = new byte[10];
+				f.seek(100);
+				sb.append(" offset ").append(f.read(c, 3, 5)).append(' ').append(hex(c)).append(" ptr ").append(f.getFilePointer());
+				f.seek(995);
+				sb.append(" tail ").append(f.read(new byte[20], 0, 20)).append(" ptr ").append(f.getFilePointer());
+				f.seek(2000);
+				sb.append(" past ").append(f.read()).append(" ptr ").append(f.getFilePointer());
+			}
+			return sb.toString();
+		});
+		String expected;
+		try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(oracle("seek.bin"), "r")) {
+			expected = probe.apply(f);
+		}
+		String got;
+		us.bringardner.parley.files.ISeekableInputStream s = sourceFor("seek.bin").getSeekableInputStream();
+		try {
+			got = probe.apply(s);
+		} finally {
+			s.close();
+		}
+		// seeking past the end of a read-only view must not change the file
+		assertEquals(1000, sourceFor("seek.bin").length(), "the file was changed by a seek");
+		if( !expected.equals(got) ) {
+			differences.add("seekable stream: java.io.RandomAccessFile [" + expected + "], FileSource [" + got + "]");
+		}
 	}
 }
