@@ -159,7 +159,9 @@ public class WindowsPermissionManager implements PermissionManager{
 
 	@Override
 	public boolean canWrite() throws IOException {
-		return Files.isWritable(target.toPath());
+		//  As java.io.File: a file with the read-only attribute is not writable. The ACL is asked
+		//  as well, so this never says yes to a write that would be refused.
+		return target.canWrite() && Files.isWritable(target.toPath());
 	}
 
 	@Override
@@ -223,53 +225,38 @@ public class WindowsPermissionManager implements PermissionManager{
 
 	@Override
 	public boolean setExecutable(boolean b, boolean ownerOnly) throws IOException {
-		boolean ret = setOwnerExecutable(b);
-
-		if(ret &&  !ownerOnly ) {
-			if(setGroupExecutable(b)) {
-				setOtherExecutable(b);
-			}
-		}
-		return ret;
+		//  As java.io.File does on Windows (it answers "enable" and changes nothing). The owner,
+		//  group and other setters edit the ACL.
+		return target.setExecutable(b, ownerOnly);
 	}
 
 	@Override
 	public boolean setReadable(boolean b, boolean ownerOnly) throws IOException {
-		boolean ret = setOwnerReadable(b);
-
-		if(ret &&  !ownerOnly ) {
-			if(setGroupReadable(b)) {
-				setOtherReadable(b);
-			}
-		}
-		return ret;
+		//  As java.io.File does on Windows (see setExecutable).
+		return target.setReadable(b, ownerOnly);
 	}
 
 	@Override
 	public boolean setWritable(boolean b, boolean ownerOnly) throws IOException {
-		boolean ret = setOwnerWritable(b);
-
-		if(ret &&  !ownerOnly ) {
-			if(setGroupWritable(b)) {
-				setOtherWritable(b);
-			}
-		}
-		return ret;
+		//  As java.io.File does on Windows: the read-only attribute, which is for everyone. (Removing
+		//  the owner's ACL entry leaves the file writable through the inherited entries.) The
+		//  owner, group and other setters below still edit the ACL.
+		return target.setWritable(b, ownerOnly);
 	}
 
 	@Override
 	public boolean setExecutable(boolean b) throws IOException {
-		return setOwnerExecutable(b);
+		return target.setExecutable(b);
 	}
 
 	@Override
 	public boolean setReadable(boolean b) throws IOException {
-		return setOwnerReadable(b);
+		return target.setReadable(b);
 	}
 
 	@Override
 	public boolean setWritable(boolean b) throws IOException {
-		return setOwnerWritable(b);
+		return target.setWritable(b);
 	}
 
 	@Override
