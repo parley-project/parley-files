@@ -86,4 +86,26 @@ public class FileSourceCopyTest {
 		assertEquals(true, to.exists());
 		assertEquals(0, to.length());
 	}
+
+	@Test
+	void nullAndASourceThatCantSayAreNoPreference() throws Exception {
+		MemoryFileSourceFactory f = new MemoryFileSourceFactory();
+		FileSource a = f.createFileSource("/n1");
+		FileSource none = (FileSource) Proxy.newProxyInstance(FileSource.class.getClassLoader(), new Class<?>[] { FileSource.class },
+				(proxy, method, args) -> {
+					if( method.getName().equals("getStreamDefaults") ) {
+						throw new IllegalStateException("not connected");
+					}
+					try {
+						return method.invoke(a, args);
+					} catch (InvocationTargetException e) {
+						throw e.getCause();
+					}
+				});
+		assertEquals(FileSourceCopy.DEFAULT_BLOCK, FileSourceCopy.blockSizeFor(a, null), "null");
+		assertEquals(FileSourceCopy.DEFAULT_BLOCK, FileSourceCopy.blockSizeFor(null, null));
+		assertEquals(FileSourceCopy.DEFAULT_BLOCK, FileSourceCopy.blockSizeFor(none, a), "one that can't say");
+		FileSource wants16 = new Spy(a, 16 * 1024).source;
+		assertEquals(16 * 1024, FileSourceCopy.blockSizeFor(none, wants16), "the other end still counts");
+	}
 }
