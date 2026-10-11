@@ -1610,4 +1610,26 @@ public abstract class FileLikeBehaviorTests {
 			differences.add("a directory's lastModified after a child was added: java.io.File changed " + expected + ", FileSource changed " + got);
 		}
 	}
+
+	// ------------------------------------------------------------ content type
+
+	/**
+	 * The MIME type is worked out from the name's extension with the table every FileSource
+	 * shares (FileSourceFactory.getType), and is null when the extension isn't in it or there
+	 * isn't one. A java.io.File has none, so the reference here is FileProxy's.
+	 */
+	@Test
+	void theContentTypeComesFromTheNameAndIsNullWhenUnknown() throws Exception {
+		for(String name : new String[] {"a.txt", "page.html", "data.json", "image.png", "archive.tar.gz", "noextension",
+				".hidden", "trailingdot.", "two.dots.txt", "with space.txt", "dir", "plain.txt", "missing.txt", "x.unknownext"}) {
+			String expected = us.bringardner.parley.files.fileproxy.FileProxy.getContentType(name);
+			FileSource f = sourceFor(name);
+			String got = f.getContentType();
+			if( !String.valueOf(expected).equals(String.valueOf(got)) ) {
+				differences.add("getContentType() of '" + name + "': the shared table [" + expected + "], FileSource [" + got + "]");
+			}
+		}
+		// it is the same whether the path exists or not, and for a directory
+		assertEquals(String.valueOf(sourceFor("plain.txt").getContentType()), String.valueOf(sourceFor("never-made.txt").getContentType()));
+	}
 }
