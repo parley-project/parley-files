@@ -161,6 +161,14 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/** As a file system does: a directory's modified time is when something was last added to it or taken out. */
+	private void touchParent() {
+		MemoryFileSource p = parent;
+		if( p != null ) {
+			p.lastModified = System.currentTimeMillis();
+		}
+	}
+
 	/** This node is a link: a symbolic link (which may point at nothing), or one more name for a file. */
 	private boolean isLinkEntry() {
 		return symlinkTarget != null || hardTarget != null;
@@ -245,6 +253,7 @@ public class MemoryFileSource implements FileSource {
 				symlinkTarget = existing;
 			}
 			updateRetention();
+			touchParent();
 		}
 	}
 
@@ -484,6 +493,7 @@ public class MemoryFileSource implements FileSource {
 			deleted = false;
 			lastModified = lastAccessed = createDate = System.currentTimeMillis();
 			updateRetention();
+			touchParent();
 			return true;
 		}
 	}
@@ -502,6 +512,7 @@ public class MemoryFileSource implements FileSource {
 			if( isLinkEntry() ) {
 				// deleting a link removes the link itself, never what it points to
 				removeLinkEntry();
+				touchParent();
 				return true;
 			}
 			MemoryFileSource r = resolve();
@@ -524,6 +535,7 @@ public class MemoryFileSource implements FileSource {
 			data = null;
 			fileType = FileType.Undefined;
 			updateRetention();
+			touchParent();
 			return true;
 		}
 	}
@@ -723,6 +735,7 @@ public class MemoryFileSource implements FileSource {
 			canOwnerRead = canOwnerWrite = true;
 			canExecute = true;
 			updateRetention();
+			touchParent();
 
 			return true;
 		}
@@ -842,6 +855,8 @@ public class MemoryFileSource implements FileSource {
 						canOwnerRead = canOwnerWrite = false;
 						newFile.updateRetention();
 						updateRetention();
+						touchParent();
+						newFile.touchParent();
 						ret = true;
 
 					}
@@ -876,6 +891,8 @@ public class MemoryFileSource implements FileSource {
 		hardTarget = null;
 		newFile.updateRetention();
 		updateRetention();
+		touchParent();
+		newFile.touchParent();
 		return true;
 	}
 
@@ -969,12 +986,16 @@ public class MemoryFileSource implements FileSource {
 					}
 				}
 			};
+			boolean created = fileType == FileType.Undefined;
 			fileType = FileType.File;
 			canOwnerRead = canOwnerWrite = true;
 			canExecute = false;
 			updateRetention();
 			lastAccessed = System.currentTimeMillis();
 			lastModified = System.currentTimeMillis();
+			if( created ) {
+				touchParent();
+			}
 
 			return ret;
 		}
@@ -1007,6 +1028,7 @@ public class MemoryFileSource implements FileSource {
 				canOwnerRead = canOwnerWrite = true;
 				canExecute = false;
 				updateRetention();
+				touchParent();
 			}
 
 			// buffer only the appended bytes (it used to be sized to the existing data)
