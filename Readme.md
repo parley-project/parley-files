@@ -99,15 +99,15 @@ Built in:
 | `fileproxy` | `FileProxyFactory` / `FileProxy` | Local files, backed by `java.io.File` and `java.nio.file`. The default. |
 | `memory` | `MemoryFileSourceFactory` / `MemoryFileSource` | A virtual file system held in memory. Handy for tests. Thread-safe. |
 
-Separate projects, which plug in the same way once they're on the classpath. They are being
-moved to Parley as `parley-files-ftp`, `parley-files-sftp` and `parley-files-jdbc`; the versions below
-still work with `bjl_file_system`:
+Separate projects, which plug in the same way once they're on the classpath:
 
 | Project | Artifact | What it is |
 |---|---|---|
-| [BjlFileSystemFtp](https://github.com/tony-bringardner/BjlFileSystemFtp) | `bjl_file_system_ftp` | FTP servers |
-| [BjlFileSystemSftp](https://github.com/tony-bringardner/BjlFileSystemSftp) | `bjl_file_system_sftp` | SSH/SFTP servers |
-| [BjlFileSystemJdbc](https://github.com/tony-bringardner/BjlFileSystemJdbc) | `bjl_file_system_jdbc` | A file system stored in a database, via JDBC |
+| [parley-files-ftp](https://github.com/tony-bringardner/parley-files-ftp) | `us.bringardner.parley:parley-files-ftp` | FTP and FTPS servers |
+| [parley-files-sftp](https://github.com/tony-bringardner/parley-files-sftp) | `us.bringardner.parley:parley-files-sftp` | SSH/SFTP servers |
+| [parley-files-jdbc](https://github.com/tony-bringardner/parley-files-jdbc) | `us.bringardner.parley:parley-files-jdbc` | A file system stored in a database, via JDBC |
+
+They were `bjl_file_system_ftp`, `bjl_file_system_sftp` and `bjl_file_system_jdbc` (BjlFileSystemFtp and so on).
 
 Each is published to GitHub Packages from its own repository, so add a matching `<repository>` (and `<server>` entry) as in [Installation](#installation).
 
@@ -273,7 +273,7 @@ a tree to work in (`newTree()` and `sourceFor(path)`). The hooks, such as `suppo
 | `listFiles(FileFilter)`, `list(FilenameFilter)` | `listFiles(FileSourceFilter)`, `list(FileSourceFilter)`; a lambda works, e.g. `dir.listFiles(f -> f.getName().endsWith(".log"))` |
 | `canRead()`, `canWrite()`, `canExecute()`, `setReadable(...)`, `setWritable(...)`, `setExecutable(...)`, `setReadOnly()` | Same names, plus per-class ones such as `setGroupWritable(...)` and `canOtherRead()` |
 | `file.setLastModified(time)` | Same name (or `setLastModifiedTime(time)`) |
-| `file.renameTo(dest)` | `file.renameTo(dest)`, where `dest` is a `FileSource` from the same factory. It never replaces an existing file (see [Behaviour worth knowing](#behaviour-worth-knowing)). |
+| `file.renameTo(dest)` | `file.renameTo(dest)`, where `dest` is a `FileSource` from the same factory. It returns `false` when it can't rename, as `java.io.File` does, and doesn't replace an existing file (see [Behaviour worth knowing](#behaviour-worth-knowing)). |
 | `File.listRoots()` | `factory.listRoots()` |
 | `File.separatorChar`, `File.pathSeparatorChar` | `factory.getSeperatorChar()`, `factory.getPathSeperatorChar()` |
 | `file.toURI()`, `file.toURL()` | Same names; they give a [`filesource:` URI/URL](#urls) that works for every implementation |
@@ -342,7 +342,7 @@ File back = (fs instanceof FileProxy) ? new File(fs.getAbsolutePath()) : null;
 ### Things that behave differently
 
 - **Checked exceptions**: see step 4. A method that returned `false` for a missing file still does (`exists()`, `delete()`), but a failed connection is an `IOException` rather than a silent `false`.
-- **`renameTo`** needs a destination from the same factory, returns `false` if the destination exists, and throws the underlying `IOException` for other failures, instead of returning `false` for everything.
+- **`renameTo`** needs a destination from the same factory, and returns `false` when it can't rename (the destination exists, the source or the destination's directory is missing, no permission), as `java.io.File` does. On SFTP and JDBC a failed connection or database is an `IOException`, not `false`.
 - **`equals`** compares absolute paths within one implementation; a local `FileSource` never equals a memory one with the same path.
 - **Remote calls cost time.** On FTP, SFTP or JDBC, `length()`, `lastModified()` and friends may each be a round trip. Keep results in a local variable inside loops instead of asking the same file repeatedly; call `refresh()` when you need fresh values.
 
@@ -363,7 +363,7 @@ assertEquals(100, totalLogSize(dir));
 
 ## Behaviour worth knowing
 
-- `renameTo` never replaces an existing file: it returns `false` if the destination exists or belongs to another file system, and throws the underlying `IOException` for other failures. Use `Files.move(..., REPLACE_EXISTING)` to replace.
+- `renameTo` returns `false`, as `java.io.File.renameTo` does, when it can't rename: the destination belongs to another file system, the source or the destination's directory is missing, or it isn't permitted. It doesn't replace an existing file in the local, memory, SFTP and JDBC file systems (it returns `false`); **on FTP the server decides**, and many servers do replace. Use `Files.move(..., REPLACE_EXISTING)` to replace on purpose. SFTP and JDBC throw an `IOException` when the connection or database fails; FTP logs it and returns `false`.
 - In both built-in implementations, reading a file that doesn't exist throws `FileNotFoundException`, like `java.io`.
 - `FileSource` objects are `Serializable` (both built-in implementations support it).
 - `createTempFile` relies on `createNewFile()` to guarantee a unique name. That's atomic for local and memory files; on FTP it checks and then creates, so two clients could in principle pick the same random name at the same moment.
