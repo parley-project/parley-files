@@ -247,7 +247,9 @@ public class FileSourcePath implements Path {
 	public static String normalizeString(String path,char seperator) {
 		//  Just use the file system path to normalize
 		if( !(""+seperator).equals(FileSystems.getDefault().getSeparator())) {
-			path = path.replaceAll(""+seperator, FileSystems.getDefault().getSeparator());
+			//  Literal replace: replaceAll treats the separator as a regex and, on Windows,
+			//  the replacement "\" as an escape with nothing after it.
+			path = path.replace(""+seperator, FileSystems.getDefault().getSeparator());
 		}
 
 		String ret = Paths.get(path).normalize().toString();
@@ -257,7 +259,15 @@ public class FileSourcePath implements Path {
 	/** Returns a new path; Paths are immutable (this used to modify itself). */
 	@Override
 	public Path normalize() {
-		return new FileSourcePath(normalizeString(rawPath, factory.getSeperatorChar()), factory);
+		char sep = factory.getSeperatorChar();
+		String ret = normalizeString(rawPath, sep);
+		//  normalizeString works with the host's separator; the path keeps its file system's own
+		//  ("/" for memory, even on Windows).
+		String host = FileSystems.getDefault().getSeparator();
+		if( !host.equals(""+sep) ) {
+			ret = ret.replace(host, ""+sep);
+		}
+		return new FileSourcePath(ret, factory);
 	}
 
 	public Path resolve(String other) {		
