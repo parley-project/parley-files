@@ -792,4 +792,139 @@ public abstract class FileLikeBehaviorTests {
 			differences.add("hard.txt.getLinkedTo(): a hard link is not a symbolic link, FileSource not null");
 		}
 	}
+
+	// ------------------------------------------------------------ a handle that was kept
+
+	/**
+	 * A java.io.File asks the file system every time, so a File made before a change sees it.
+	 * These tests keep one handle, ask it something (so anything it remembers is remembered),
+	 * change the file through a different object, and ask the first one again.
+	 */
+	private String describe(Object subject, String... methods) {
+		StringBuilder sb = new StringBuilder();
+		for(String m : methods) {
+			if( sb.length() > 0 ) {
+				sb.append(", ");
+			}
+			sb.append(m).append(' ').append(answer(subject, m));
+		}
+		return sb.toString();
+	}
+
+	private void heldAgree(String label, File heldFile, FileSource heldSource, String... methods) {
+		String expected = describe(heldFile, methods);
+		String got = describe(heldSource, methods);
+		if( !expected.equals(got) ) {
+			differences.add("held handle, " + label + ": java.io.File [" + expected + "], FileSource [" + got + "]");
+		}
+	}
+
+	private static final String[] BASICS = {"exists", "isFile", "isDirectory", "length"};
+
+	@Test
+	void aHeldHandleSeesAFileBeingCreated() throws Exception {
+		File heldFile = oracle("later.txt");
+		FileSource held = sourceFor("later.txt");
+		heldAgree("before", heldFile, held, BASICS);
+
+		Files.write(oracle("later.txt").toPath(), new byte[] {1, 2, 3, 4});
+		try (OutputStream out = sourceFor("later.txt").getOutputStream()) {
+			out.write(new byte[] {1, 2, 3, 4});
+		}
+		heldAgree("after it was created", heldFile, held, BASICS);
+	}
+
+	@Test
+	void aHeldHandleSeesAFileBeingDeleted() throws Exception {
+		File heldFile = oracle("five.txt");
+		FileSource held = sourceFor("five.txt");
+		heldAgree("before", heldFile, held, BASICS);
+
+		oracle("five.txt").delete();
+		sourceFor("five.txt").delete();
+		heldAgree("after it was deleted", heldFile, held, BASICS);
+		heldAgree("after it was deleted (again)", heldFile, held, "exists", "isFile");
+	}
+
+	@Test
+	void aHeldHandleSeesAFileBeingRewritten() throws Exception {
+		File heldFile = oracle("five.txt");
+		FileSource held = sourceFor("five.txt");
+		heldAgree("before", heldFile, held, BASICS);
+
+		byte[] longer = new byte[] {9, 8, 7, 6, 5, 4, 3, 2, 1};
+		Files.write(oracle("five.txt").toPath(), longer);
+		try (OutputStream out = sourceFor("five.txt").getOutputStream()) {
+			out.write(longer);
+		}
+		heldAgree("after it was rewritten", heldFile, held, "length");
+		streamsAgree("content through the held handle", () -> hex(Files.readAllBytes(heldFile.toPath())), () -> {
+			try (java.io.InputStream in = held.getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+	}
+
+	@Test
+	void aHeldDirectorySeesChildrenComingAndGoing() throws Exception {
+		File heldFile = oracle("dir");
+		FileSource held = sourceFor("dir");
+		heldAgree("before", heldFile, held, "list");
+		java.util.function.Function<String[], String> names = n -> n == null ? "null" : new java.util.TreeSet<>(java.util.Arrays.asList(n)).toString();
+		streamsAgree("before", () -> names.apply(heldFile.list()), () -> names.apply(held.list()));
+
+		oracle("dir/new.txt").createNewFile();
+		sourceFor("dir/new.txt").createNewFile();
+		streamsAgree("after a child was made", () -> names.apply(heldFile.list()), () -> names.apply(held.list()));
+		streamsAgree("listFiles after a child was made", () -> "" + heldFile.listFiles().length, () -> "" + held.listFiles().length);
+
+		oracle("dir/new.txt").delete();
+		sourceFor("dir/new.txt").delete();
+		streamsAgree("after the child was deleted", () -> names.apply(heldFile.list()), () -> names.apply(held.list()));
+	}
+
+	@Test
+	void aHeldHandleSeesAFileBeingMovedAway() throws Exception {
+		File heldFile = oracle("plain.txt");
+		FileSource held = sourceFor("plain.txt");
+		heldAgree("before", heldFile, held, BASICS);
+
+		oracle("plain.txt").renameTo(oracle("moved.txt"));
+		sourceFor("plain.txt").renameTo(sourceFor("moved.txt"));
+		heldAgree("after it was moved", heldFile, held, BASICS);
+		for(String m : BASICS) {
+			same("moved.txt", m);
+		}
+	}
+
+	@Test
+	void aHeldHandleSeesAFileBecomeADirectory() throws Exception {
+		File heldFile = oracle("plain.txt");
+		FileSource held = sourceFor("plain.txt");
+		heldAgree("before", heldFile, held, BASICS);
+
+		oracle("plain.txt").delete();
+		oracle("plain.txt").mkdir();
+		sourceFor("plain.txt").delete();
+		sourceFor("plain.txt").mkdir();
+		// (not the length: a File gives a directory entry's size, which is whatever the platform says)
+		heldAgree("after it became a directory", heldFile, held, "exists", "isFile", "isDirectory");
+	}
+
+	@Test
+	void aHeldHandleSeesPermissionsChange() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(permissionsOfExistingPathsAreComparable());
+		File heldFile = oracle("five.txt");
+		FileSource held = sourceFor("five.txt");
+		heldAgree("before", heldFile, held, "canRead", "canWrite");
+		try {
+			oracle("five.txt").setReadOnly();
+			sourceFor("five.txt").setReadOnly();
+			heldAgree("after setReadOnly", heldFile, held, "canRead", "canWrite");
+		} finally {
+			oracle("five.txt").setWritable(true);
+			sourceFor("five.txt").setWritable(true);
+		}
+		heldAgree("after it was made writable again", heldFile, held, "canWrite");
+	}
 }
