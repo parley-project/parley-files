@@ -122,6 +122,9 @@ public abstract class AbstractTestClass extends FileSourceTestSupport {
 	@Test 
 	@Order(3)
 	public void testPermissions() throws IOException {
+		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
+		org.junit.jupiter.api.Assumptions.assumeFalse(System.getProperty("os.name", "").toLowerCase().startsWith("windows")
+				&& factory instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
 		FileSource remoteDir = factory.createFileSource(remoteTestFileDirPath);
 		if( !remoteDir.exists()) {
 			assertTrue(remoteDir.mkdirs(),"Can't create dirs for "+remoteTestFileDirPath);
