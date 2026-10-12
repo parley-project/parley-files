@@ -127,6 +127,9 @@ public abstract class AbstractNioProviderTests extends FileSourceTestSupport {
 
 	@Test
 	public void testFileAttributes() throws Exception {
+		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
+		org.junit.jupiter.api.Assumptions.assumeFalse(System.getProperty("os.name", "").toLowerCase().startsWith("windows")
+				&& factory instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
 		Path target = nioDir("attributes");
 		FileTime now = FileTime.fromMillis(System.currentTimeMillis());
 		copyTree(localTestDir(), target);
@@ -246,6 +249,9 @@ public abstract class AbstractNioProviderTests extends FileSourceTestSupport {
 
 	@Test
 	public void testCreateDir() throws  Exception {
+		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
+		org.junit.jupiter.api.Assumptions.assumeFalse(System.getProperty("os.name", "").toLowerCase().startsWith("windows")
+				&& factory instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
 		Path path = nioDir("createDir");
 		Files.createDirectories(path.getParent());
 

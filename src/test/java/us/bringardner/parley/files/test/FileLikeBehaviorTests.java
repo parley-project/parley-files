@@ -790,6 +790,8 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkHasThePermissionsOfWhatItLeadsTo() throws Exception {
+		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
+		org.junit.jupiter.api.Assumptions.assumeFalse(onWindows() && sourceFor("five.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
 		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
 		org.junit.jupiter.api.Assumptions.assumeTrue(permissionsOfExistingPathsAreComparable());
 		// a mode that no link has of its own on any system, so it can't be mistaken for the link's
