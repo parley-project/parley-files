@@ -99,15 +99,65 @@ public abstract class FileLikeBehaviorTests {
 
 	private Path oracleRoot;
 
+	/** Every directory made by {@link #newTargetDirectory}, removed after the test. */
+	private final List<Path> madeDirectories = new ArrayList<>();
+
+	/**
+	 * Makes a directory under target/ that is removed (with everything in it) after the test, whether
+	 * or not the test passed. A backend's {@link #newTree()} uses this to make the root of its tree.
+	 */
+	protected Path newTargetDirectory(String prefix) throws IOException {
+		Path dir = Files.createTempDirectory(Path.of("target").toAbsolutePath(), prefix);
+		madeDirectories.add(dir);
+		return dir;
+	}
+
 	@BeforeEach
 	void buildBothTrees() throws Exception {
 		resetTrees();
 	}
 
+	@AfterEach
+	void removeDirectories() {
+		for(Path dir : madeDirectories) {
+			deleteTree(dir);
+		}
+		madeDirectories.clear();
+	}
+
+	/** Deletes a tree, giving back the permissions a test took away (links are removed, not followed). */
+	private static void deleteTree(Path dir) {
+		try {
+			Files.walkFileTree(dir, new java.nio.file.SimpleFileVisitor<Path>() {
+				@Override
+				public java.nio.file.FileVisitResult preVisitDirectory(Path d, java.nio.file.attribute.BasicFileAttributes a) {
+					d.toFile().setReadable(true);
+					d.toFile().setWritable(true);
+					d.toFile().setExecutable(true);
+					return java.nio.file.FileVisitResult.CONTINUE;
+				}
+
+				@Override
+				public java.nio.file.FileVisitResult visitFile(Path f, java.nio.file.attribute.BasicFileAttributes a) throws IOException {
+					Files.deleteIfExists(f);
+					return java.nio.file.FileVisitResult.CONTINUE;
+				}
+
+				@Override
+				public java.nio.file.FileVisitResult postVisitDirectory(Path d, IOException e) throws IOException {
+					Files.deleteIfExists(d);
+					return java.nio.file.FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException e) {
+			System.err.println("Could not remove " + dir + ": " + e);
+		}
+	}
+
 	/** Gives both sides a fresh, identical tree (a test with several cases that change it uses this between them). */
 	private void resetTrees() throws Exception {
 		newTree();
-		oracleRoot = Files.createTempDirectory(Path.of("target").toAbsolutePath(), "filelike-oracle");
+		oracleRoot = newTargetDirectory("filelike-oracle");
 		File root = oracleRoot.toFile();
 		new File(root, "dir").mkdir();
 		new File(root, "dir/inner").mkdir();
@@ -398,20 +448,24 @@ public abstract class FileLikeBehaviorTests {
 		resetTrees();
 		File of = oracle(relative);
 		boolean existed = of.exists();
-		String expected = permissionOutcome(onFile.apply(of), of.canRead(), of.canWrite(), of.canExecute(), existed);
-		String got;
 		try {
-			FileSource sf = sourceFor(relative);
-			boolean r = onSource.apply(sf);
-			FileSource after = sourceFor(relative);
-			got = permissionOutcome(r, after.canRead(), after.canWrite(), after.canExecute(), existed);
-		} catch (Exception e) {
-			got = "throws " + (e instanceof IOException ? "IOException" : e.getClass().getSimpleName());
+			String expected = permissionOutcome(onFile.apply(of), of.canRead(), of.canWrite(), of.canExecute(), existed);
+			String got;
+			try {
+				FileSource sf = sourceFor(relative);
+				boolean r = onSource.apply(sf);
+				FileSource after = sourceFor(relative);
+				got = permissionOutcome(r, after.canRead(), after.canWrite(), after.canExecute(), existed);
+			} catch (Exception e) {
+				got = "throws " + (e instanceof IOException ? "IOException" : e.getClass().getSimpleName());
+			}
+			if( !expected.equals(got) ) {
+				differences.add(relative + "." + label + ": java.io.File [" + expected + "], FileSource [" + got + "]");
+			}
+		} finally {
+			// whatever happened above, a directory must not be left that can't be entered or deleted
+			restorePermissions(relative);
 		}
-		if( !expected.equals(got) ) {
-			differences.add(relative + "." + label + ": java.io.File [" + expected + "], FileSource [" + got + "]");
-		}
-		restorePermissions(relative);
 	}
 
 	/**
