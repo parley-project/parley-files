@@ -1,6 +1,5 @@
 package us.bringardner.parley.files.test;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import us.bringardner.parley.files.FileSource;
@@ -13,7 +12,7 @@ public class LocalFileLikeTest extends FileLikeBehaviorTests {
 
 	@Override
 	protected void newTree() throws Exception {
-		root = Files.createTempDirectory(Path.of("target").toAbsolutePath(), "filelike-local");
+		root = newTargetDirectory("filelike-local");
 	}
 
 	@Override
