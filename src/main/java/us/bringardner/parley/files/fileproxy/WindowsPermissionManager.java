@@ -165,26 +165,24 @@ public class WindowsPermissionManager implements PermissionManager{
 		return Files.isExecutable(target.toPath());
 	}
 
+	//  The owner's bits are what the user can do: the system's answer, which is what the setters
+	//  above act on. (They were read from an ACL entry naming the owner, which an ordinary file
+	//  does not have: the access comes from inherited group entries. So a file showed ---, and
+	//  copying its "permissions" onto another file made that one read-only.)
+
 	@Override
 	public boolean canOwnerExecute() throws IOException {
-		return isOwnerAllowed( AclEntryPermission.EXECUTE);
-	}
-
-	private boolean isOwnerAllowed(AclEntryPermission permission) throws IOException {
-		Boolean ret = null;
-		UserPrincipal owner = Files.getOwner(target.toPath());
-		ret = isAllowed(owner, permission);
-		return ret;
+		return canExecute();
 	}
 
 	@Override
 	public boolean canOwnerRead() throws IOException {
-		return isOwnerAllowed( AclEntryPermission.READ_DATA);
+		return canRead();
 	}
 
 	@Override
 	public boolean canOwnerWrite() throws IOException {
-		return isOwnerAllowed( AclEntryPermission.WRITE_DATA);
+		return canWrite();
 	}
 
 	@Override
