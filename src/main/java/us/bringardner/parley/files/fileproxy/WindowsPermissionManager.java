@@ -104,28 +104,24 @@ public class WindowsPermissionManager implements PermissionManager{
 		return ret;
 	}
 
+	/**
+	 * Windows permissions are an ACL, not rwx bits, and editing the ACL here is not safe: writing
+	 * the list back made every entry explicit and stopped the folder's inheritance, and the entry
+	 * made for the owner held only the one permission asked for, so a user lost the right to
+	 * change (or delete) what was in their own folders. So this changes nothing. It answers, as
+	 * java.io.File's setters do on Windows, whether the permission is as asked for already.
+	 */
 	private boolean setPermission(UserPrincipal user,AclEntryPermission perm,boolean value) throws IOException {
-		boolean ret = false;
-
-		if( value) {
-			ret = addPermission(user,perm);
-		} else {
-			ret = removePermission(user,perm);
-		}
-
-		return ret;
-
+		return isAllowed(user, perm) == value;
 	}
 
 	public boolean setOwnerReadable(boolean value) throws IOException {
-		boolean ret = setPermission(Files.getOwner(target.toPath()),AclEntryPermission.READ_DATA, value);
-
-		return ret;
+		//  as java.io.File on Windows: a file is readable or it is not; this does not change that
+		return target.setReadable(value, true);
 	}
 
 	public boolean setOwnerWritable(boolean value) throws IOException {
-		boolean ret = setPermission(Files.getOwner(target.toPath()),AclEntryPermission.WRITE_DATA, value);
-		return ret;
+		return target.setWritable(value, true);
 	}
 
 	
@@ -266,7 +262,7 @@ public class WindowsPermissionManager implements PermissionManager{
 
 	@Override
 	public boolean setOwnerExecutable(boolean b) throws IOException {
-		return setPermission(Files.getOwner(target.toPath()),AclEntryPermission.EXECUTE, b);
+		return target.setExecutable(b, true);
 	}
 
 	@Override
@@ -291,97 +287,8 @@ public class WindowsPermissionManager implements PermissionManager{
 
 	@Override
 	public boolean setGroup(GroupPrincipal group) throws IOException {
-		AclFileAttributeView view = Files.getFileAttributeView(target.toPath(), AclFileAttributeView.class);
-		
-		List<AclEntry> acl = view.getAcl();
-		String name = group.getName();
-		AclEntry ge=null;
-
-		for(AclEntry e : acl) {
-			if( e.principal().getName().equals(name)){
-				ge = e;
-				break;
-			}
-		} 
-
-		if( ge == null) {
-			ge = AclEntry.newBuilder().setPrincipal(group).setType(AclEntryType.ALLOW).setPermissions(AclEntryPermission.READ_DATA,AclEntryPermission.WRITE_DATA,AclEntryPermission.EXECUTE).build();
-			acl.add(0,ge);
-			view.setAcl(acl);
-		} 
-
-
-		return true;
-	}
-
-	private boolean addPermission(UserPrincipal user,AclEntryPermission perm) throws IOException {
-		boolean ret = false;
-
-
-		AclFileAttributeView view = Files.getFileAttributeView(target.toPath(), AclFileAttributeView.class);
-		List<AclEntry> acl = view.getAcl();
-		List<AclEntry> acl2 = new ArrayList<>();
-
-		AclEntry oe=null;		
-		for(AclEntry e : acl) {
-			if( e.principal().equals(user))	{
-				oe = e;				
-			} else {
-				acl2.add(e);
-			}
-		}
-
-		if( oe == null) {
-			oe = AclEntry.newBuilder().setPrincipal(user).setType(AclEntryType.ALLOW).build();
-		} 
-
-		Set<AclEntryPermission> perms = oe.permissions();
-		if( !perms.contains(perm)) {
-			perms.add(perm);
-		}
-
-		oe = AclEntry.newBuilder(oe).setPermissions(perms).build();
-		acl2.add(0,oe);
-		view.setAcl(acl2);
-		ret = true;
-
-
-		return ret;
-
-	}
-
-	private boolean removePermission(UserPrincipal user,AclEntryPermission perm) throws IOException {
-		boolean ret = false;
-
-		AclFileAttributeView view = Files.getFileAttributeView(target.toPath(), AclFileAttributeView.class);
-		List<AclEntry> acl = view.getAcl();
-		List<AclEntry> acl2 = new ArrayList<>();
-
-		AclEntry oe=null;		
-		for(AclEntry e : acl) {
-			if( e.principal().equals(user))	{
-				oe = e;				
-			} else {
-				acl2.add(e);
-			}
-		}
-
-		if( oe == null) {
-			oe = AclEntry.newBuilder().setPrincipal(user).setType(AclEntryType.ALLOW).build();
-		} 
-
-		Set<AclEntryPermission> perms = oe.permissions();
-		if( perms.contains(perm)) {
-			perms.remove(perm);
-		}
-
-		oe = AclEntry.newBuilder(oe).setPermissions(perms).build();
-		acl2.add(0,oe);
-		view.setAcl(acl2);
-		ret = true;
-
-		return ret;
-
+		//  Not done: it meant editing the ACL (see setPermission)
+		return false;
 	}
 
 }
