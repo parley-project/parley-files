@@ -109,11 +109,45 @@ public abstract class FileLikeBehaviorTests {
 	protected Path newTargetDirectory(String prefix) throws IOException {
 		Path dir = Files.createTempDirectory(Path.of("target").toAbsolutePath(), prefix);
 		madeDirectories.add(dir);
+		LIVE.add(dir);
 		return dir;
+	}
+
+	/**
+	 * Directories not yet removed. The JVM removes what is left when it exits, so a run that is
+	 * stopped (Ctrl-C, SIGTERM, an IDE's stop button) between a permission change and its restore
+	 * does not leave a directory that can't be deleted.
+	 */
+	private static final java.util.Set<Path> LIVE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	static {
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> LIVE.forEach(FileLikeBehaviorTests::deleteTree)));
+	}
+
+	/** A run that was killed outright (kill -9) can't clean up, so the next run does it. */
+	private static final java.util.concurrent.atomic.AtomicBoolean SWEPT = new java.util.concurrent.atomic.AtomicBoolean();
+
+	/** How old a leftover must be before it is taken to be from an earlier run, not a running one. */
+	private static final long STALE_MILLIS = 60 * 60 * 1000L;
+
+	private static void sweepStaleDirectories() {
+		if( !SWEPT.compareAndSet(false, true) ) {
+			return;
+		}
+		File[] old = new File("target").listFiles((d, name) -> name.startsWith("filelike-"));
+		if( old != null ) {
+			long cutoff = System.currentTimeMillis() - STALE_MILLIS;
+			for(File f : old) {
+				if( f.isDirectory() && f.lastModified() < cutoff ) {
+					deleteTree(f.toPath());
+				}
+			}
+		}
 	}
 
 	@BeforeEach
 	void buildBothTrees() throws Exception {
+		sweepStaleDirectories();
 		resetTrees();
 	}
 
@@ -121,36 +155,33 @@ public abstract class FileLikeBehaviorTests {
 	void removeDirectories() {
 		for(Path dir : madeDirectories) {
 			deleteTree(dir);
+			LIVE.remove(dir);
 		}
 		madeDirectories.clear();
 	}
 
-	/** Deletes a tree, giving back the permissions a test took away (links are removed, not followed). */
-	private static void deleteTree(Path dir) {
+	/**
+	 * Deletes a tree, giving back the permissions a test took away first (a directory without its
+	 * read, write or execute bit can't be listed or emptied). Links are removed, not followed.
+	 * A walkFileTree can't do this: it must open a directory before it reports it.
+	 */
+	private static void deleteTree(Path path) {
 		try {
-			Files.walkFileTree(dir, new java.nio.file.SimpleFileVisitor<Path>() {
-				@Override
-				public java.nio.file.FileVisitResult preVisitDirectory(Path d, java.nio.file.attribute.BasicFileAttributes a) {
-					d.toFile().setReadable(true);
-					d.toFile().setWritable(true);
-					d.toFile().setExecutable(true);
-					return java.nio.file.FileVisitResult.CONTINUE;
+			File f = path.toFile();
+			if( !Files.isSymbolicLink(path) && f.isDirectory() ) {
+				f.setReadable(true);
+				f.setWritable(true);
+				f.setExecutable(true);
+				File[] children = f.listFiles();
+				if( children != null ) {
+					for(File child : children) {
+						deleteTree(child.toPath());
+					}
 				}
-
-				@Override
-				public java.nio.file.FileVisitResult visitFile(Path f, java.nio.file.attribute.BasicFileAttributes a) throws IOException {
-					Files.deleteIfExists(f);
-					return java.nio.file.FileVisitResult.CONTINUE;
-				}
-
-				@Override
-				public java.nio.file.FileVisitResult postVisitDirectory(Path d, IOException e) throws IOException {
-					Files.deleteIfExists(d);
-					return java.nio.file.FileVisitResult.CONTINUE;
-				}
-			});
+			}
+			Files.deleteIfExists(path);
 		} catch (IOException e) {
-			System.err.println("Could not remove " + dir + ": " + e);
+			System.err.println("Could not remove " + path + ": " + e);
 		}
 	}
 
