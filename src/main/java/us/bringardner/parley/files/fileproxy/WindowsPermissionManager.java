@@ -11,6 +11,7 @@ import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
+import java.nio.file.attribute.UserPrincipalNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -41,7 +42,10 @@ public class WindowsPermissionManager implements PermissionManager{
 		if( otherSid == null ) {
 			synchronized (WindowsPermissionManager.class) {
 				if( otherSid == null ) {
-					otherSid= System.getProperty(OTHER_SID_PROPERTY, "Other");
+					//  "Other" is not a Windows group (the lookup threw UserPrincipalNotFoundException).
+					//  Everyone (S-1-1-0) is what "other" means on Windows. The name is localized
+					//  on some systems, so it can be set with the OtherSid property.
+					otherSid= System.getProperty(OTHER_SID_PROPERTY, "Everyone");
 				}
 			}
 		}
@@ -90,18 +94,24 @@ public class WindowsPermissionManager implements PermissionManager{
 	}
 	
 	private boolean isOtherAllowed(AclEntryPermission permission) throws IOException {
-		boolean ret = false;
-		GroupPrincipal other = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByGroupName(getOtherSid());		
-		ret = isAllowed(other, permission);
-		return ret;
+		GroupPrincipal other;
+		try {
+			other = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByGroupName(getOtherSid());
+		} catch (UserPrincipalNotFoundException e) {
+			//  no such group on this system (e.g. a localized name): nobody else has the permission
+			return false;
+		}
+		return isAllowed(other, permission);
 	}
 
 	private boolean isGroupAllowed( AclEntryPermission permission) throws IOException {
-		boolean ret = false;
-		UserPrincipal group = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByGroupName(getGroupSid());		
-		ret = isAllowed(group, permission);
-
-		return ret;
+		UserPrincipal group;
+		try {
+			group = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByGroupName(getGroupSid());
+		} catch (UserPrincipalNotFoundException e) {
+			return false;
+		}
+		return isAllowed(group, permission);
 	}
 
 	/**

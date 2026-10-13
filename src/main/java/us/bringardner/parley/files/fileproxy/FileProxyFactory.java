@@ -287,7 +287,13 @@ public class FileProxyFactory extends FileSourceFactory {
 			FileProxy sfp = (FileProxy) newLink;
 			if (existing instanceof FileProxy) {
 				FileProxy tfp = (FileProxy) existing;
-				Path path = Files.createSymbolicLink(sfp.target.toPath(), tfp.target.toPath());
+				Path path;
+				try {
+					path = Files.createSymbolicLink(sfp.target.toPath(), tfp.target.toPath());
+				} catch (IOException e) {
+					// on Windows without Developer Mode this says what to do about it
+					throw SymbolicLinkSupport.explain(e, sfp.target.toPath(), tfp.target.toPath());
+				}
 
 				ret = new FileProxy(path.toFile(), this); 
 			}

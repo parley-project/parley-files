@@ -198,6 +198,42 @@ link.getCanonicalPath();   // the path of what it leads to
 
 These are checked, link by link, against `java.nio.file.Files`, by `FileLikeBehaviorTests` in the tests jar.
 
+### Symbolic links on Windows
+
+Windows lets a process create a symbolic link only if it holds the *Create symbolic links* privilege.
+Without it, `createSymbolicLink` (and `Files.createSymbolicLink`) fails with "A required privilege is not
+held by the client". The privilege is held by:
+
+- **every user, when Developer Mode is on** (Settings > System > For developers; sign out and in again
+  afterwards), and Java 13 and later use it; or
+- **administrators, in an elevated process** (Run as administrator); or
+- users granted *Create symbolic links* by policy (`secpol.msc` > Local Policies > User Rights Assignment).
+
+Hard links, directories, permissions and everything else need nothing special. The memory, SFTP and JDBC
+implementations don't use the operating system's links at all.
+
+What the library does about it:
+
+- **The error says what is wrong.** On Windows, a link that can't be made for this reason throws
+  `SymbolicLinkSupport.SymbolicLinkPrivilegeException` (a `FileSystemException`, so `catch (IOException)`
+  still works) whose message names the link and says to turn on Developer Mode or run elevated. The
+  operating system's own error is its cause. A link that already exists still throws
+  `FileAlreadyExistsException`, and a missing directory `NoSuchFileException`, as before.
+- **You can ask first.** `SymbolicLinkSupport.isAvailable()` tries to make a link in the temporary directory
+  and answers true or false (remembered for the life of the process). `isAvailableIn(path)` asks about
+  one directory, for example a different drive. Trying is deliberate: it covers Developer Mode, elevation and
+  policy together, and doesn't depend on the language of Windows' error text.
+
+```java
+if (!SymbolicLinkSupport.isAvailable()) {
+    // fall back: copy the file, make a hard link (f.createLink), or tell the user
+}
+```
+
+- **The tests skip, not fail.** The link tests build their expected results with real operating system
+  links, so on a Windows machine without the privilege they are skipped, with the reason as the skip message.
+  Turn on Developer Mode to run them.
+
 ## NIO file system provider
 
 `file.toPath()` returns a `java.nio.file.Path` (a `FileSourcePath`) for any FileSource. The provider is registered for the `filesource` scheme, so `Paths.get(URI)` works too:
@@ -375,7 +411,23 @@ assertEquals(100, totalLogSize(dir));
 mvn test
 ```
 
-The tests use JUnit 5. A few only run on Windows, or when your user belongs to more than one group, and are skipped otherwise.
+The tests use JUnit 5. A few only run on Windows, or when your user belongs to more than one group, and are skipped otherwise. On Windows the symbolic link tests also need Developer Mode or an elevated shell, and are skipped without it (see [Symbolic links on Windows](#symbolic-links-on-windows)).
+
+**A skipped test is not a passed test.** `mvn test` and an IDE's JUnit run can't elevate themselves, so on
+Windows they end in `BUILD SUCCESS` with the symbolic link tests *not run*. To see them run:
+
+- start the shell with **Run as administrator** and run `mvn test` there (clean up with a normal shell
+  afterwards if `target\` ends up owned by Administrators), or
+- turn on Developer Mode (a machine-wide setting; see above), or
+- run the build on a CI Windows runner, which runs as an administrator.
+
+When the tests are skipped for this reason the end of the test output says so, with a banner that counts
+them. To make a build **fail** instead of skipping, which is what a CI job that is meant to have the
+privilege wants, add `-Dparley.requireSymlinks=true`:
+
+```
+mvn test -Dparley.requireSymlinks=true
+```
 
 `mvn test` also measures test coverage with [JaCoCo](https://www.jacoco.org/jacoco/); open `target/site/jacoco/index.html` for the report.
 

@@ -146,3 +146,19 @@ FileProxy, the memory file system, FTP, SFTP (three libraries) and JDBC all pass
 - A symbolic link has the permissions of what it leads to, as `java.io.File` and `chmod` see them. They
   were the link's own (`rwxr-xr-x` whatever the file is), and setting one bit wrote the link's bits onto the
   file.
+
+### Changed (Windows)
+
+- `WindowsPermissionManager`: the "other" group defaults to `Everyone` (it was `Other`, which is not a
+  Windows group, so every other-permission check threw `UserPrincipalNotFoundException`). A group that
+  can't be found now answers "not allowed" instead of throwing. Set the `OtherSid` system property for a
+  localized name.
+- Creating a symbolic link without the Windows privilege (no Developer Mode, not elevated) throws
+  `SymbolicLinkSupport.SymbolicLinkPrivilegeException`, a `FileSystemException` that says what to do. It
+  was the bare "A required privilege is not held by the client".
+
+### Added
+
+- `SymbolicLinkSupport.isAvailable()` and `isAvailableIn(Path)`: whether this process can create symbolic
+  links. See the README, "Symbolic links on Windows".
+- The symbolic link tests are skipped, with the reason, when the process can't create links.
