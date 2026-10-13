@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
+import us.bringardner.parley.files.fileproxy.SymbolicLinkSupport;
 
 /**
  * A FileSource acts like a java.io.File: it can do more, never less, so every question a File
@@ -62,6 +63,17 @@ public abstract class FileLikeBehaviorTests {
 	 */
 	protected boolean supportsSymbolicLinks() {
 		return true;
+	}
+
+	/**
+	 * Skips the link tests unless the backend has symbolic links and this process may create them on the
+	 * operating system: the tests make the oracle's links with java.nio, which on Windows needs Developer
+	 * Mode or an elevated process (see {@link SymbolicLinkSupport}). A skip says why instead of an error.
+	 */
+	private void requireSymbolicLinks() {
+		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks(), "this backend has no symbolic links");
+		org.junit.jupiter.api.Assumptions.assumeTrue(SymbolicLinkSupport.isAvailable(),
+				"skipped: " + SymlinkSkipWarning.MARKER + ". " + SymbolicLinkSupport.advice());
 	}
 
 	/** Whether the backend can create hard links ({@link FileSourceFactory#createLink}). */
@@ -801,7 +813,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkToAFileActsLikeTheFile() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		oracleSymlink("ln.txt", "five.txt");
 		symlink("ln.txt", "five.txt");
 		for(String m : new String[] {"exists", "isFile", "isDirectory", "length", "getName"}) {
@@ -847,7 +859,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkHasTheCanonicalPathOfWhatItLeadsTo() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		oracleSymlink("ln.txt", "five.txt");
 		symlink("ln.txt", "five.txt");
 		oracleSymlink("ln2.txt", "ln.txt");            // a link to a link
@@ -877,7 +889,7 @@ public abstract class FileLikeBehaviorTests {
 	void aSymbolicLinkHasThePermissionsOfWhatItLeadsTo() throws Exception {
 		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
 		org.junit.jupiter.api.Assumptions.assumeFalse(onWindows() && sourceFor("five.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		org.junit.jupiter.api.Assumptions.assumeTrue(permissionsOfExistingPathsAreComparable());
 		// a mode that no link has of its own on any system, so it can't be mistaken for the link's
 		FileSource target = sourceFor("five.txt");
@@ -909,7 +921,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkToADirectoryActsLikeTheDirectory() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		oracleSymlink("lndir", "dir");
 		symlink("lndir", "dir");
 		for(String m : new String[] {"exists", "isFile", "isDirectory", "list"}) {
@@ -922,7 +934,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkIsItsOwnEntry() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		oracleSymlink("ln.txt", "five.txt");
 		symlink("ln.txt", "five.txt");
 		// it is in its parent's list, and says where it points; the target says it points nowhere
@@ -950,7 +962,7 @@ public abstract class FileLikeBehaviorTests {
 
 	@Test
 	void aSymbolicLinkMayPointAtNothing() throws Exception {
-		org.junit.jupiter.api.Assumptions.assumeTrue(supportsSymbolicLinks());
+		requireSymbolicLinks();
 		oracleSymlink("dangling", "nope.txt");
 		symlink("dangling", "nope.txt");
 		for(String m : new String[] {"exists", "isFile", "isDirectory", "length"}) {
