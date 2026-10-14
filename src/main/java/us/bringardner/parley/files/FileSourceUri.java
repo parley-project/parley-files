@@ -29,7 +29,7 @@ public class FileSourceUri  {
 	public String toString() {
 		StringBuilder ret = new StringBuilder(scheme+":");
 		if( authority !=null ) {
-			ret.append(authority);
+			ret.append(maskPassword(authority));
 		} else if( host != null) {
 			ret.append(host);
 			if( port != null ) {
@@ -50,6 +50,24 @@ public class FileSourceUri  {
 
 
 		return ret.toString();
+	}
+
+
+	/**
+	 * An authority (user:password@host:port) with the password replaced by ****, so
+	 * toString() can be logged or shown in an error message without leaking it.
+	 */
+	static String maskPassword(String authority) {
+		int at = authority.lastIndexOf('@');
+		if( at < 0 ) {
+			return authority;
+		}
+		String userInfo = authority.substring(0, at);
+		int colon = userInfo.indexOf(':');
+		if( colon < 0 ) {
+			return authority;
+		}
+		return userInfo.substring(0, colon)+":****"+authority.substring(at);
 	}
 
 
