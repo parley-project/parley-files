@@ -56,6 +56,9 @@ import java.util.Collections;
 
 import us.bringardner.parley.core.BaseObject;
 import us.bringardner.parley.core.util.LogHelper;
+import us.bringardner.parley.files.credentials.CredentialRef;
+import us.bringardner.parley.files.credentials.CredentialRequest;
+import us.bringardner.parley.files.credentials.Credentials;
 import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 
 /**
@@ -765,13 +768,66 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	 * @return true if successfully connected to a FileSource
 	 * @throws IOException 
 	 */
-	public  boolean connect() throws IOException {		
+	public  boolean connect() throws IOException {
 		boolean ret = isConnected();
 		if( !ret || getTypeId().equals(FileProxyFactory.FACTORY_ID)) {
-			ret = connectImpl();
+			synchronized (resolvedThisConnect) {
+				resolvedThisConnect.clear();
+			}
+			boolean ok = false;
+			try {
+				ret = connectImpl();
+				ok = ret;
+			} finally {
+				// a secret that didn't work is dropped by providers that keep answers (prompt)
+				List<Object[]> used;
+				synchronized (resolvedThisConnect) {
+					used = new ArrayList<>(resolvedThisConnect);
+					resolvedThisConnect.clear();
+				}
+				if( !ok ) {
+					for(Object[] u : used) {
+						Credentials.rejected((CredentialRef) u[0], (CredentialRequest) u[1]);
+					}
+				}
+			}
 			if( ret ) {
 				registerSession();
 			}
+		}
+		return ret;
+	}
+
+	/** References {@link #secret(String, String)} resolved during the connect in progress. */
+	private final List<Object[]> resolvedThisConnect = new ArrayList<>();
+
+	/**
+	 * The secret a connection setting's value stands for. Factories call this in
+	 * {@link #connectImpl()}, just before logging in, for each secret setting, and keep the
+	 * value as given (a {@code @scheme:locator} reference, say) in their fields, so
+	 * {@link #getConnectProperties()}, {@link #getURL()} and recent files lists hold the
+	 * reference and never the secret. A plain value is returned as it is ({@code @@} at the
+	 * start read as {@code @}).
+	 * <p>
+	 * If the connect fails, references resolved here are reported to their providers as
+	 * rejected, so a prompted password is asked for again.
+	 *
+	 * @param property the setting's name, such as "password"
+	 * @param value the setting's value: a secret or a reference to one
+	 * @return a new array; zero it once the login is done
+	 * @throws IOException if a reference can't be resolved (the message names it, never a secret)
+	 */
+	protected char[] secret(String property, String value) throws IOException {
+		Optional<CredentialRef> ref = CredentialRef.parse(value);
+		if( ref.isEmpty()) {
+			return Credentials.secret(value, null);
+		}
+		Properties p = getConnectProperties();
+		CredentialRequest req = new CredentialRequest(getTypeId(), property,
+				p == null ? null : p.getProperty("host"), p == null ? null : p.getProperty("user"));
+		char[] ret = Credentials.resolve(ref.get(), req);
+		synchronized (resolvedThisConnect) {
+			resolvedThisConnect.add(new Object[] {ref.get(), req});
 		}
 		return ret;
 	}
