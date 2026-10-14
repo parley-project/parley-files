@@ -45,6 +45,36 @@ public class ConnectionSettingsTests {
 	}
 
 	@Test
+	public void checksCredentialReferences() {
+		try {
+			List<ConnectionSetting> settings = List.of(ConnectionSetting.text("user", "User"), ConnectionSetting.secret("password", "Password"));
+			Properties p = new Properties();
+			p.setProperty("password", "@env:SOME_VAR");
+			assertTrue(ConnectionSettings.validate(settings, p).isEmpty(), "a usable reference is fine");
+			p.setProperty("password", "plain@pw");
+			assertTrue(ConnectionSettings.validate(settings, p).isEmpty());
+			p.setProperty("password", "@vault:prod");
+			List<String> problems = ConnectionSettings.validate(settings, p);
+			assertEquals(List.of("Password: there is no credential store called 'vault' (@vault:prod)"), problems);
+			p.setProperty("password", "@cmd:op read x");
+			problems = ConnectionSettings.validate(settings, p);
+			assertTrue(problems.get(0).startsWith("Password: the cmd store is unavailable here"), problems.toString());
+			p.setProperty("user", "@notasecret:x");
+			p.setProperty("password", "x");
+			assertTrue(ConnectionSettings.validate(settings, p).isEmpty(), "only secret settings are references");
+		} finally {
+			us.bringardner.parley.files.credentials.Credentials.restoreDefaults();
+		}
+	}
+
+	@Test
+	public void suggestsAKeychainEntry() {
+		assertEquals("@keychain:parley/sftp/deploy@prod", ConnectionSettings.suggestedKeychainRef("sftp", "deploy", "prod").toString());
+		assertEquals("@keychain:parley/jdbc/app", ConnectionSettings.suggestedKeychainRef("jdbc", "app", null).toString());
+		assertEquals("@keychain:parley/connection", ConnectionSettings.suggestedKeychainRef(null, " ", "").toString());
+	}
+
+	@Test
 	public void checksValues() {
 		ConnectionSetting port = ConnectionSettings.find(SETTINGS, "port");
 		assertNull(port.check("22"));

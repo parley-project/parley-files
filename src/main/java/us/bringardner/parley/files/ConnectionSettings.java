@@ -27,7 +27,12 @@ package us.bringardner.parley.files;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
+
+import us.bringardner.parley.files.credentials.CredentialProvider;
+import us.bringardner.parley.files.credentials.CredentialRef;
+import us.bringardner.parley.files.credentials.Credentials;
 
 /**
  * Working with a factory's {@link ConnectionSetting}s, the same way in every UI: the
@@ -89,13 +94,66 @@ public class ConnectionSettings {
 		List<String> ret = new ArrayList<>();
 		for(ConnectionSetting s : settings) {
 			if( isVisible(s, settings, values)) {
-				String problem = s.check(values == null ? null : values.getProperty(s.key()));
+				String value = values == null ? null : values.getProperty(s.key());
+				String problem = s.check(value);
+				if( problem == null && isSecret(s)) {
+					problem = checkReference(s, value);
+				}
 				if( problem != null ) {
 					ret.add(problem);
 				}
 			}
 		}
 		return ret;
+	}
+
+	/** True for the settings that may hold a credential reference. */
+	public static boolean isSecret(ConnectionSetting s) {
+		return s.kind() == ConnectionSetting.Kind.SECRET || s.kind() == ConnectionSetting.Kind.MULTILINE_SECRET;
+	}
+
+	/**
+	 * What's wrong with a secret setting's value as a reference (@keychain:...): no provider
+	 * for its scheme, or the provider can't work here. Null for a plain value or a usable
+	 * reference. Whether the secret exists isn't checked: that may ask for a password.
+	 */
+	public static String checkReference(ConnectionSetting s, String value) {
+		Optional<CredentialRef> ref = CredentialRef.parse(value);
+		if( ref.isEmpty()) {
+			return null;
+		}
+		Optional<CredentialProvider> p = Credentials.get(ref.get().scheme());
+		if( p.isEmpty()) {
+			return s.label()+": there is no credential store called '"+ref.get().scheme()+"' ("+ref.get()+")";
+		}
+		if( !p.get().isAvailable()) {
+			return s.label()+": the "+ref.get().scheme()+" store is unavailable here: "+p.get().unavailableReason();
+		}
+		return null;
+	}
+
+	/**
+	 * The keychain entry to suggest when a typed password is saved there:
+	 * {@code @keychain:parley/FACTORY/USER@HOST}, leaving out what's unknown.
+	 */
+	public static CredentialRef suggestedKeychainRef(String factoryId, String user, String host) {
+		StringBuilder buf = new StringBuilder("parley/");
+		buf.append(factoryId == null || factoryId.isBlank() ? "connection" : factoryId.trim());
+		boolean hasUser = user != null && !user.isBlank();
+		boolean hasHost = host != null && !host.isBlank();
+		if( hasUser || hasHost ) {
+			buf.append('/');
+			if( hasUser ) {
+				buf.append(user.trim());
+				if( hasHost ) {
+					buf.append('@');
+				}
+			}
+			if( hasHost ) {
+				buf.append(host.trim());
+			}
+		}
+		return new CredentialRef("keychain", buf.toString());
 	}
 
 	/**
