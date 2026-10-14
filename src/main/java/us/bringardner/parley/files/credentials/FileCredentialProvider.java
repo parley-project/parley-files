@@ -31,6 +31,9 @@ public class FileCredentialProvider implements CredentialProvider {
 	@Override
 	public char[] resolve(CredentialRef ref, CredentialRequest request) throws CredentialException {
 		Path p = path(ref);
+		if( !Files.exists(p)) {
+			throw new CredentialException(ref, p+" doesn't exist");
+		}
 		SecretFiles.checkOwnerOnly(ref, p);
 		byte[] bytes = null;
 		try {

@@ -132,7 +132,8 @@ public class CredentialsTests {
 		assertEquals("stored pä", str(new FileCredentialProvider().resolve(ref, REQ)));
 		Credentials.remove(ref);
 		assertFalse(Files.exists(f));
-		assertThrows(CredentialException.class, () -> Credentials.resolve(ref, REQ));
+		CredentialException e = assertThrows(CredentialException.class, () -> Credentials.resolve(ref, REQ));
+		assertTrue(e.getMessage().endsWith("doesn't exist"), e.getMessage());
 	}
 
 	// ---------------------------------------------------------------- cmd
