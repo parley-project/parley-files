@@ -71,8 +71,12 @@ final class SecretFiles {
 	 */
 	static void writeOwnerOnly(Path p, byte[] data) throws IOException {
 		Path dir = p.toAbsolutePath().getParent();
+		if( dir == null ) {
+			// a file system root: there's no directory to put the file in
+			throw new IOException("Not a file path: "+p);
+		}
 		boolean posix = hasPosix(p);
-		if( dir != null && !Files.isDirectory(dir)) {
+		if( !Files.isDirectory(dir)) {
 			if( posix ) {
 				Files.createDirectories(dir, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
 			} else {
