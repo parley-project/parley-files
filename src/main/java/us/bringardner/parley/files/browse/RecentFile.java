@@ -46,6 +46,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
+import us.bringardner.parley.files.credentials.CredentialRef;
 import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 
 /**
@@ -56,7 +57,9 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
  * An entry keeps its factory's connection properties, but secret values (the factory decides
  * which, see {@link FileSourceFactory#isSecretProperty(String)}) are never saved. A secret that
  * had a value is saved as its name alone; {@link #open(SecretPrompter)} asks for it, and the answer
- * is kept in memory for the rest of the session. Secrets that were empty are left out.
+ * is kept in memory for the rest of the session. Secrets that were empty are left out. A secret
+ * setting holding a reference ({@code @keychain:parley/prod}, see
+ * {@link us.bringardner.parley.files.credentials.Credentials}) is saved as it is and never asked for.
  * <p>
  * Entries are the same when they have the same file system type and path.
  */
@@ -123,7 +126,8 @@ public class RecentFile {
 				}
 				if( factory != null ? factory.isSecretProperty(name) : FileSourceFactory.looksLikeSecret(name) ) {
 					secrets.add(name);
-					if( !val.isEmpty() ) {
+					// a reference (@keychain:...) is saved as it is and needs no prompt
+					if( !val.isEmpty() && !CredentialRef.isReference(val) ) {
 						needed.add(name);
 					}
 				}
@@ -144,7 +148,8 @@ public class RecentFile {
 		for(String name : prop.stringPropertyNames()) {
 			if( f.isSecretProperty(name) ) {
 				secrets.add(name);
-				if( !prop.getProperty(name).isEmpty() ) {
+				String val = prop.getProperty(name);
+				if( !val.isEmpty() && !CredentialRef.isReference(val) ) {
 					needed.add(name);
 				}
 			}
@@ -276,13 +281,15 @@ public class RecentFile {
 
 	/**
 	 * The saved form: id|name=value,...,secretName,...|path. Secret values are never
-	 * written; a secret the connection needs is written as its name alone.
+	 * written; a secret the connection needs is written as its name alone. A secret setting
+	 * holding a reference ({@code @keychain:...}) is written with it, so reopening needs no prompt.
 	 */
 	@Override
 	public String toString() {
 		StringBuilder buf = new StringBuilder();
 		for(String name : new TreeSet<>(prop.stringPropertyNames())) {
-			if( secrets.contains(name) ) {
+			if( secrets.contains(name) && !CredentialRef.isReference(prop.getProperty(name)) ) {
+				// a secret value is never written; a reference to one is
 				continue;
 			}
 			if(buf.length()>0) {
