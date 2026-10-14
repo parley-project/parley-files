@@ -42,6 +42,18 @@ public class FileSourceUrlTests {
 		assertEquals("6", comma.getSessionId());
 	}
 
+	/** toString() is logged and shown in errors, so it must not carry a URI's password. */
+	@Test
+	public void toStringMasksPassword() throws Exception {
+		FileSourceUri u = new FileSourceUri(new URI("sftp://deploy:s3cret@prod.example.com:22/var/www"));
+		assertEquals("s3cret", u.getPassword(), "still parsed for the connection");
+		assertFalse(u.toString().contains("s3cret"), u.toString());
+		assertTrue(u.toString().contains("deploy:****@prod.example.com:22"), u.toString());
+
+		FileSourceUri noPw = new FileSourceUri(new URI("sftp://deploy@prod.example.com/var/www"));
+		assertTrue(noPw.toString().contains("deploy@prod.example.com"), noPw.toString());
+	}
+
 	/** #13: a URL with a second parameter failed with "No Filesource Factory". */
 	@Test
 	public void urlWithSeveralParametersResolves() throws Exception {
