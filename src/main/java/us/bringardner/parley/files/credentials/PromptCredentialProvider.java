@@ -42,7 +42,7 @@ public class PromptCredentialProvider implements CredentialProvider {
 			}
 		}
 		Credentials.Prompter p = Credentials.getPrompter();
-		if( p == null ) {
+		if( p == null || !p.canAsk(request)) {
 			throw new CredentialException(ref, "can't ask for "+request.describe()+": this session has no way to ask");
 		}
 		String label = ref.locator().isEmpty() ? request.describe() : ref.locator();

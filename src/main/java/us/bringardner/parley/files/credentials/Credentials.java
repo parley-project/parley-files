@@ -31,6 +31,15 @@ public final class Credentials {
 		 * @return the answer (the caller zeroes it), or null if the person cancelled
 		 */
 		char[] ask(String label, CredentialRequest request);
+
+		/**
+		 * Whether anyone can be asked now: false in a session nobody is watching (a script
+		 * run by cron, say), so a prompt fails at once with that reason instead of waiting
+		 * or reporting a cancel. True by default.
+		 */
+		default boolean canAsk(CredentialRequest request) {
+			return true;
+		}
 	}
 
 	private static final Map<String, CredentialProvider> providers = new LinkedHashMap<>();

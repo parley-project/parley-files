@@ -226,7 +226,7 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 			}
 		}
 		Credentials.Prompter p = Credentials.getPrompter();
-		if( p == null ) {
+		if( p == null || !p.canAsk(CredentialRequest.forProperty("keystore master password"))) {
 			throw new CredentialException(ref, "the keystore is locked and this session has no way to ask for its master password");
 		}
 		CredentialRequest req = CredentialRequest.forProperty("keystore master password");

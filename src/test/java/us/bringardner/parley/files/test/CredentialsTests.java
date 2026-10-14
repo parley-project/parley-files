@@ -178,6 +178,26 @@ public class CredentialsTests {
 	}
 
 	@Test
+	public void aPrompterThatCantAskNowFailsAtOnce() {
+		List<String> asked = new ArrayList<>();
+		Credentials.setPrompter(new Credentials.Prompter() {
+			@Override
+			public char[] ask(String label, CredentialRequest req) {
+				asked.add(label);
+				return "x".toCharArray();
+			}
+
+			@Override
+			public boolean canAsk(CredentialRequest req) {
+				return false;
+			}
+		});
+		CredentialException e = assertThrows(CredentialException.class, () -> Credentials.secret("@prompt:", REQ));
+		assertTrue(e.getMessage().contains("no way to ask"), e.getMessage());
+		assertTrue(asked.isEmpty());
+	}
+
+	@Test
 	public void aPromptIsAskedOnceAndCancellingFails() throws IOException {
 		List<String> asked = new ArrayList<>();
 		Credentials.setPrompter((label, req) -> { asked.add(label); return "typed".toCharArray(); });
