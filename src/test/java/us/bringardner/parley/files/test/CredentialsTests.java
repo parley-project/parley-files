@@ -249,6 +249,22 @@ public class CredentialsTests {
 	}
 
 	@Test
+	public void prepareAsksForTheMasterPasswordBeforeAnySecret() throws IOException {
+		KeyStoreCredentialProvider ks = new KeyStoreCredentialProvider(dir.resolve("creds.p12"));
+		Credentials.register(ks);
+		List<String> asked = new ArrayList<>();
+		Credentials.setPrompter((label, req) -> { asked.add(label); return "master".toCharArray(); });
+		ks.prepare();
+		assertEquals(2, asked.size(), "a new keystore: asked twice");
+		assertFalse(Files.exists(dir.resolve("creds.p12")), "nothing is written until a secret is stored");
+		Credentials.store(new CredentialRef("keystore", "a"), "A".toCharArray());
+		assertEquals(2, asked.size(), "not asked again");
+		ks.lock();
+		ks.prepare();
+		assertEquals(3, asked.size(), "an existing keystore: asked once");
+	}
+
+	@Test
 	public void theKeystoreMasterPasswordComesFromTheKeychainFirst() throws IOException {
 		Path ksPath = dir.resolve("creds.p12");
 		KeyStoreCredentialProvider ks = new KeyStoreCredentialProvider(ksPath);

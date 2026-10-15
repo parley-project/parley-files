@@ -77,6 +77,15 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 		this.master = master.clone();
 	}
 
+	/**
+	 * Gets the master password now (from the keychain, or asked for: twice for a new keystore),
+	 * so a tool that is about to ask for a secret to store can unlock the keystore first and a
+	 * mistyped master password doesn't waste the secret. Does nothing when already unlocked.
+	 */
+	public synchronized void prepare() throws CredentialException {
+		load(null, true);
+	}
+
 	/** Forgets the master password, so it is asked for again. */
 	public synchronized void lock() {
 		if( master != null ) {
