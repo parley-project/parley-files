@@ -20,7 +20,7 @@ The syntax deliberately stays close to `java.io.File`, so moving code between th
 ## Requirements
 
 - Java 11 or later
-- [parley-core](https://github.com/tony-bringardner/parley-core) and [parley-io](https://github.com/tony-bringardner/parley-io) (pulled in automatically by Maven)
+- [parley-core](https://github.com/parley-project/parley-core) and [parley-io](https://github.com/parley-project/parley-io) (pulled in automatically by Maven)
 
 ## Installation
 
@@ -40,15 +40,15 @@ Add the package repositories to your `pom.xml` (parley-core and parley-io are pu
 <repositories>
     <repository>
         <id>github</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/parley-files</url>
+        <url>https://maven.pkg.github.com/parley-project/parley-files</url>
     </repository>
     <repository>
         <id>github-parley-core</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/parley-core</url>
+        <url>https://maven.pkg.github.com/parley-project/parley-core</url>
     </repository>
     <repository>
         <id>github-parley-io</id>
-        <url>https://maven.pkg.github.com/tony-bringardner/parley-io</url>
+        <url>https://maven.pkg.github.com/parley-project/parley-io</url>
     </repository>
 </repositories>
 ```
@@ -103,9 +103,9 @@ Separate projects, which plug in the same way once they're on the classpath:
 
 | Project | Artifact | What it is |
 |---|---|---|
-| [parley-files-ftp](https://github.com/tony-bringardner/parley-files-ftp) | `us.bringardner.parley:parley-files-ftp` | FTP and FTPS servers |
-| [parley-files-sftp](https://github.com/tony-bringardner/parley-files-sftp) | `us.bringardner.parley:parley-files-sftp` | SSH/SFTP servers |
-| [parley-files-jdbc](https://github.com/tony-bringardner/parley-files-jdbc) | `us.bringardner.parley:parley-files-jdbc` | A file system stored in a database, via JDBC |
+| [parley-files-ftp](https://github.com/parley-project/parley-files-ftp) | `us.bringardner.parley:parley-files-ftp` | FTP and FTPS servers |
+| [parley-files-sftp](https://github.com/parley-project/parley-files-sftp) | `us.bringardner.parley:parley-files-sftp` | SSH/SFTP servers |
+| [parley-files-jdbc](https://github.com/parley-project/parley-files-jdbc) | `us.bringardner.parley:parley-files-jdbc` | A file system stored in a database, via JDBC |
 
 They were `bjl_file_system_ftp`, `bjl_file_system_sftp` and `bjl_file_system_jdbc` (BjlFileSystemFtp and so on).
 
@@ -176,7 +176,7 @@ link.getCanonicalPath();   // the path of what it leads to
 - **A write through a link changes the file it leads to**, as a `FileOutputStream` does on a symbolic link
   (checked on every implementation that has links). The link stays a link. A *protocol* that can't see
   links has to decide what a write means for itself: the FTP server in
-  [parley-ftp](https://github.com/tony-bringardner/parley-ftp#links) hides links from its clients and
+  [parley-ftp](https://github.com/parley-project/parley-ftp#links) hides links from its clients and
   replaces the link with a regular file instead. That is the FTP server's rule, not this API's.
 - **A link that leads nowhere** is there (it is listed and can be deleted) but `exists()` is false, and
   writing through it creates the target. Its canonical path is its own path, as `java.io.File`'s is.
