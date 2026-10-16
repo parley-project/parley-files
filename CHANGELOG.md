@@ -55,13 +55,10 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
   `FileSource` and the factories don't depend on Swing. `ProgressMonitorProgress` adapts a Swing
   `ProgressMonitor`; it's built on swing-widgets' `ProgressMonitorUpdater`. The memory file system's version no longer fails when given `null`.
 - `CommandLinePropertyEditor` asks for the settings that apply, with their labels and choices, never
-  shows a secret's value, and doesn't accept invalid values. `Terminal`'s connect dialog now connects
-  with the values entered in it (they used to be replaced by the ones it started with).
-- `Terminal` is console only: it no longer uses Swing. `connect` always asks for the settings as
-  text (`CommandLinePropertyEditor`) instead of opening `FactoryPropertiesDialog` when there's a
-  display, and errors are written to the Terminal's output instead of shown in a dialog. The unused
-  `headless` command and the debugging `test` command are gone; a command that fails no longer
-  prints a stack trace (it's in the debug log).
+  shows a secret's value, and doesn't accept invalid values.
+- `Terminal`, the interactive file shell, is gone: an application doesn't belong in the library.
+  Use [fsh](https://github.com/parley-project/parley-fsh), a full shell for any parley-files file
+  system, or [parley-files-console](https://github.com/parley-project/parley-files-console).
 - New package `us.bringardner.parley.files.browse`, the UI-free part of a file chooser or browser,
   shared by Swing and JavaFX UIs: `FileEntry` (a file's details, read once, so a view doesn't ask a
   remote file system on every repaint), `DirectoryListing` (listing with progress and cancel, sort
