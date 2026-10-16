@@ -1,5 +1,27 @@
 # Changelog
 
+## parley-files 1.1.0 (unreleased)
+
+Locking, added without changing anything that exists: code written for 1.0.0 compiles and behaves the same.
+
+### Added
+
+- **Locks on any path.** `FileSource` has four new default methods: `tryLock(mode, lease)`,
+  `lock(mode, lease, wait)`, `getLockScope()` and `supportsFencedWrites()`. Locks are leases with fencing
+  tokens, EXCLUSIVE or SHARED, advisory and not reentrant. See the new package
+  `us.bringardner.parley.files.lock` (`FileSourceLock`, `LockMode`, `LockScope`, `LockManager`,
+  `LockBackend`, `LockRenewer`, `Locks`, `LockLostException`, `LockTimeoutException`) and the README's
+  "Locking" section.
+- Every FileSource gets `PROCESS` locks (all threads in this JVM) from the defaults.
+- Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
+  A `.parley-locks` directory in or above the locked path is the lock directory
+  (`FileProxyFactory.LOCK_DIRECTORY_NAME`); otherwise the `parley.files.lockDirectory` system property
+  (`FileProxyFactory.LOCK_DIRECTORY_PROPERTY`), or `parley-locks-<user>` in the system temp directory, created
+  private to the user. Lock files are opened without following symbolic links.
+- In-memory file systems lock per factory instance: the same path in two memory file systems is two files.
+- Tests jar: `AbstractLockTests`, the lock contract for every implementation, with a second-JVM worker
+  (`LockWorker`) for the cross-process cases; `MemoryLockTests` and `LocalLockTests` run it here.
+
 ## parley-files 1.0.0 (2026-10-16)
 
 BjlFileSystem is now **parley-files**, part of the Parley library family. The code is the same as

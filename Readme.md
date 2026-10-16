@@ -224,6 +224,60 @@ Supported: streams and byte channels (`readAllBytes`, `readString`, `lines`, `wr
 
 For remote file systems the lookup service only knows the connected user and that user's groups, and a file store's space figures are 0 because the size isn't known (as `java.io.File` reports); local files use the operating system's lookup and report real disk space.
 
+## Locking
+
+Since 1.1.0, any FileSource can lock a path, so an application can coordinate threads, processes and
+even machines through its storage alone: the same code runs as one process or several, and the file
+system decides how far the locks reach.
+
+```java
+try (FileSourceLock lock = mailbox.lock(LockMode.EXCLUSIVE, Duration.ofSeconds(30), Duration.ofSeconds(10))) {
+    Index index = Index.read(mailbox);          // reread: another process may have changed it
+    index.add(message);
+    lock.checkValid();                          // still ours? then commit
+    index.write(mailbox);
+}
+```
+
+`tryLock(mode, lease)` returns the lock or null at once; `lock(mode, lease, wait)` waits, and throws
+`LockTimeoutException` if the lock doesn't come. Every lock is a **lease**: it ends at its expiry unless
+renewed, so a holder that dies or hangs can't block everyone forever. `LockRenewer.start(lock, lease)` keeps a
+long-running holder's lease alive. Each grant carries a **fencing token** that only increases, and locks are
+advisory, not reentrant, owned by the lock object rather than a thread, and never upgraded from SHARED to
+EXCLUSIVE. A lease is enforced by the process holding it, so a thread that forgets its lock doesn't block
+others; what happens to a frozen process depends on the file system. The `us.bringardner.parley.files.lock` package documentation has the full rules.
+
+How far the locks reach is `getLockScope()`:
+
+| Scope | Meaning | Who has it |
+|---|---|---|
+| `PROCESS` | All threads in this JVM | Every FileSource, by default (the in-memory file system, FTP, ...) |
+| `HOST` | All processes on this machine | Local files (`FileProxy`) |
+| `CLUSTER` | All processes on all machines sharing the file system | File systems that can coordinate machines |
+
+An application that runs as several processes checks the scope when it starts:
+
+```java
+if (root.getLockScope().compareTo(LockScope.HOST) < 0) {
+    throw new IllegalStateException(root + " can't be shared by several processes");
+}
+```
+
+**Local files.** The operating system locks real files, so each locked path gets a lock file, named by a hash
+of the path, in a lock directory: the first `.parley-locks` directory in the locked path or above it. An
+application marks the root it serves by creating `.parley-locks` there, and every process serving that root
+shares its locks. Without one, the `parley.files.lockDirectory` system property names the directory, or else
+`parley-locks-<user>` in the system temp directory is used, private to the user. Every process locking a path
+must find the same lock directory, so create or remove one only while nothing is locked under it. The
+operating system frees a dead process's locks at once; a process that is stopped or frozen keeps its locks
+until it runs again. File locks are unreliable on NFS and some other network file systems.
+
+**Adding locks to your implementation.** Nothing is required: the default methods give `PROCESS` locks. To do
+better, override `getLockScope()` and `tryLock(...)`, usually by passing a `LockBackend` that asks the rest of
+the world to `LockManager.get().tryAcquire(...)`. Then extend `AbstractLockTests` from the tests jar: it runs
+every case your scope promises, including a second JVM for `HOST` and `CLUSTER` (give it `workerSpec` and
+`fromWorkerSpec` so the second JVM can find the same path).
+
 ## Writing your own implementation
 
 1. Implement `FileSource` for your storage, and extend `FileSourceFactory`. The factory's `getTypeId()` is the id used in URLs and `getFileSourceFactory(...)`. The factory needs a public no-argument constructor.
@@ -241,7 +295,8 @@ A `FileSource` is meant to look and act like a `java.io.File`: it can have more,
 on any difference (names, creating and deleting, renaming, permissions, times, streams and their errors,
 links, random access, listings with a filter, file sizes around the usual block sizes). Extend it and give it
 a tree to work in (`newTree()` and `sourceFor(path)`). The hooks, such as `supportsSymbolicLinks()` and
-`supportsRandomAccess()`, say what your file system can't do.
+`supportsRandomAccess()`, say what your file system can't do. If your implementation adds locking, extend
+`AbstractLockTests` too (see [Locking](#locking)).
 
 ## Migrating from File to FileSource
 

@@ -37,6 +37,14 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
+import java.time.Duration;
+
+import us.bringardner.parley.files.lock.FileSourceLock;
+import us.bringardner.parley.files.lock.LockBackend;
+import us.bringardner.parley.files.lock.LockManager;
+import us.bringardner.parley.files.lock.LockMode;
+import us.bringardner.parley.files.lock.LockScope;
+import us.bringardner.parley.files.lock.Locks;
 
 
 
@@ -665,6 +673,59 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	default long getUsableSpace() throws IOException {
 		return 0L;
+	}
+
+	// ------------------------------------------------------------------ locking
+
+	/**
+	 * How far this file system's locks reach: {@link LockScope#PROCESS} (this JVM) unless the file
+	 * system does better. An application that runs as several processes on one store checks this at
+	 * start-up and refuses to run if the scope is too narrow.
+	 * @return the scope of {@link #tryLock} and {@link #lock}
+	 * @since 1.1.0
+	 */
+	default LockScope getLockScope() {
+		return LockScope.PROCESS;
+	}
+
+	/**
+	 * Whether a write can be checked against its lock in one atomic step, so a holder whose lease ran
+	 * out can never overwrite the next holder's work. Where false, {@link FileSourceLock#checkValid()}
+	 * before a commit is best effort: keep each locked step much shorter than its lease.
+	 * @return false unless the file system says otherwise
+	 * @since 1.1.0
+	 */
+	default boolean supportsFencedWrites() {
+		return false;
+	}
+
+	/**
+	 * Take a lock on this path now, or return null if another holder has it. The path need not
+	 * exist. Locks are leases, advisory, not reentrant; see the {@code us.bringardner.parley.files.lock}
+	 * package for the full rules.
+	 * @param mode EXCLUSIVE or SHARED
+	 * @param lease how long the lock lasts unless renewed; more than zero
+	 * @return the lock, or null
+	 * @throws IOException if the file system could not be asked
+	 * @since 1.1.0
+	 */
+	default FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
+		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), mode, lease, LockBackend.inProcess());
+	}
+
+	/**
+	 * Take a lock on this path, waiting up to {@code wait} for it.
+	 * @param mode EXCLUSIVE or SHARED
+	 * @param lease how long the lock lasts unless renewed; more than zero
+	 * @param wait how long to wait; zero tries once
+	 * @return the lock
+	 * @throws us.bringardner.parley.files.lock.LockTimeoutException if it didn't come in time
+	 * @throws IOException if the file system could not be asked
+	 * @throws InterruptedException if the thread was interrupted while waiting
+	 * @since 1.1.0
+	 */
+	default FileSourceLock lock(LockMode mode, Duration lease, Duration wait) throws IOException, InterruptedException {
+		return Locks.await(this, mode, lease, wait);
 	}
 
 }

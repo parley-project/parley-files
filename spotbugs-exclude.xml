@@ -25,6 +25,16 @@
 		<Bug pattern="CT_CONSTRUCTOR_THROW"/>
 	</Match>
 
+	<!--
+	  LockManager.get() hands out the JVM's one lock manager on purpose: every file system's locks
+	  in the JVM must go through the same instance, or holders couldn't see each other.
+	-->
+	<Match>
+		<Class name="us.bringardner.parley.files.lock.LockManager"/>
+		<Method name="get"/>
+		<Bug pattern="MS_EXPOSE_REP"/>
+	</Match>
+
 	<!-- The default factory is a deliberately shared, replaceable setting. -->
 	<Match>
 		<Class name="us.bringardner.parley.files.FileSourceFactory"/>
