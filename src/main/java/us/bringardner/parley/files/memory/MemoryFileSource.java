@@ -1112,7 +1112,7 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public FileSource getChild(String path) throws IOException {
 		String myPath = getAbsolutePath();
-		return theCreator.createFileSource(myPath+(""+theCreator.getSeperatorChar())+path);
+		return theCreator.createFileSource(myPath+(""+theCreator.getSeparatorChar())+path);
 	}
 
 	/* (non-Javadoc)

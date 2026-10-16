@@ -255,13 +255,13 @@ public class FileProxyFactory extends FileSourceFactory {
 
 
 	@Override
-	public char getPathSeperatorChar() {
+	public char getPathSeparatorChar() {
 		return File.pathSeparatorChar;
 	}
 
 
 	@Override
-	public char getSeperatorChar() {
+	public char getSeparatorChar() {
 		return File.separatorChar;
 	}
 

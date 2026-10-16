@@ -7,6 +7,8 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
 
 ### Changed (needs a code change)
 
+- `FileSourceFactory.getSeperatorChar()` and `getPathSeperatorChar()` are now
+  `getSeparatorChar()` and `getPathSeparatorChar()` (spelling); file systems implement the new names.
 - Maven coordinates: `us.bringardner:bjl_file_system` is now `us.bringardner.parley:parley-files`.
 - Packages: `us.bringardner.io.filesource` (and `.fileproxy`, `.memory`, `.java.file`) is now
   `us.bringardner.parley.files`.

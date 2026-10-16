@@ -469,14 +469,14 @@ public class Terminal extends BaseThread {
 		List<Object> ret = new ArrayList<Object>();
 
 		//out.writeLine("Look at parsing paths with rx");
-		String pathSegments [] = path.split("["+factory.getSeperatorChar()+"]");
+		String pathSegments [] = path.split("["+factory.getSeparatorChar()+"]");
 
 		//out.writeLine(path+" len="+pathSegments.length);
 		FileSource file = null;
 
 		int startArg = 0;
 		if(pathSegments.length == 0 ||  pathSegments[0].isEmpty()) {
-			file = factory.createFileSource(""+factory.getSeperatorChar()+"");
+			file = factory.createFileSource(""+factory.getSeparatorChar()+"");
 			startArg++;
 		} else {
 			file =  factory.getCurrentDirectory();

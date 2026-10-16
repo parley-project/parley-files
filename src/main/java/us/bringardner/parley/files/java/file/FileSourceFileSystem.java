@@ -98,7 +98,7 @@ public class FileSourceFileSystem extends FileSystem {
 	public String getSeparator() {
 		String ret = File.separator;
 		if( factory != null ) {
-			ret = ""+factory.getSeperatorChar();   // was getPathSeperatorChar() (':' or ';')
+			ret = ""+factory.getSeparatorChar();   // was getPathSeparatorChar() (':' or ';')
 		}
 		
 		return ret;
@@ -146,7 +146,7 @@ public class FileSourceFileSystem extends FileSystem {
 	 * next to path.)
 	 */
 	public Path getPath(String first, String... more) {
-		String sep = ""+factory.getSeperatorChar();
+		String sep = ""+factory.getSeparatorChar();
 		StringBuilder path = new StringBuilder(first);
 		if( more != null ) {
 			for(String name : more) {
@@ -182,7 +182,7 @@ public class FileSourceFileSystem extends FileSystem {
 		}
 		String syntax = syntaxAndPattern.substring(0, colon);
 		String input = syntaxAndPattern.substring(colon + 1);
-		char sep = factory != null ? factory.getSeperatorChar() : File.separatorChar;
+		char sep = factory != null ? factory.getSeparatorChar() : File.separatorChar;
 
 		String regex;
 		if( syntax.equalsIgnoreCase("glob") ) {

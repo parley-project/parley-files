@@ -77,7 +77,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 	}
 
 	synchronized String expandDots(String path) {
-		char sep = getSeperatorChar();
+		char sep = getSeparatorChar();
 		List<String> expanded = new ArrayList<>();
 		String [] parts = path.split(""+sep);
 		//System.out.println("lsn="+parts.length);
@@ -248,7 +248,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 			return roots[0];
 		}
 		MemoryFileSource ret = null;
-		String [] parts = expand.split(""+getSeperatorChar());
+		String [] parts = expand.split(""+getSeparatorChar());
 		MemoryFileSource parent = roots[0];
 
 		// always starts with the root by now
@@ -286,7 +286,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 	/** /tmp, created when first needed. */
 	@Override
 	public FileSource getTempDirectory() throws IOException {
-		FileSource tmp = createFileSource(getSeperatorChar()+"tmp");
+		FileSource tmp = createFileSource(getSeparatorChar()+"tmp");
 		if( !tmp.exists() ) {
 			tmp.mkdirs();
 		}
@@ -308,13 +308,13 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 
 
 	@Override
-	public char getPathSeperatorChar() {
+	public char getPathSeparatorChar() {
 		return ':';
 	}
 
 
 	@Override
-	public char getSeperatorChar() {
+	public char getSeparatorChar() {
 		return '/';
 	}
 

@@ -79,7 +79,7 @@ public class FileSourcePath implements Path {
 			}
 		}
 		//  only '/' are valid in URI
-		rawPath = rawPath.replace('/', factory.getSeperatorChar());
+		rawPath = rawPath.replace('/', factory.getSeparatorChar());
 
 	}
 
@@ -118,9 +118,9 @@ public class FileSourcePath implements Path {
 	private String rootString() {
 		Matcher m = DRIVE_ROOT.matcher(rawPath);
 		if( m.find() ) {
-			return rawPath.substring(0, 2)+factory.getSeperatorChar();
+			return rawPath.substring(0, 2)+factory.getSeparatorChar();
 		}
-		char sep = factory.getSeperatorChar();
+		char sep = factory.getSeparatorChar();
 		if( rawPath.length() > 0 && rawPath.charAt(0) == sep ) {
 			return ""+sep;
 		}
@@ -128,7 +128,7 @@ public class FileSourcePath implements Path {
 	}
 
 	/**
-	 * (This compared the first character with getPathSeperatorChar() -- the ':'
+	 * (This compared the first character with getPathSeparatorChar() -- the ':'
 	 * or ';' that separates entries in a path list -- instead of the name
 	 * separator, so absolute paths reported false; and the Windows pattern
 	 * only matched strings like "c" or "c:".)
@@ -152,7 +152,7 @@ public class FileSourcePath implements Path {
 	}
 
 	private String[] split() {
-		char sep = factory.getSeperatorChar();
+		char sep = factory.getSeparatorChar();
 		String path = rawPath;
 		if(path.length()>0 && path.charAt(0) == sep) {
 			path = path.substring(1);
@@ -173,7 +173,7 @@ public class FileSourcePath implements Path {
 	 */
 	@Override
 	public Path getParent() {
-		char sep = factory.getSeperatorChar();
+		char sep = factory.getSeparatorChar();
 		String root = rootString();
 		String path = rawPath;
 		// ignore a trailing separator (but not the root's)
@@ -211,7 +211,7 @@ public class FileSourcePath implements Path {
 		StringBuilder ret = new StringBuilder();
 		for (int idx = beginIndex; idx < parts.length && idx < endIndex; idx++) {
 			if( idx > beginIndex || idx == 0 ) {
-				ret.append(factory.getSeperatorChar());
+				ret.append(factory.getSeparatorChar());
 			}
 			ret.append(parts[idx]);
 		}
@@ -244,12 +244,12 @@ public class FileSourcePath implements Path {
 		return ret;
 	}
 
-	public static String normalizeString(String path,char seperator) {
+	public static String normalizeString(String path,char separator) {
 		//  Just use the file system path to normalize
-		if( !(""+seperator).equals(FileSystems.getDefault().getSeparator())) {
+		if( !(""+separator).equals(FileSystems.getDefault().getSeparator())) {
 			//  Literal replace: replaceAll treats the separator as a regex and, on Windows,
 			//  the replacement "\" as an escape with nothing after it.
-			path = path.replace(""+seperator, FileSystems.getDefault().getSeparator());
+			path = path.replace(""+separator, FileSystems.getDefault().getSeparator());
 		}
 
 		String ret = Paths.get(path).normalize().toString();
@@ -259,7 +259,7 @@ public class FileSourcePath implements Path {
 	/** Returns a new path; Paths are immutable (this used to modify itself). */
 	@Override
 	public Path normalize() {
-		char sep = factory.getSeperatorChar();
+		char sep = factory.getSeparatorChar();
 		String ret = normalizeString(rawPath, sep);
 		//  normalizeString works with the host's separator; the path keeps its file system's own
 		//  ("/" for memory, even on Windows).
@@ -335,7 +335,7 @@ public class FileSourcePath implements Path {
 			me = toAbsolutePath().toString();
 			u = child.toAbsolutePath().toString();
 
-			String sep = ""+factory.getSeperatorChar();
+			String sep = ""+factory.getSeparatorChar();
 			String tmp = null;
 			if( u.equals(me) ) {
 				tmp = "";
@@ -370,7 +370,7 @@ public class FileSourcePath implements Path {
 		if( factory.getSessionId() >= 0 ) {
 			query += "&"+FileSourceFactory.QUERY_STRING_SESSION_ID+"="+factory.getSessionId();
 		}
-		String path = rawPath.replace(factory.getSeperatorChar(), '/');
+		String path = rawPath.replace(factory.getSeparatorChar(), '/');
 		try {
 			return new URI(FileSourceFactory.FILE_SOURCE_PROTOCOL, path+"?"+query, null);
 		} catch (URISyntaxException e) {
