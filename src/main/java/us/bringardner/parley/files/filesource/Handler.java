@@ -34,7 +34,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
 
-import us.bringardner.parley.files.FileSourceURLConnction;
+import us.bringardner.parley.files.FileSourceURLConnection;
 
 /**
  * The URL handler for the filesource: protocol. It lives in a package named after the
@@ -56,7 +56,7 @@ public class Handler extends URLStreamHandler {
 	 * @see java.net.URLStreamHandler#openConnection(java.net.URL)
 	 */
 	protected URLConnection openConnection(URL arg0) throws IOException {
-		return new FileSourceURLConnction(arg0);
+		return new FileSourceURLConnection(arg0);
 	}
 
 }
