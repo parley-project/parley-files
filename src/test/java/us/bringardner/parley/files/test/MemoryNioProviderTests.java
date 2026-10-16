@@ -12,9 +12,9 @@ public class MemoryNioProviderTests extends AbstractNioProviderTests {
 
 	@BeforeAll
 	public static void setup() throws IOException {
-		localTestFileDirPath = "TestFiles";
+		localTestFileDirPath = testFilesDir(MemoryNioProviderTests.class);
 		remoteTestFileDirPath = "/NioProviderTests";
-		localCacheDirPath = "target/MemoryNioProviderTestsCache";
+		localCacheDirPath = scratchDir("MemoryNioProviderTestsCache");
 		factory = new MemoryFileSourceFactory();
 
 		if(!factory.connect(new Properties())) {

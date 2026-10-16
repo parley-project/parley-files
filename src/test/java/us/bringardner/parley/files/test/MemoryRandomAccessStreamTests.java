@@ -13,7 +13,7 @@ public class MemoryRandomAccessStreamTests extends AbstractRandomAccessStreamTes
 	@BeforeAll
 	public static void setup() throws IOException {
 		factory = new MemoryFileSourceFactory();
-		remoteTestFileDirPath = "target/RandomAccessStreamTests";
+		remoteTestFileDirPath = "/RandomAccessStreamTests";
 
 		if(!factory.connect(new Properties())) {
 			throw new IOException("Can't connect");

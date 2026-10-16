@@ -17,7 +17,7 @@ public class MemoryRandomAccessIoBufferTests extends FileSourceRandomAccessIoBuf
 	@BeforeAll
 	public static void setup() throws IOException {
 		factory = new MemoryFileSourceFactory();
-		remoteTestFileDirPath = "target/UnitTests";
+		remoteTestFileDirPath = "/UnitTests";
 
 		if(!factory.connect(new Properties())) {
 			throw new IOException("Can't connect");

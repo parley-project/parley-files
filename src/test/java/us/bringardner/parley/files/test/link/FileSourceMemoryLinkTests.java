@@ -48,6 +48,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.memory.MemoryFileSourceFactory;
+import us.bringardner.parley.files.test.FileSourceTestSupport;
 
 @TestMethodOrder(OrderAnnotation.class)
 public class FileSourceMemoryLinkTests {
@@ -62,9 +63,9 @@ public class FileSourceMemoryLinkTests {
 	@BeforeAll
 	public static void beforeAll() throws IOException  {
 		//System.out.println("Enter beforeAll");
-		localTestFileDirPath = "TestFiles";
-		localCacheDirPath = "target/MemoryLinkCache";
-		remoteTestFileDirPath = "target/MemoryLinkTests";		
+		localTestFileDirPath = FileSourceTestSupport.testFilesDir(FileSourceMemoryLinkTests.class);
+		localCacheDirPath = FileSourceTestSupport.scratchDir("MemoryLinkCache");
+		remoteTestFileDirPath = "/MemoryLinkTests";		
 		
 		factory = new MemoryFileSourceFactory();
 		

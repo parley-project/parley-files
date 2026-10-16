@@ -16,6 +16,10 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
   `us.bringardner.parley.files`.
 - The shared test suite (the `tests` jar) moves from `us.bringardner.io.filesource.test` to
   `us.bringardner.parley.files.test`.
+- The shared test suite works in a folder under the system temp directory instead of `target/`:
+  `FileSourceTestSupport.scratchDir(name)` gives a folder for the run (kept afterwards, and printed),
+  and `testFilesDir(MyTest.class)` finds the project's `TestFiles`, so the tests don't depend on the
+  working directory. `FileLikeBehaviorTests.newTargetDirectory` makes its folders there too.
 - `ServiceLoader` registrations: implementations must register in
   `META-INF/services/us.bringardner.parley.files.FileSourceFactory`.
 - Module name (`Automatic-Module-Name`): `us.bringardner.parley.files` (none was set before).

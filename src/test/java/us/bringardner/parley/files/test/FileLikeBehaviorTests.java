@@ -115,11 +115,11 @@ public abstract class FileLikeBehaviorTests {
 	private final List<Path> madeDirectories = new ArrayList<>();
 
 	/**
-	 * Makes a directory under target/ that is removed (with everything in it) after the test, whether
-	 * or not the test passed. A backend's {@link #newTree()} uses this to make the root of its tree.
+	 * Makes a directory in the system temp directory that is removed (with everything in it) after the
+	 * test, whether or not the test passed. (The name is from when it was made under target/.) A backend's {@link #newTree()} uses this to make the root of its tree.
 	 */
 	protected Path newTargetDirectory(String prefix) throws IOException {
-		Path dir = Files.createTempDirectory(Path.of("target").toAbsolutePath(), prefix);
+		Path dir = Files.createTempDirectory(prefix);
 		madeDirectories.add(dir);
 		LIVE.add(dir);
 		return dir;
@@ -146,7 +146,7 @@ public abstract class FileLikeBehaviorTests {
 		if( !SWEPT.compareAndSet(false, true) ) {
 			return;
 		}
-		File[] old = new File("target").listFiles((d, name) -> name.startsWith("filelike-"));
+		File[] old = new File(System.getProperty("java.io.tmpdir")).listFiles((d, name) -> name.startsWith("filelike-"));
 		if( old != null ) {
 			long cutoff = System.currentTimeMillis() - STALE_MILLIS;
 			for(File f : old) {

@@ -41,9 +41,9 @@ public class FileSourceFileProxyTests extends AbstractTestClass {
 	static void setUpBeforeClass() throws IOException {
 		
 
-		localTestFileDirPath = "TestFiles";
-		remoteTestFileDirPath = "target/FileProxyTests";		
-		localCacheDirPath = "target/FileProxyTestsCache";
+		localTestFileDirPath = testFilesDir(FileSourceFileProxyTests.class);
+		remoteTestFileDirPath = scratchDir("FileProxyTests");		
+		localCacheDirPath = scratchDir("FileProxyTestsCache");
 		factory = new FileProxyFactory();
 
 	}

@@ -17,7 +17,7 @@ public class FileProxyRandomAccessIoBufferTests extends FileSourceRandomAccessIo
 	@BeforeAll
 	public static void setup() throws IOException {
 		factory = new FileProxyFactory();
-		remoteTestFileDirPath = "target/UnitTests";
+		remoteTestFileDirPath = scratchDir("UnitTests");
 
 		if(!factory.connect(new Properties())) {
 			throw new IOException("Can't connect");

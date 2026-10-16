@@ -54,9 +54,9 @@ public class FileSourceCoreTest  extends AbstractTestClass {
 
 		}
 
-		localTestFileDirPath = "TestFiles";
-		remoteTestFileDirPath = "target/MemoryTests";		
-		localCacheDirPath = "target/MemoryTestsCache";
+		localTestFileDirPath = testFilesDir(FileSourceCoreTest.class);
+		remoteTestFileDirPath = scratchDir("MemoryTests");		
+		localCacheDirPath = scratchDir("MemoryTestsCache");
 		factory = FileSourceFactory.getDefaultFactory();
 
 	}
