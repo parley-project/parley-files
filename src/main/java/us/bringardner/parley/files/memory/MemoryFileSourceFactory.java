@@ -80,7 +80,6 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 		char sep = getSeparatorChar();
 		List<String> expanded = new ArrayList<>();
 		String [] parts = path.split(""+sep);
-		//System.out.println("lsn="+parts.length);
 
 		if(! path.startsWith(""+sep)) {
 			String p2[] = currentDirectory.getAbsolutePath().split(""+sep);
