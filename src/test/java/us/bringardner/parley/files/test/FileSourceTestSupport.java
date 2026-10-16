@@ -102,8 +102,9 @@ public abstract class FileSourceTestSupport {
 	/**
 	 * A local directory for this test run's files, under the system temp directory instead of
 	 * the build's output folder, so tests don't depend on where they run. It is new for each run
-	 * (nothing left by an earlier run gets in the way) and kept afterwards so it can be looked at;
-	 * the OS clears its temp directory in time. The run's root is printed once.
+	 * (nothing left by an earlier run gets in the way) and kept afterwards so it can be looked at.
+	 * macOS and Linux clear their temp directories over time; on Windows, clear %TEMP% yourself.
+	 * The run's root is printed once.
 	 * @param name the directory's name in the run's root
 	 * @return its absolute path (not created)
 	 */
@@ -128,11 +129,19 @@ public abstract class FileSourceTestSupport {
 	 * @return the project folder
 	 */
 	public static File projectDir(Class<?> testClass) {
+		java.security.CodeSource source = testClass.getProtectionDomain().getCodeSource();
+		if( source == null ) {
+			throw new IllegalStateException("can't tell where "+testClass.getName()+" was loaded from");
+		}
 		File dir;
 		try {
-			dir = new File(testClass.getProtectionDomain().getCodeSource().getLocation().toURI());
+			dir = new File(source.getLocation().toURI());
 		} catch(URISyntaxException e) {
 			throw new IllegalStateException(e);
+		}
+		if( !dir.isDirectory() ) {
+			throw new IllegalStateException(testClass.getName()+" was loaded from "+dir
+					+", not a project's test classes: pass a test class from your own project");
 		}
 		for(File d = dir; d != null; d = d.getParentFile()) {
 			if( new File(d, "pom.xml").isFile() ) {

@@ -115,11 +115,14 @@ public abstract class FileLikeBehaviorTests {
 	private final List<Path> madeDirectories = new ArrayList<>();
 
 	/**
-	 * Makes a directory in the system temp directory that is removed (with everything in it) after the
-	 * test, whether or not the test passed. (The name is from when it was made under target/.) A backend's {@link #newTree()} uses this to make the root of its tree.
+	 * Makes a directory in this run's folder ({@link FileSourceTestSupport#scratchDir(String)}) that is
+	 * removed (with everything in it) after the test, whether or not the test passed. A backend's
+	 * {@link #newTree()} uses this to make the root of its tree. (The name is from when it was made
+	 * under target/.)
 	 */
 	protected Path newTargetDirectory(String prefix) throws IOException {
-		Path dir = Files.createTempDirectory(prefix);
+		Path parent = Files.createDirectories(Path.of(FileSourceTestSupport.scratchDir("filelike")));
+		Path dir = Files.createTempDirectory(parent, prefix);
 		madeDirectories.add(dir);
 		LIVE.add(dir);
 		return dir;
@@ -136,30 +139,8 @@ public abstract class FileLikeBehaviorTests {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> LIVE.forEach(FileLikeBehaviorTests::deleteTree)));
 	}
 
-	/** A run that was killed outright (kill -9) can't clean up, so the next run does it. */
-	private static final java.util.concurrent.atomic.AtomicBoolean SWEPT = new java.util.concurrent.atomic.AtomicBoolean();
-
-	/** How old a leftover must be before it is taken to be from an earlier run, not a running one. */
-	private static final long STALE_MILLIS = 60 * 60 * 1000L;
-
-	private static void sweepStaleDirectories() {
-		if( !SWEPT.compareAndSet(false, true) ) {
-			return;
-		}
-		File[] old = new File(System.getProperty("java.io.tmpdir")).listFiles((d, name) -> name.startsWith("filelike-"));
-		if( old != null ) {
-			long cutoff = System.currentTimeMillis() - STALE_MILLIS;
-			for(File f : old) {
-				if( f.isDirectory() && f.lastModified() < cutoff ) {
-					deleteTree(f.toPath());
-				}
-			}
-		}
-	}
-
 	@BeforeEach
 	void buildBothTrees() throws Exception {
-		sweepStaleDirectories();
 		resetTrees();
 	}
 
