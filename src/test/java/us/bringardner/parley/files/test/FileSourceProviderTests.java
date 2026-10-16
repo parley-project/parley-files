@@ -52,9 +52,9 @@ public class FileSourceProviderTests extends AbstractNioProviderTests {
 
 	@BeforeAll
 	public static void setUpBeforeAll()  {
-		localTestFileDirPath = "TestFiles";
-		remoteTestFileDirPath = "target/ProviderTests";		
-		localCacheDirPath = "target/ProviderTestsCache";
+		localTestFileDirPath = testFilesDir(FileSourceProviderTests.class);
+		remoteTestFileDirPath = scratchDir("ProviderTests");		
+		localCacheDirPath = scratchDir("ProviderTestsCache");
 		factory = new FileProxyFactory();		
 
 	}

@@ -13,7 +13,7 @@ public class FileProxyRandomAccessStreamTests extends AbstractRandomAccessStream
 	@BeforeAll
 	public static void setup() throws IOException {
 		factory = new FileProxyFactory();
-		remoteTestFileDirPath = "target/RandomAccessStreamTests";
+		remoteTestFileDirPath = scratchDir("RandomAccessStreamTests");
 
 		if(!factory.connect(new Properties())) {
 			throw new IOException("Can't connect");

@@ -37,9 +37,9 @@ public class FileSourceMemoryTests extends AbstractTestClass {
 
 	@BeforeAll
 	public static void setUpBeforeAll()  {
-		localTestFileDirPath = "TestFiles";
-		remoteTestFileDirPath = "target/MemoryTests";		
-		localCacheDirPath = "target/MemoryTestsCache";
+		localTestFileDirPath = testFilesDir(FileSourceMemoryTests.class);
+		remoteTestFileDirPath = "/MemoryTests";		
+		localCacheDirPath = scratchDir("MemoryTestsCache");
 		factory = new MemoryFileSourceFactory();
 
 	}

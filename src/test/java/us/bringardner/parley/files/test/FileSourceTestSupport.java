@@ -31,6 +31,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -92,6 +96,59 @@ public abstract class FileSourceTestSupport {
 	public static String remoteTestFileDirPath ;
 	/** A local scratch directory (default factory). */
 	public static String localCacheDirPath;
+
+	private static Path scratchRoot;
+
+	/**
+	 * A local directory for this test run's files, under the system temp directory instead of
+	 * the build's output folder, so tests don't depend on where they run. It is new for each run
+	 * (nothing left by an earlier run gets in the way) and kept afterwards so it can be looked at;
+	 * the OS clears its temp directory in time. The run's root is printed once.
+	 * @param name the directory's name in the run's root
+	 * @return its absolute path (not created)
+	 */
+	public static synchronized String scratchDir(String name) {
+		if( scratchRoot == null ) {
+			try {
+				scratchRoot = Files.createTempDirectory("parley-files-tests");
+			} catch(IOException e) {
+				throw new UncheckedIOException(e);
+			}
+			System.out.println("parley-files test files: "+scratchRoot);
+		}
+		return scratchRoot.resolve(name).toString();
+	}
+
+	/**
+	 * The project folder of a test class (the one with pom.xml), found by walking up from where the
+	 * class was loaded, so it works from any working directory and whatever the output folder is called.
+	 * Pass your own test class: when this class comes from the parley-files tests jar, that's where
+	 * your project is.
+	 * @param testClass a class from the project's test classes
+	 * @return the project folder
+	 */
+	public static File projectDir(Class<?> testClass) {
+		File dir;
+		try {
+			dir = new File(testClass.getProtectionDomain().getCodeSource().getLocation().toURI());
+		} catch(URISyntaxException e) {
+			throw new IllegalStateException(e);
+		}
+		for(File d = dir; d != null; d = d.getParentFile()) {
+			if( new File(d, "pom.xml").isFile() ) {
+				return d;
+			}
+		}
+		throw new IllegalStateException("no pom.xml above "+dir);
+	}
+
+	/**
+	 * @param testClass a class from the project's test classes
+	 * @return the project's TestFiles folder (the files the tests copy), as a path
+	 */
+	public static String testFilesDir(Class<?> testClass) {
+		return new File(projectDir(testClass), "TestFiles").getPath();
+	}
 	/** The factory under test, connected. Disconnected after each test class. */
 	public static FileSourceFactory factory;
 	/**

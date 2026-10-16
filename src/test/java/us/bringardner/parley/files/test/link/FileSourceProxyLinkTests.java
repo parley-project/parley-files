@@ -48,6 +48,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.fileproxy.FileProxyFactory;
+import us.bringardner.parley.files.test.FileSourceTestSupport;
 
 @TestMethodOrder(OrderAnnotation.class)
 public class FileSourceProxyLinkTests {
@@ -62,9 +63,9 @@ public class FileSourceProxyLinkTests {
 	@BeforeAll
 	public static void beforeAll() throws IOException  {
 		//System.out.println("Enter beforeAll");
-		localTestFileDirPath = "TestFiles";
-		localCacheDirPath = "target/ProxyLinkCache";
-		remoteTestFileDirPath = "target/ProxyLinkTests";		
+		localTestFileDirPath = FileSourceTestSupport.testFilesDir(FileSourceProxyLinkTests.class);
+		localCacheDirPath = FileSourceTestSupport.scratchDir("ProxyLinkCache");
+		remoteTestFileDirPath = FileSourceTestSupport.scratchDir("ProxyLinkTests");		
 
 		factory = new FileProxyFactory();
 

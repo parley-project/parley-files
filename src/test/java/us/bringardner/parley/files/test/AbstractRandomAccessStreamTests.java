@@ -203,7 +203,7 @@ public abstract class AbstractRandomAccessStreamTests extends FileSourceTestSupp
 	@Test
 	@Order(4)
 	public void compareWithJava() throws IOException {
-		File jdir = new File("target").getAbsoluteFile();
+		File jdir = new File(scratchDir("compareWithJava"));
 		jdir.mkdirs();
 		File jfile = new File(jdir,getClass().getSimpleName()+"-RamFile.txt");
 		if( jfile.exists()) {
