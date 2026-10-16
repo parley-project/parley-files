@@ -166,11 +166,6 @@
 				</executions>
 			</plugin>
 
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-deploy-plugin</artifactId>
-				<version>3.1.3</version>
-			</plugin>
 			<!-- Static analysis, part of verify (skip with -Dspotbugs.skip).
 			     Accepted findings are listed in spotbugs-exclude.xml -->
 			<plugin>
@@ -195,38 +190,6 @@
 
 		</plugins>
 
-		<pluginManagement>
-			<plugins>
-				<!-- Publishes to the GitHub branch when explicitly activated
-				     (needs branch-name and github credentials) -->
-				<plugin>
-					<groupId>com.github.github</groupId>
-					<artifactId>site-maven-plugin</artifactId>
-					<version>0.12</version>
-					<configuration>
-						<message>Maven artifacts for ${project.version}</message>
-						<noJekyll>true</noJekyll>
-						<outputDirectory>${project.build.directory}</outputDirectory>
-						<branch>refs/heads/${branch-name}</branch>
-						<includes>
-							<include>**/*</include>
-						</includes>
-						<merge>true</merge>
-						<repositoryName>parley-files</repositoryName>
-						<repositoryOwner>parley-project</repositoryOwner>
-						<server>github</server>
-					</configuration>
-					<executions>
-						<execution>
-							<goals>
-								<goal>site</goal>
-							</goals>
-							<phase>deploy</phase>
-						</execution>
-					</executions>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 
 	<distributionManagement>
