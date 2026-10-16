@@ -92,15 +92,15 @@ public class RecentFileTests {
 		assertFalse(saved.contains("passphrase"), saved);
 		assertFalse(saved.contains("4321") || saved.contains("pw2") || saved.contains("s3cret"), saved);
 		// kept in memory for this session
-		assertEquals(PASSWORD, entry.prop.getProperty("password"));
+		assertEquals(PASSWORD, entry.getProperties().getProperty("password"));
 	}
 
 	@Test
 	public void theSavedFormIsReadBackAndAsksForSecrets() throws IOException {
 		RecentFile entry = new RecentFile(new RecentFile(secretFile("/dir|x/a,b.txt")).toString());
-		assertEquals("/dir|x/a,b.txt", entry.path);
-		assertEquals(USER, entry.prop.getProperty("user"));
-		assertFalse(entry.isLocal);
+		assertEquals("/dir|x/a,b.txt", entry.getPath());
+		assertEquals(USER, entry.getProperties().getProperty("user"));
+		assertFalse(entry.isLocal());
 		assertEquals("memory:/dir|x/a,b.txt", entry.getLabel());
 		assertEquals(Arrays.asList("jdbcPassword", "password", "pin"), entry.getMissingSecrets());
 
@@ -148,7 +148,7 @@ public class RecentFileTests {
 		older.fillMissingSecrets((e, name) -> "typed-"+name);
 		RecentFile newer = new RecentFile("memory|user=bob|/a.txt");
 		assertSame(newer, newer.keepSecretsFrom(older));
-		assertEquals("typed-password", newer.prop.getProperty("password"));
+		assertEquals("typed-password", newer.getProperties().getProperty("password"));
 		assertTrue(newer.isSecret("pin"));
 		assertFalse(newer.toString().contains("typed"));
 	}
@@ -165,8 +165,8 @@ public class RecentFileTests {
 		File tmp = Files.createTempFile("recent", ".txt").toFile();
 		try {
 			RecentFile local = new RecentFile(new RecentFile(new FileProxyFactory().createFileSource(tmp.getAbsolutePath())).toString());
-			assertTrue(local.isLocal);
-			assertEquals(local.path, local.getLabel());
+			assertTrue(local.isLocal());
+			assertEquals(local.getPath(), local.getLabel());
 			assertFalse(local.isGone());
 			assertTrue(tmp.delete());
 			assertTrue(new RecentFile(local.toString()).isGone());

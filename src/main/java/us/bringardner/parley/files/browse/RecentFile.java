@@ -83,10 +83,10 @@ public class RecentFile {
 	private static final String TILDE= "~";
 	private static final String VBAR= "|";
 
-	public String id;
-	public Properties prop = new Properties();
-	public String path;
-	public boolean isLocal=true;
+	private final String id;
+	private final Properties prop = new Properties();
+	private final String path;
+	private final boolean isLocal;
 	private FileSource filex;
 	/** Properties the factory calls secret: never saved with a value. */
 	private final Set<String> secrets = new TreeSet<>();
@@ -238,6 +238,29 @@ public class RecentFile {
 			}
 		}
 		return ret;
+	}
+
+	/** @return the id of the entry's file system type (its FileSourceFactory) */
+	public String getId() {
+		return id;
+	}
+
+	/**
+	 * @return the connection properties: secrets hold a credential reference or are empty
+	 * unless they were filled in. This is the entry's own copy; changes are saved with it.
+	 */
+	public Properties getProperties() {
+		return prop;
+	}
+
+	/** @return the file's path on its file system */
+	public String getPath() {
+		return path;
+	}
+
+	/** @return true for a file on the local file system */
+	public boolean isLocal() {
+		return isLocal;
 	}
 
 	/** @return what a menu shows: the path for a local file, otherwise type:path */
