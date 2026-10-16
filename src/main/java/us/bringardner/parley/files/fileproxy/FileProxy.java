@@ -757,7 +757,7 @@ public class FileProxy implements FileSource {
 		return target.toString();
 	}
 
-	/** Return a Factory taht can be used to create a factory of this type.
+	/** Return a Factory that can be used to create a factory of this type.
 	 * @see us.bringardner.parley.files.FileSource#getFileSourceFactory()
 	 */
 	public FileSourceFactory getFileSourceFactory() {

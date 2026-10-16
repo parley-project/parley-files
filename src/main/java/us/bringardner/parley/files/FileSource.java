@@ -167,7 +167,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	public boolean createNewFile() throws IOException ;
 
 	/**
-	 * Equivalent to dir.getFactory().createFileSource(dir,name)
+	 * Returns the file with the given name (or relative path) in this directory. The file
+	 * doesn't have to exist.
 	 */
 	public FileSource getChild(String path) throws IOException ;
 
@@ -189,11 +190,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	public FileSourceFactory getFileSourceFactory();
 
 	/**
-	 * Tests whether this abstract pathname is absolute. The definition of absolute pathname is system dependent. 
-	 * On UNIX systems, a pathname is absolute if its prefix is "/". On Microsoft Windows systems, a pathname is absolute 
-	 * if its prefix is a drive specifier followed by "\\", or if its prefix is "\\\\".
-	 *
-	 *	Returns: true if this abstract pathname is absolute, false otherwise
+	 * Returns the absolute pathname string of this abstract pathname, as
+	 * {@link java.io.File#getAbsolutePath()} does.
 	 */
 	public String getAbsolutePath() ;
 

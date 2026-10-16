@@ -347,7 +347,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	}
 
 	/**
-	 * Create a FileSourceFileSystemProvider identified by the URL given by 'uri'
+	 * Returns a factory for the file system that 'uri' names (by its scheme).
 	 */
 	public static FileSourceFactory getFileSourceFactory(URI uri) throws IOException  {
 
@@ -494,9 +494,9 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	}
 
 	/**
-	 * Create a FileSource identified by 'name' as a sub-directory of 'parent'
+	 * @return true if this file system keeps a version number for each file
+	 * (see {@link FileSource#getVersion()})
 	 */
-
 	public abstract boolean isVersionSupported();
 
 	/**
@@ -737,7 +737,8 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	}
 
 	/**
-	 * Return the type id (File / JbdcFile / just like URL prototype)
+	 * Returns the type id that names this kind of file system, the way a URL's protocol does
+	 * (for example "fileproxy" or "memory").
 	 */
 	public abstract String getTypeId() ;
 
@@ -1032,14 +1033,14 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 
 	/**
 	 * The system-dependent path-separator character, represented as a string for convenience. This string contains a single character, namely pathSeparatorChar.
-	 * @see java.io.File.pathSeparatorChar
+	 * @see java.io.File#pathSeparatorChar
 	 */
 	public abstract char getPathSeparatorChar(); 
 
 	/**
 	 * The system-dependent default name-separator character. This field is initialized to contain the first character of the value of the system property file.separator. On UNIX systems the value of this field is '/'; on Microsoft Windows systems it is '\\'.
-	 * @see java.io.File.separatorChar
-		See Also:java.lang.System.getProperty(java.lang.String)
+	 * @see java.io.File#separatorChar
+	 * @see java.lang.System#getProperty(String)
 	 */
 	public abstract char getSeparatorChar(); 
 

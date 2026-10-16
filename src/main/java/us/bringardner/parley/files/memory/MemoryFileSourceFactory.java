@@ -141,7 +141,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 		}		
 	}
 
-	/** Set The Current dir (Ignored for FileProxy)
+	/** Sets the current directory, which relative paths are resolved against. It must be a MemoryFileSource.
 	 * @see us.bringardner.parley.files.FileSourceFactory#setCurrentDirectory(us.bringardner.parley.files.FileSource)
 	 */
 	public synchronized void setCurrentDirectory(FileSource dir) {
