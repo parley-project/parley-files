@@ -431,7 +431,7 @@ public class FileSourcePath implements Path {
 
 	}
 
-	/*
+	/**
 	 * Compares two abstract paths lexicographically. The ordering defined by this method is provider specific, 
 	 * and in the case of the default provider, platform specific. This method does not access the file system and neither file is required to exist.
 	 * This method may not be used to compare paths that are associated with different file system providers.

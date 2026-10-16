@@ -68,19 +68,19 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	//  Feeble attempt to init factory class
 	String pkgc = FileSourceFactory.getAllHandlerPkgs();
 
-	/*
+	/**
 	 *  Compares two abstract pathnames lexicographically.
 	 * @see java.lang.Comparable#compareTo(java.lang.Object)
 	 */
 	public abstract int compareTo(Object o) ;
 
-	/*
-	 * GEt the creation date for this fileSource
+	/**
+	 * Get the creation date for this fileSource
 	 */
 	public long getCreateDate() throws IOException;
 
 
-	/*
+	/**
 	 * Get the MIME Content Type
 	 */
 
@@ -160,18 +160,18 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	boolean canOtherExecute() throws IOException;
 
-	/*
+	/**
 	 * Atomically creates a new, empty file named by this abstract pathname if 
 	 * and only if a file with this name does not yet exist.  
 	 */
 	public boolean createNewFile() throws IOException ;
 
-	/*
+	/**
 	 * Equivalent to dir.getFactory().createFileSource(dir,name)
 	 */
 	public FileSource getChild(String path) throws IOException ;
 
-	/*
+	/**
 	 * Deletes the file or directory denoted by this abstract pathname. 
 	 * If this pathname denotes a directory, then the directory must be empty 
 	 * in order to be deleted. 
@@ -181,14 +181,14 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public boolean exists() throws IOException ;
 
-	/*
+	/**
 	 * Return a FileSource Factory capable of creating FileSources
 	 * of the same type as this FileSource. 
 	 */
 
 	public FileSourceFactory getFileSourceFactory();
 
-	/*
+	/**
 	 * Tests whether this abstract pathname is absolute. The definition of absolute pathname is system dependent. 
 	 * On UNIX systems, a pathname is absolute if its prefix is "/". On Microsoft Windows systems, a pathname is absolute 
 	 * if its prefix is a drive specifier followed by "\\", or if its prefix is "\\\\".
@@ -197,7 +197,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	public String getAbsolutePath() ;
 
-	/*
+	/**
 	 * Returns the canonical pathname string of this abstract pathname.
 	 * A canonical pathname is both absolute and unique. The precise definition 
 	 * of canonical form is system-dependent. 
@@ -208,7 +208,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public String getParent();
 
-	/*
+	/**
 	 * Get the parent file of this object.  If an object
 	 * is create to represent the parent, it's stored in a cache
 	 * for performance issues.
@@ -453,7 +453,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	boolean setOtherWritable(boolean b) throws IOException ;
 
-	/*
+	/**
 	 * Marks the file or directory named by this abstract pathname 
 	 * so that only read operations are allowed.
 	 */

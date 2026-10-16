@@ -346,7 +346,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		return FileSourceFactory.class.getPackage().getName();   // us.bringardner.parley.files
 	}
 
-	/*
+	/**
 	 * Create a FileSourceFileSystemProvider identified by the URL given by 'uri'
 	 */
 	public static FileSourceFactory getFileSourceFactory(URI uri) throws IOException  {
@@ -387,7 +387,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 
 	}
 
-	/*
+	/**
 	 * Create a FileSource identified by the URL given by 'url'
 	 */
 	
@@ -395,7 +395,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		return getFileSource(new URL(url));
 	}
 
-	/*
+	/**
 	 * List all of the roots of this file system
 	 */
 	public abstract FileSource [] listRoots() throws IOException;
@@ -493,13 +493,13 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		throw new IOException("Unable to create a unique temporary "+(dir ? "directory" : "file")+" in "+directory.getAbsolutePath());
 	}
 
-	/*
+	/**
 	 * Create a FileSource identified by 'name' as a sub-directory of 'parent'
 	 */
 
 	public abstract boolean isVersionSupported();
 
-	/*
+	/**
 	 * Set the current directory for the type of FileSource.
 	 * 
 	 * While Java does not allow you to change the current
@@ -617,7 +617,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		return ret.toArray(new String[ret.size()]);
 	}
 
-	/*
+	/**
 	 * Set the default FileSource Factory
 	 */
 
@@ -736,7 +736,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		return other == this;
 	}
 
-	/*
+	/**
 	 * Return the type id (File / JbdcFile / just like URL prototype)
 	 */
 	public abstract String getTypeId() ;
@@ -1030,13 +1030,13 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	 */
 	public abstract Properties getConnectProperties();
 
-	/*
+	/**
 	 * The system-dependent path-separator character, represented as a string for convenience. This string contains a single character, namely pathSeparatorChar.
 	 * @see java.io.File.pathSeparatorChar
 	 */
 	public abstract char getPathSeparatorChar(); 
 
-	/*
+	/**
 	 * The system-dependent default name-separator character. This field is initialized to contain the first character of the value of the system property file.separator. On UNIX systems the value of this field is '/'; on Microsoft Windows systems it is '\\'.
 	 * @see java.io.File.separatorChar
 		See Also:java.lang.System.getProperty(java.lang.String)
