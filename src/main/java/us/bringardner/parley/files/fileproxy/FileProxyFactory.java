@@ -55,6 +55,20 @@ public class FileProxyFactory extends FileSourceFactory {
 	private static final long serialVersionUID = 1L;
 	public static final String LOCAL_INDICATOR="~";
 	public static final String FACTORY_ID = "fileproxy";
+	/**
+	 * The name of a lock directory. A directory of this name in a locked path or above it holds that
+	 * path's lock files, so an application that creates one in the root it serves shares its locks
+	 * with every process serving that root.
+	 * @since 1.1.0
+	 */
+	public static final String LOCK_DIRECTORY_NAME = ".parley-locks";
+	/**
+	 * System property: the lock directory for paths with no {@value #LOCK_DIRECTORY_NAME} directory
+	 * in or above them. Default: {@code parley-locks-<user>} in the system temp directory, private
+	 * to the user. Every process that shares those paths must use the same one.
+	 * @since 1.1.0
+	 */
+	public static final String LOCK_DIRECTORY_PROPERTY = "parley.files.lockDirectory";
 	private volatile FileSource [] roots;
 	private volatile FileSource currentDirectory;
 

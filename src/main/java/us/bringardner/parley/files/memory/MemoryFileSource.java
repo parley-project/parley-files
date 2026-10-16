@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.time.Duration;
 
 
 import us.bringardner.parley.files.FileSource;
@@ -59,6 +60,10 @@ import us.bringardner.parley.files.FileSourceRandomAccessStream;
 import us.bringardner.parley.files.FileSourceUser;
 import us.bringardner.parley.files.IRandomAccessStream;
 import us.bringardner.parley.files.ISeekableInputStream;
+import us.bringardner.parley.files.lock.FileSourceLock;
+import us.bringardner.parley.files.lock.LockBackend;
+import us.bringardner.parley.files.lock.LockManager;
+import us.bringardner.parley.files.lock.LockMode;
 
 
 /**
@@ -1647,6 +1652,19 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public IRandomAccessStream getRandomAccessStream(String mode) throws IOException {
 		return new FileSourceRandomAccessStream(new MemoryRandomAccessIoController(resolve()), mode);
+	}
+
+	/**
+	 * The default PROCESS locks, keyed by this file system instance: every
+	 * MemoryFileSourceFactory is a separate file system with the same URL, and
+	 * the same path in two of them is two different files.
+	 * @since 1.1.0
+	 */
+	@Override
+	public FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
+		return LockManager.get().tryAcquire(this,
+				"memory|" + System.identityHashCode(getFileSourceFactory()) + "|" + getCanonicalPath(),
+				mode, lease, LockBackend.inProcess());
 	}
 
 }

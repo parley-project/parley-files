@@ -50,6 +50,7 @@ import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.UserPrincipal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -64,6 +65,10 @@ import us.bringardner.parley.files.FileSourcePrincipal;
 import us.bringardner.parley.files.FileSourceRandomAccessStream;
 import us.bringardner.parley.files.IRandomAccessStream;
 import us.bringardner.parley.files.ISeekableInputStream;
+import us.bringardner.parley.files.lock.FileSourceLock;
+import us.bringardner.parley.files.lock.LockManager;
+import us.bringardner.parley.files.lock.LockMode;
+import us.bringardner.parley.files.lock.LockScope;
 
 
 /**
@@ -1230,6 +1235,37 @@ public class FileProxy implements FileSource {
 	public IRandomAccessStream getRandomAccessStream(String mode) throws IOException {
 
 		return new FileSourceRandomAccessStream(new FileProxyRandomAccessIoController(this, mode), mode);
+	}
+
+	/**
+	 * {@link LockScope#HOST}: every process on this machine that uses the same lock directory (see
+	 * {@link FileProxyFactory#LOCK_DIRECTORY_NAME}).
+	 * @since 1.1.0
+	 */
+	@Override
+	public LockScope getLockScope() {
+		return LockScope.HOST;
+	}
+
+	/**
+	 * A lock that every process on this machine sees, through an OS lock on a lock file
+	 * (see {@link FileProxyFactory#LOCK_DIRECTORY_NAME}).
+	 * @since 1.1.0
+	 */
+	@Override
+	public FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
+		java.util.Objects.requireNonNull(mode, "mode");
+		java.util.Objects.requireNonNull(lease, "lease");
+		if( lease.isNegative() || lease.isZero() ) {
+			throw new IllegalArgumentException("The lease must be more than zero: " + lease);
+		}
+		File canonical = new File(getCanonicalPath());
+		File dir = LocalLocks.lockDirectoryFor(canonical);
+		String hash = LocalLocks.hashOf(canonical.getPath());
+		// keyed by the locked path, not the lock file: holders in this JVM exclude each other
+		// whichever lock directory each one found
+		return LockManager.get().tryAcquire(this, "fileproxy|" + canonical.getPath(), mode, lease,
+				new LocalLocks.Backend(new File(dir, hash + ".lock"), new File(dir, hash + ".seq")));
 	}
 
 }
