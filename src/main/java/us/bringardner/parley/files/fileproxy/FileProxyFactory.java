@@ -66,7 +66,7 @@ public class FileProxyFactory extends FileSourceFactory {
 	}
 
 
-	/* Set The Current dir (Ignored for FileProxy)
+	/** Set The Current dir (Ignored for FileProxy)
 	 * @see us.bringardner.parley.files.FileSourceFactory#setCurrentDirectory(us.bringardner.parley.files.FileSource)
 	 */
 	public void setCurrentDirectory(FileSource dir) {
