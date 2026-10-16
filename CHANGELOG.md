@@ -1,6 +1,6 @@
 # Changelog
 
-## parley-files 1.0.0 (unreleased)
+## parley-files 1.0.0 (2026-10-16)
 
 BjlFileSystem is now **parley-files**, part of the Parley library family. The code is the same as
 BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts again at 1.0.0.
