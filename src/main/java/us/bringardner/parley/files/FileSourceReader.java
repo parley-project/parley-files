@@ -23,12 +23,6 @@
  *
  * ~version~V000.00.01-V000.00.00-
  */
-/*
- * Created on Jan 28, 2006
- *
- * TODO To change the template for this generated file go to
- * Window - Preferences - Java - Code Style - Code Templates
- */
 package us.bringardner.parley.files;
 
 import java.io.FileNotFoundException;

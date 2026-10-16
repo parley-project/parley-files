@@ -54,7 +54,8 @@ BjlFileSystem 1.0.2-SNAPSHOT; only names changed. As a new artifact it starts ag
 - `Terminal` is console only: it no longer uses Swing. `connect` always asks for the settings as
   text (`CommandLinePropertyEditor`) instead of opening `FactoryPropertiesDialog` when there's a
   display, and errors are written to the Terminal's output instead of shown in a dialog. The unused
-  `headless` command is gone.
+  `headless` command and the debugging `test` command are gone; a command that fails no longer
+  prints a stack trace (it's in the debug log).
 - New package `us.bringardner.parley.files.browse`, the UI-free part of a file chooser or browser,
   shared by Swing and JavaFX UIs: `FileEntry` (a file's details, read once, so a view doesn't ask a
   remote file system on every repaint), `DirectoryListing` (listing with progress and cancel, sort

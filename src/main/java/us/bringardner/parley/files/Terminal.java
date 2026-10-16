@@ -175,8 +175,7 @@ public class Terminal extends BaseThread {
 					try {
 						out.writeLine("update "+name+" size="+size1+" total="+total+" transfered="+transfered+" percent="+perc);
 					} catch (IOException e) {
-						// Not implemented
-						e.printStackTrace();
+												logError("Can't write to the terminal", e);
 					}					
 				}
 
@@ -184,8 +183,7 @@ public class Terminal extends BaseThread {
 					try {
 						out.writeLine("Copy started for "+name);
 					} catch (IOException e) {
-						// Not implemented
-						e.printStackTrace();
+												logError("Can't write to the terminal", e);
 					}
 				}
 
@@ -194,8 +192,7 @@ public class Terminal extends BaseThread {
 					try {
 						out.writeLine("Copy completed for "+name);
 					} catch (IOException e) {
-						// Not implemented
-						e.printStackTrace();
+												logError("Can't write to the terminal", e);
 					}
 
 				}
@@ -236,7 +233,7 @@ public class Terminal extends BaseThread {
 
 	interface CommandProcessor {
 		String getName();
-		void proccess(String [] args) throws IOException ;
+		void process(String [] args) throws IOException ;
 		String help();
 	}
 
@@ -246,7 +243,7 @@ public class Terminal extends BaseThread {
 			return "pwd";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length>1 ) {
 				for (int idx =  1; idx < args.length; idx++) {
 					ParsedFileValue val = parseOnly(args[idx]);
@@ -284,7 +281,7 @@ public class Terminal extends BaseThread {
 			return "help";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length  < 2) {
 				for(CommandProcessor cmd : procs.values()) {
 					out.writeLine(cmd.getName()+": "+ cmd.help());
@@ -316,7 +313,7 @@ public class Terminal extends BaseThread {
 			return "Show availible and connected FileSource factories.";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			String[] factories = FileSourceFactory.getRegisterdFactories();
 			out.writeLine("There are "+factories.length+" registered factories");
 			for(String f : factories) {				
@@ -341,7 +338,7 @@ public class Terminal extends BaseThread {
 			return "Echo values to stdout.";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 
 			for (int idx = 1; idx < args.length; idx++) {
 				if( idx >1) {
@@ -352,37 +349,6 @@ public class Terminal extends BaseThread {
 			out.writeLine("");
 
 		}
-	}
-
-	class  Test implements CommandProcessor {
-
-		public String getName() {
-			return "test";
-		}
-
-		public String help() {
-			return "A test command";
-		}
-
-		public void proccess(String[] args) throws IOException {
-			ParsedArgs arg2 = parseArgs(args);
-			System.out.println("Named args cnt = "+arg2.namesArgs.size());
-
-			for(String name : arg2.namesArgs.keySet()) {
-				System.out.println("\t"+name+"="+arg2.namesArgs.get(name));
-			}
-			System.out.println();
-			System.out.println("Un named Args cnt = "+arg2.args.size());
-
-
-			for(int idx=0; idx<arg2.args.size(); idx++ ) {
-				System.out.println("\tunamed "+idx+"="+arg2.args.get(idx));
-			}
-
-
-		}
-
-
 	}
 
 	public boolean followPathWithAction(String arg,FileSourceFactory f,TerminalAction action) throws IOException {
@@ -533,7 +499,7 @@ public class Terminal extends BaseThread {
 			return "Specify a connected factory to use on future commands";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length < 2) {
 				out.writeLine("USAGE: use connected_factory_number");
 			} else {
@@ -560,14 +526,14 @@ public class Terminal extends BaseThread {
 			return "List environment variables";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			env.forEach(new BiConsumer<String, String>() {
 
 				public void accept(String key, String val) {
 					try {
 						out.writeLine(key+"="+val);
 					} catch (IOException e) {
-						e.printStackTrace();
+						logError("Can't write to the terminal", e);
 					}						
 				}					
 			});
@@ -585,7 +551,7 @@ public class Terminal extends BaseThread {
 			return "Set environment variable";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length < 2) {
 				out.writeLine("USAGE: export name=value");
 			} else {
@@ -611,7 +577,7 @@ public class Terminal extends BaseThread {
 			return "Execute commands from a source other than the keybord";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length < 2) {
 				out.writeLine("USAGE: exec source [...]");
 			} else {
@@ -626,7 +592,7 @@ public class Terminal extends BaseThread {
 							while( line != null ) {
 								line = line.trim();
 								if(!line.isEmpty() && !line.startsWith("#")) {
-									process(line);
+									Terminal.this.process(line);
 								}
 								line = myIn.readLine();
 							}
@@ -657,7 +623,7 @@ public class Terminal extends BaseThread {
 					;
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length < 2) {
 				out.writeLine("USAGE: connect factory_id [position] [as name] [from property_file]");
 			} else {
@@ -742,7 +708,7 @@ public class Terminal extends BaseThread {
 			return "Terminate the Terminal program.";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			/*
 			int val = 0;
 			if( args.length>1) {
@@ -768,7 +734,7 @@ public class Terminal extends BaseThread {
 			return "Display a list of previos commands.  Optionsally filter the list with arguments.";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			for(String line : history) {
 				if( args.length<2) {
 					out.writeLine(line);
@@ -806,34 +772,7 @@ public class Terminal extends BaseThread {
 			return "Change the current working directory. cd [#!]path";
 		}
 
-		public void proccess1(String[] args) throws IOException {
-			if( args.length > 1) {
-				ParsedFileValue val = parseOnly(args[1]);
-				FileSource tmp = null;
-				if( val.path.startsWith("/")) {
-					tmp = connected.get(val.factory).createFileSource(val.path);
-				} else {
-					FileSource dir = connected.get(val.factory).getCurrentDirectory();
-					if( dir != null ) {
-						tmp = dir.getChild(val.path);
-					}
-				}
-				if( tmp != null ) {
-					if( tmp.exists()) {
-						connected.get(val.factory).setCurrentDirectory(tmp);
-					} else {
-						out.writeLine(val.path+" does not exists");
-					}
-				} else {
-					out.writeLine(val.path+" does not exists");
-				}
-			} else {
-				out.writeLine("USAGE: cd [#!] path");
-			}
-
-		}
-
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			if( args.length == 1) {
 				out.writeLine("USAGE: cd [#!]path");
 			} else {
@@ -860,7 +799,7 @@ public class Terminal extends BaseThread {
 					+ "and -v for verbose output ";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 
 			if( args.length < 3) {
 				out.writeLine("USAGE: cp [-v] [#!]from_path [#!]to_path\nWhere '#' represent the number of a connected factory");
@@ -896,7 +835,7 @@ public class Terminal extends BaseThread {
 		}
 
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 			boolean recursive = false;
 			Size size=null;
 			int depth=-1;
@@ -979,70 +918,6 @@ public class Terminal extends BaseThread {
 
 	}
 
-	class  Find1 implements CommandProcessor {
-
-
-		public String getName() {
-			return "find";
-		}
-
-		public String help() {
-			return "Search direcctory\n\tfind [-r] [#!]path [reg_exp]\n\tWhere '#' represent the number of a connected factory."
-
-					+ "\n\tuse -r to recursivly search the tree "
-					;
-		}
-
-		public void proccess(String[] args) throws IOException {
-			FileSource dir = null;
-			boolean recursive = false;
-			int startArg = 1;
-			Pattern rx = Pattern.compile(".*");
-			if( args.length == 1) {
-				dir = connected.get(currentFactory).getCurrentDirectory();
-			} else {
-
-				if( args[startArg].equals("-r")) {
-					recursive = true;
-					startArg++;
-				}
-				dir = parseFile(args[startArg++]);
-				if( args.length>startArg) {
-					rx = Pattern.compile(args[startArg]);
-				}
-			}
-
-			if( !dir.exists() || !dir.isDirectory()) {
-				throw new IOException("Can only search existing directories");
-			}
-
-			search(dir,recursive,rx);
-
-
-
-		}
-
-		private void search(FileSource dir, boolean recursive, Pattern rx) throws IOException {
-			FileSource[] kids = dir.listFiles();
-			if( kids != null ) {
-				for(FileSource file : kids) {
-					Matcher m = rx.matcher(file.getName());
-					if( m.matches()) {
-						out.writeLine("\t"+file.toString());
-					}
-				}
-				if( recursive ) {
-					for(FileSource file : kids) {
-						if( file.isDirectory()) {
-							search(file,recursive,rx);
-						}
-					}
-				}
-			}
-		}
-
-	};
-
 
 	class  Delete implements CommandProcessor {
 
@@ -1055,7 +930,7 @@ public class Terminal extends BaseThread {
 			return "Delete a file or direcctory\n\trm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to deleted direcories recursively ";
 		}
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 
 			if( args.length < 2) {
 				out.writeLine("USAGE: rm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to deleted direcories recursively ");
@@ -1121,7 +996,7 @@ public class Terminal extends BaseThread {
 		}
 
 
-		public void proccess(String[] args) throws IOException {
+		public void process(String[] args) throws IOException {
 
 			boolean showHidden = false;
 			boolean showLong   = false;
@@ -1209,7 +1084,6 @@ public class Terminal extends BaseThread {
 		addCmd(new Copy());
 		addCmd(new Delete());
 		addCmd(new Find());
-		addCmd(new Test());
 		addCmd(new Env());
 		addCmd(new Export());
 		addCmd(new Echo());
@@ -1241,7 +1115,8 @@ public class Terminal extends BaseThread {
 		try {
 			out.writeLine(e == null ? String.valueOf(msg) : msg+":"+e);
 		} catch (IOException e1) {
-			e1.printStackTrace();
+			logError(msg, e);
+			logError("Can't write to the terminal", e1);
 		}
 	}
 
@@ -1288,7 +1163,7 @@ public class Terminal extends BaseThread {
 		FileSource f = FileSourceFactory.getDefaultFactory().createFileSource(rc);
 		if( f.exists()) {
 			Execute exec = new Execute();
-			exec.proccess(("exec "+f.getAbsolutePath()).split(" "));
+			exec.process(("exec "+f.getAbsolutePath()).split(" "));
 		}
 	}
 
@@ -1453,11 +1328,11 @@ public class Terminal extends BaseThread {
 		String parts [] = line.split("\\s");
 		if( (cmd = procs.get(parts[0])) != null ) {
 			try {						
-				cmd.proccess(parts);
+				cmd.process(parts);
 				history.add(line);
 			} catch (Exception e) {
 				out.writeLine(e.toString());
-				e.printStackTrace();
+				logDebug("Command failed: "+line, e);
 			}
 		} else {
 			out.writeLine("Unrecognized command '"+line+"'");
