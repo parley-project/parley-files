@@ -320,7 +320,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		return key.isEmpty() ? null : key.toLowerCase(java.util.Locale.ROOT);
 	}
 
-	private FileSourceUser localPrinciple;
+	private FileSourceUser localPrincipal;
 
 	/**
 	 * 
@@ -1232,7 +1232,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	 * started a process on its first permission check.)
 	 */
 	public FileSourceUser whoAmI() {
-		if( localPrinciple == null ) {
+		if( localPrincipal == null ) {
 			// a copy: FileSourceUser is mutable (e.g. MemoryFileSource.setGroup changes its owner)
 			FileSourceUser shared = lookupLocalUser();
 			FileSourceUser mine = new FileSourceUser();
@@ -1240,9 +1240,9 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 			mine.setName(shared.getName());
 			mine.setGroup(shared.getGroup());
 			mine.setGroups(shared.getGroups());
-			localPrinciple = mine;
+			localPrincipal = mine;
 		}
-		return localPrinciple;
+		return localPrincipal;
 	}
 
 	private static FileSourceUser lookupLocalUser() {

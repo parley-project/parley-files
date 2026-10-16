@@ -1,20 +1,20 @@
 package us.bringardner.parley.files;
 
-public class FileSourcePrinciple implements java.io.Serializable {
+public class FileSourcePrincipal implements java.io.Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private int id;
 	private String name="UnKnown";
 	
-	public FileSourcePrinciple() {
+	public FileSourcePrincipal() {
 		
 	}
 	
-	public FileSourcePrinciple(FileSourcePrinciple principle) {
-		this(principle.getId(),principle.getName());
+	public FileSourcePrincipal(FileSourcePrincipal principal) {
+		this(principal.getId(),principal.getName());
 	}
 	
-	public FileSourcePrinciple(int id, String name) {
+	public FileSourcePrincipal(int id, String name) {
 		this.id = id;
 		this.name = name;
 	}

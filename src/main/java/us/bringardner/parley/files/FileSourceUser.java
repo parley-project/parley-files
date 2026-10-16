@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-public class FileSourceUser extends FileSourcePrinciple implements UserPrincipal {
+public class FileSourceUser extends FileSourcePrincipal implements UserPrincipal {
 
 	private static final long serialVersionUID = 1L;
 	private static final us.bringardner.parley.core.util.LogHelper logger = new us.bringardner.parley.core.util.LogHelper(FileSourceUser.class);
@@ -322,7 +322,7 @@ Attributes: Mandatory group, Enabled by default, Enabled group
 	 * @param idResponse:  response from the id command on *nix systems
 	 * macos uid=503(Jimmie) gid=20(staff) groups=20(staff),12(everyone),61(localaccounts),701(com.apple.sharepoint.group.1),702(com.apple.sharepoint.group.2),100(_lpoperator),703(com.apple.sharepoint.group.3)
 	 * linux uid=1000(ec2-user) gid=1000(ec2-user) groups=1000(ec2-user),4(adm),10(wheel),190(systemd-journal)
-	 * @return A FileSourcePrinciple representing the id response
+	 * @return A FileSourcePrincipal representing the id response
 	 */
 	
 	private static FileSourceUser fromUnixId(String idResponse) {
@@ -334,18 +334,18 @@ Attributes: Mandatory group, Enabled by default, Enabled group
 					String [] parts = part.split("=");
 					if( parts.length==2) {
 						if( parts[0].equals("uid")) {
-							FileSourcePrinciple e = parseEntry(parts[1]);
+							FileSourcePrincipal e = parseEntry(parts[1]);
 							if( e!=null) {
 								ret = new FileSourceUser(e.getId(),e.getName());
 							}
 						} else if( parts[0].equals("gid")) {
-							FileSourcePrinciple e = parseEntry(parts[1]);
+							FileSourcePrincipal e = parseEntry(parts[1]);
 							if( e!=null) {
 								ret.setGroup(new FileSourceGroup(e.getId(), e.getName()));
 							}
 						} else if( parts[0].equals("groups")) {
 							for(String g : parts[1].split(",")) {
-								FileSourcePrinciple e = parseEntry(g);
+								FileSourcePrincipal e = parseEntry(g);
 								if( e != null ) {
 									ret.addGroup(new FileSourceGroup(e.getId(), e.getName()));
 								}
@@ -372,7 +372,7 @@ Attributes: Mandatory group, Enabled by default, Enabled group
 	 * @param id part: looks like this: 0-9+(name)
 	 * @return
 	 */
-	private static FileSourcePrinciple parseEntry(String str) {
+	private static FileSourcePrincipal parseEntry(String str) {
 		
 		String [] parts = str.replace('(', ' ').replace(')', ' ').trim().split(" ");
 		if( parts.length>=2) {
@@ -380,7 +380,7 @@ Attributes: Mandatory group, Enabled by default, Enabled group
 				
 				int id = Integer.parseInt(parts[0]);
 				String name = parts[1].trim();
-				return new FileSourcePrinciple(id, name);
+				return new FileSourcePrincipal(id, name);
 			} catch (NumberFormatException e) {
 				// not an "id(name)" entry
 			}

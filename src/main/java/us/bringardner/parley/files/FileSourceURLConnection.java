@@ -44,10 +44,10 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
  * @author Tony Bringardner
  *
  */
-public class FileSourceURLConnction extends URLConnection {
+public class FileSourceURLConnection extends URLConnection {
 
 	private FileSource target ;
-	private static LogHelper logger = new LogHelper(FileSourceURLConnction.class);
+	private static LogHelper logger = new LogHelper(FileSourceURLConnection.class);
 
 	static {
 		// force FileSourceFactory class loading
@@ -62,7 +62,7 @@ public class FileSourceURLConnction extends URLConnection {
 	 * used to connect and log-and-swallow any failure, so getInputStream()
 	 * later failed with a NullPointerException instead of the real error.)
 	 */
-	public FileSourceURLConnction(URL url) {
+	public FileSourceURLConnection(URL url) {
 		super(url);
 	}
 

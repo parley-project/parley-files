@@ -3,7 +3,8 @@ package us.bringardner.parley.files;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
 
-public class FileSourceGroup extends FileSourcePrinciple implements GroupPrincipal {
+public class FileSourceGroup extends FileSourcePrincipal implements GroupPrincipal {
+	private static final long serialVersionUID = 1L;
 	
 	public FileSourceGroup() {}
 	public FileSourceGroup(int id,String name) {
