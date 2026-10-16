@@ -24,7 +24,7 @@ The syntax deliberately stays close to `java.io.File`, so moving code between th
 
 ## Installation
 
-The artifacts are published to GitHub Packages:
+parley-files is on Maven Central, so no extra repository is needed:
 
 ```xml
 <dependency>
@@ -32,38 +32,6 @@ The artifacts are published to GitHub Packages:
     <artifactId>parley-files</artifactId>
     <version>1.0.0</version>
 </dependency>
-```
-
-Add the package repositories to your `pom.xml` (parley-core and parley-io are published from their own repositories):
-
-```xml
-<repositories>
-    <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/parley-project/parley-files</url>
-    </repository>
-    <repository>
-        <id>github-parley-core</id>
-        <url>https://maven.pkg.github.com/parley-project/parley-core</url>
-    </repository>
-    <repository>
-        <id>github-parley-io</id>
-        <url>https://maven.pkg.github.com/parley-project/parley-io</url>
-    </repository>
-</repositories>
-```
-
-GitHub Packages requires authentication even for public packages. Create a personal access token with the `read:packages` scope, and add a `<server>` entry for each repository id to `~/.m2/settings.xml`:
-
-```xml
-<servers>
-    <server>
-        <id>github</id>
-        <username>YOUR_GITHUB_USERNAME</username>
-        <password>YOUR_TOKEN</password>
-    </server>
-    <!-- repeat for github-parley-core and github-parley-io -->
-</servers>
 ```
 
 ## Quick start
@@ -109,7 +77,7 @@ Separate projects, which plug in the same way once they're on the classpath:
 
 They were `bjl_file_system_ftp`, `bjl_file_system_sftp` and `bjl_file_system_jdbc` (BjlFileSystemFtp and so on).
 
-Each is published to GitHub Packages from its own repository, so add a matching `<repository>` (and `<server>` entry) as in [Installation](#installation).
+They are on Maven Central too.
 
 ### Choosing an implementation at runtime
 
@@ -311,7 +279,7 @@ a tree to work in (`newTree()` and `sourceFor(path)`). The hooks, such as `suppo
 | `file.setLastModified(time)` | Same name (or `setLastModifiedTime(time)`) |
 | `file.renameTo(dest)` | `file.renameTo(dest)`, where `dest` is a `FileSource` from the same factory. It returns `false` when it can't rename, as `java.io.File` does, and doesn't replace an existing file (see [Behaviour worth knowing](#behaviour-worth-knowing)). |
 | `File.listRoots()` | `factory.listRoots()` |
-| `File.separatorChar`, `File.pathSeparatorChar` | `factory.getSeperatorChar()`, `factory.getPathSeperatorChar()` |
+| `File.separatorChar`, `File.pathSeparatorChar` | `factory.getSeparatorChar()`, `factory.getPathSeparatorChar()` |
 | `file.toURI()`, `file.toURL()` | Same names; they give a [`filesource:` URI/URL](#urls) that works for every implementation |
 | `file.toPath()` | Same name; the `Path` works with `java.nio.file.Files` ([NIO file system provider](#nio-file-system-provider)) |
 | `new FileInputStream(file)` | `file.getInputStream()` |
