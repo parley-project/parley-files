@@ -121,7 +121,7 @@ public class FileSourceProviderTests extends AbstractNioProviderTests {
 		FileSourceFactory factory = FileSourceFactory.getDefaultFactory();
 		FileSystem fileSystem = FileSystems.getDefault();
 		//  Weighted toward dot and dot dot
-		String [] options = {".","..",".","..",".","..","one","two",""+factory.getSeperatorChar(),"three","four","five","six"};
+		String [] options = {".","..",".","..",".","..","one","two",""+factory.getSeparatorChar(),"three","four","five","six"};
 		Random r = new Random();
 		int numTests = 100;
 		while(--numTests > 0) {
@@ -131,7 +131,7 @@ public class FileSourceProviderTests extends AbstractNioProviderTests {
 			for(int idx=0; idx < nameCount; idx++ ) {
 				if( idx>0) {
 					fileBuf.append(fileSystem.getSeparator());
-					filesourceBuf.append(factory.getSeperatorChar());
+					filesourceBuf.append(factory.getSeparatorChar());
 				}
 				int pos = r.nextInt(options.length-1);
 				fileBuf.append(options[pos]);

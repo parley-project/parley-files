@@ -101,7 +101,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	private static final String DOT = ".";
 	private static final String DOT_DOT = "..";
 
-	public static String expandDots(String pathStr,char seperator) {
+	public static String expandDots(String pathStr,char separator) {
 		String path = pathStr.trim();
 
 		if( path.isEmpty() || path.equals(DOT_DOT)) {
@@ -112,14 +112,14 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 			return "";
 		}
 
-		if( File.separatorChar != seperator) {
-			path = path.replace(seperator,File.separatorChar);
+		if( File.separatorChar != separator) {
+			path = path.replace(separator,File.separatorChar);
 		}
 
 		String ret = Paths.get(path).normalize().toString();
 
-		if( File.separatorChar != seperator) {
-			ret = ret. replace(File.separatorChar,seperator);
+		if( File.separatorChar != separator) {
+			ret = ret. replace(File.separatorChar,separator);
 		}
 
 		return ret;
@@ -478,7 +478,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		if( !directory.isDirectory() ) {
 			throw new IOException("Not a directory: "+directory.getAbsolutePath());
 		}
-		String sep = String.valueOf(getSeperatorChar());
+		String sep = String.valueOf(getSeparatorChar());
 		if( prefix.contains(sep) || suffix.contains(sep) || prefix.contains("/") || suffix.contains("/") ) {
 			throw new IOException("Unable to create temporary file: prefix and suffix can't contain a path separator");
 		}
@@ -638,7 +638,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 		
 		String realPath = fullPath;
 		if( cwd != null && !abs) {
-			char sep = getSeperatorChar();
+			char sep = getSeparatorChar();
 			String tmp = cwd.getAbsolutePath();
 			if( tmp.endsWith(""+sep)) {
 				realPath = tmp+fullPath;
@@ -1034,14 +1034,14 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	 * The system-dependent path-separator character, represented as a string for convenience. This string contains a single character, namely pathSeparatorChar.
 	 * @see java.io.File.pathSeparatorChar
 	 */
-	public abstract char getPathSeperatorChar(); 
+	public abstract char getPathSeparatorChar(); 
 
 	/*
 	 * The system-dependent default name-separator character. This field is initialized to contain the first character of the value of the system property file.separator. On UNIX systems the value of this field is '/'; on Microsoft Windows systems it is '\\'.
 	 * @see java.io.File.separatorChar
 		See Also:java.lang.System.getProperty(java.lang.String)
 	 */
-	public abstract char getSeperatorChar(); 
+	public abstract char getSeparatorChar(); 
 
 
 	/* 
