@@ -373,6 +373,18 @@ assertEquals(100, totalLogSize(dir));
 - `createTempFile` relies on `createNewFile()` to guarantee a unique name. That's atomic for local and memory files; on FTP it checks and then creates, so two clients could in principle pick the same random name at the same moment.
 - `deleteOnExit()` on a non-local file deletes it when its factory's `disConnect()` runs, because that's the last point a remote connection is certainly open; a factory that is never disconnected has its files deleted by a shutdown hook, if it's still connected then. As with `java.io.File`, files are deleted newest registration first, a directory only if it's empty, and failures are ignored. Local files use `java.io.File.deleteOnExit()` and are deleted only at exit.
 
+## Building a file browser (the browse package)
+
+`us.bringardner.parley.files.browse` is for programs with a user interface that browses files: a
+file chooser, a file browser, a "recent files" menu. It holds the part of those that doesn't depend
+on a UI toolkit (a file's details read once, a directory listing with progress and sorting,
+back/forward history, recent files entries, copying a dropped file), so the Swing
+([parley-files-swing](https://github.com/parley-project/parley-files-swing)), JavaFX
+([parley-files-fx](https://github.com/parley-project/parley-files-fx)) and text UIs all share one
+implementation. It has no Swing, AWT or JavaFX code, nothing else in parley-files uses it, and a
+program that only reads and writes files can ignore it. It's here rather than in one of the UI
+libraries because any one of those would make the others depend on its toolkit.
+
 ## Building and testing
 
 ```
