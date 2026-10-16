@@ -126,6 +126,8 @@ FileProxy, the memory file system, FTP, SFTP (three libraries) and JDBC all pass
 
 ### Changed (API and behavior)
 
+- `FileSourcePath.register(WatchService, ...)` throws `UnsupportedOperationException`, as
+  `java.nio.file.Path` requires when watching isn't supported (it returned null).
 - `FileSourceFactory.getType(String)` is now `getMimeType(String)`, the counterpart of `addMimeType`.
   `addMimeType` throws `IllegalArgumentException` for a missing extension or type (it was a
   `NullPointerException` from the map).
