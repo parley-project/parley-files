@@ -170,10 +170,10 @@ public class Terminal extends BaseThread {
 			final StreamOptions options = FileSourceCopy.optionsFor(block);
 			InputStream in = new MonitoredInputStream( from.getInputStream(options),(1024*10),new IStreamMonitor() {
 
-				public void update(long total, long transfered) {
+				public void update(long total, long transferred) {
 					double perc = ((double)total/(double)size1)*100.0; 
 					try {
-						out.writeLine("update "+name+" size="+size1+" total="+total+" transfered="+transfered+" percent="+perc);
+						out.writeLine("update "+name+" size="+size1+" total="+total+" transferred="+transferred+" percent="+perc);
 					} catch (IOException e) {
 												logError("Can't write to the terminal", e);
 					}					
@@ -310,7 +310,7 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Show availible and connected FileSource factories.";
+			return "Show available and connected FileSource factories.";
 		}
 
 		public void process(String[] args) throws IOException {
@@ -574,7 +574,7 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Execute commands from a source other than the keybord";
+			return "Execute commands from a source other than the keyboard";
 		}
 
 		public void process(String[] args) throws IOException {
@@ -613,11 +613,11 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Connect (open) a FileSource factory and make it availible to the Terminal.\n"
+			return "Connect (open) a FileSource factory and make it available to the Terminal.\n"
 					+ "\tWhen a factory is connected it is added to a list of connected factories and, \n"
 					+ "\tby default is referenced by the index of the list.\n"
-					+ "\tthe notation [#!]path identied a file with an optional connect number. \n"
-					+ "\tExample: 1!/data/file.txt mean the file /data/file.txt from conneted factort #1\n"
+					+ "\tthe notation [#!]path identifies a file with an optional connect number. \n"
+					+ "\tExample: 1!/data/file.txt means the file /data/file.txt from connected factory #1\n"
 					+ "\tA path with out the [#!] is assumed to be connection 0."
 					+ "\n\tUSAGE: connect factory_id [position] [as name] [from property_file_name]\n"
 					;
@@ -731,7 +731,7 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Display a list of previos commands.  Optionsally filter the list with arguments.";
+			return "Display a list of previous commands. Optionally filter the list with arguments.";
 		}
 
 		public void process(String[] args) throws IOException {
@@ -793,7 +793,7 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Copy a file or direcctory\n\t"
+			return "Copy a file or directory\n\t"
 					+ "cp [-v] [#!]from_path [#!]to_path\n\t"
 					+ "Where '#' represent the number of a connected factory.\n\t"
 					+ "and -v for verbose output ";
@@ -828,8 +828,8 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "Search direcctory\n\tfind [-r] [#!]path [-depth #] [reg_exp] [-size=><=#-#\n\tWhere '#' represent the number of a connected factory."
-					+ "\n\tuse -r to recursivly search the tree "
+			return "Search directory\n\tfind [-r] [#!]path [-depth #] [reg_exp] [-size=><=#-#\n\tWhere '#' represent the number of a connected factory."
+					+ "\n\tuse -r to recursively search the tree "
 
 					;
 		}
@@ -927,13 +927,13 @@ public class Terminal extends BaseThread {
 
 		public String help() {
 
-			return "Delete a file or direcctory\n\trm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to deleted direcories recursively ";
+			return "Delete a file or directory\n\trm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to delete directories recursively ";
 		}
 
 		public void process(String[] args) throws IOException {
 
 			if( args.length < 2) {
-				out.writeLine("USAGE: rm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to deleted direcories recursively ");
+				out.writeLine("USAGE: rm -[r] [-v] [#!]path \n\tWhere '#' represent the number of a connected factory.\n\tuse -v for verbose output\n\tuse -r to delete directories recursively ");
 
 			} else {
 				int startArg = 1;
@@ -992,7 +992,7 @@ public class Terminal extends BaseThread {
 		}
 
 		public String help() {
-			return "List compunets in a FileSource factory";
+			return "List the contents of a FileSource factory";
 		}
 
 

@@ -12,9 +12,7 @@ import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
 import java.nio.file.attribute.UserPrincipalNotFoundException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import us.bringardner.parley.files.fileproxy.FileProxy.PermissionManager;
 

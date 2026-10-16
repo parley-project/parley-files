@@ -109,7 +109,6 @@ public class MemoryFileSource implements FileSource {
 	private boolean canOtherRead=true;
 	private boolean canOtherWrite=true;
 	private boolean canOtherExecute=true;
-	private boolean deleted;
 	private volatile byte[] data;
 	private String cananicalPath;
 	private long lastAccessed=System.currentTimeMillis();
@@ -293,7 +292,6 @@ public class MemoryFileSource implements FileSource {
 		heir.lastModified = lastModified;
 		heir.lastAccessed = lastAccessed;
 		heir.createDate = createDate;
-		heir.deleted = false;
 		for(MemoryFileSource other : hardLinks) {
 			other.hardTarget = heir;
 			heir.hardLinks.add(other);
@@ -490,7 +488,6 @@ public class MemoryFileSource implements FileSource {
 			fileType = FileType.File;
 			canOwnerRead = canOwnerWrite = true;
 			canExecute = false;
-			deleted = false;
 			lastModified = lastAccessed = createDate = System.currentTimeMillis();
 			updateRetention();
 			touchParent();
@@ -531,7 +528,6 @@ public class MemoryFileSource implements FileSource {
 				kidsMap.clear();
 			}
 			passContentToAHardLink();
-			deleted = true;
 			data = null;
 			fileType = FileType.Undefined;
 			updateRetention();
@@ -829,7 +825,6 @@ public class MemoryFileSource implements FileSource {
 						newFile.createDate = createDate;
 						newFile.owner = owner;
 						newFile.isRoot = isRoot;
-						newFile.deleted = false;
 
 						// Move the children too (previously a renamed directory lost them).
 						for(MemoryFileSource kid : kidsMap.values()) {
