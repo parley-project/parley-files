@@ -38,7 +38,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -61,7 +60,7 @@ import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.FileSourceFilter;
 import us.bringardner.parley.files.FileSourceProgress;
-import us.bringardner.parley.files.FileSourcePrinciple;
+import us.bringardner.parley.files.FileSourcePrincipal;
 import us.bringardner.parley.files.FileSourceRandomAccessStream;
 import us.bringardner.parley.files.IRandomAccessStream;
 import us.bringardner.parley.files.ISeekableInputStream;
@@ -772,7 +771,6 @@ public class FileProxy implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#toURL()
 	 */
 	
-	@SuppressWarnings("deprecation")
 	public URL toURL() throws MalformedURLException {
 		URL ret = null;
 
@@ -1197,7 +1195,7 @@ public class FileProxy implements FileSource {
 	@Override
 	public boolean setGroup(GroupPrincipal group) throws IOException {
 		try {
-			if( group instanceof FileSourcePrinciple ) {
+			if( group instanceof FileSourcePrincipal ) {
 				// e.g. the group getGroup() returned: the OS only accepts its own principals
 				try {
 					group = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByGroupName(group.getName());
@@ -1214,7 +1212,7 @@ public class FileProxy implements FileSource {
 	@Override
 	public boolean setOwner(UserPrincipal owner) throws IOException {
 		try {
-			if( owner instanceof FileSourcePrinciple ) {
+			if( owner instanceof FileSourcePrincipal ) {
 				// e.g. the owner getOwner() returned: the OS only accepts its own principals
 				owner = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName(owner.getName());
 			}

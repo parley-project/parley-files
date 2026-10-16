@@ -26,8 +26,6 @@
 package us.bringardner.parley.files.browse;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceCopy;

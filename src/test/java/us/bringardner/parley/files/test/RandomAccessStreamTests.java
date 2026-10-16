@@ -199,6 +199,7 @@ public class RandomAccessStreamTests {
 			}
 		}
 		if( kind.equals("bytewise") ) {
+			@SuppressWarnings("resource") // closed through s.raw / s.ra
 			ByteWiseStream b = new ByteWiseStream(s.file, mode);
 			b.data = initial.clone();
 			s.raw = b;
