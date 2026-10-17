@@ -234,8 +234,8 @@ system decides how far the locks reach.
 try (FileSourceLock lock = mailbox.lock(LockMode.EXCLUSIVE, Duration.ofSeconds(30), Duration.ofSeconds(10))) {
     Index index = Index.read(mailbox);          // reread: another process may have changed it
     index.add(message);
-    lock.checkValid();                          // still ours? then commit
-    index.write(mailbox);
+    index.write(tmp.getOutputStream(lock));     // fenced: refused if the lock was lost
+    tmp.renameTo(indexFile, lock);              // the commit, fenced too
 }
 ```
 
@@ -246,6 +246,12 @@ long-running holder's lease alive. Each grant carries a **fencing token** that o
 advisory, not reentrant, owned by the lock object rather than a thread, and never upgraded from SHARED to
 EXCLUSIVE. A lease is enforced by the process holding it, so a thread that forgets its lock doesn't block
 others; what happens to a frozen process depends on the file system. The `us.bringardner.parley.files.lock` package documentation has the full rules.
+
+Writes made under a lock should say so: `getOutputStream(lock)`, `renameTo(dest, lock)` and `delete(lock)`
+are **fenced**, refused once the lock is lost, so a process that stalled past its lease can't commit over the
+next holder's work. Write to a temporary file under the lock, then commit with `renameTo(dest, lock)`.
+By default the lock is checked just before each step; a file system whose `supportsFencedWrites()` is true
+makes the check and the write one atomic step.
 
 How far the locks reach is `getLockScope()`:
 

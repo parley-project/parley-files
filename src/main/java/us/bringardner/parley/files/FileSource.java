@@ -38,6 +38,7 @@ import java.net.URL;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
 import java.time.Duration;
+import java.util.Objects;
 
 import us.bringardner.parley.files.lock.FileSourceLock;
 import us.bringardner.parley.files.lock.LockBackend;
@@ -726,6 +727,57 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	default FileSourceLock lock(LockMode mode, Duration lease, Duration wait) throws IOException, InterruptedException {
 		return Locks.await(this, mode, lease, wait);
+	}
+
+	/**
+	 * Open this file for writing under a lock: the write is <i>fenced</i>, so a holder whose lease ran
+	 * out (a stalled process, say) can't commit over the next holder's work. Where
+	 * {@link #supportsFencedWrites()} is true the file system refuses the write atomically; otherwise
+	 * (the default) the lock is checked when the stream is opened and again when it is closed, and
+	 * closing throws {@link us.bringardner.parley.files.lock.LockLostException} if it was lost. Either
+	 * way, treat that exception as "don't commit": write to a temporary file, then commit with
+	 * {@link #renameTo(FileSource, FileSourceLock)}.
+	 * @param lock the lock held for this write (on this path or on a directory that guards it)
+	 * @return the stream
+	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock is already lost
+	 * @throws IOException as {@link #getOutputStream()}
+	 * @since 1.1.0
+	 */
+	default OutputStream getOutputStream(FileSourceLock lock) throws IOException {
+		Objects.requireNonNull(lock, "lock");
+		lock.checkValid();
+		return Locks.checkOnClose(getOutputStream(), lock);
+	}
+
+	/**
+	 * {@link #renameTo(FileSource)} under a lock (see {@link #getOutputStream(FileSourceLock)}). By
+	 * default the lock is checked just before the rename.
+	 * @param dest the new name
+	 * @param lock the lock held for this change
+	 * @return as {@link #renameTo(FileSource)}
+	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock was lost; nothing is renamed
+	 * @throws IOException as {@link #renameTo(FileSource)}
+	 * @since 1.1.0
+	 */
+	default boolean renameTo(FileSource dest, FileSourceLock lock) throws IOException {
+		Objects.requireNonNull(lock, "lock");
+		lock.checkValid();
+		return renameTo(dest);
+	}
+
+	/**
+	 * {@link #delete()} under a lock (see {@link #getOutputStream(FileSourceLock)}). By default the
+	 * lock is checked just before the delete.
+	 * @param lock the lock held for this change
+	 * @return as {@link #delete()}
+	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock was lost; nothing is deleted
+	 * @throws IOException as {@link #delete()}
+	 * @since 1.1.0
+	 */
+	default boolean delete(FileSourceLock lock) throws IOException {
+		Objects.requireNonNull(lock, "lock");
+		lock.checkValid();
+		return delete();
 	}
 
 }

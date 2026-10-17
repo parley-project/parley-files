@@ -379,6 +379,31 @@ public abstract class AbstractLockTests {
 		assertEquals(threads * each, readCount(counter));
 	}
 
+	/** 9b. Writes under a lock: allowed while it is held; refused, and nothing committed, once it is lost. */
+	@Test
+	public void fencedWrites() throws Exception {
+		FileSource target = path("fenced.txt");
+		FileSource tmp = path("fenced.tmp");
+		FileSourceLock lock = dir.tryLock(LockMode.EXCLUSIVE, Duration.ofMillis(800));
+		assertNotNull(lock);
+		try (OutputStream out = tmp.getOutputStream(lock)) {
+			out.write("one".getBytes(StandardCharsets.UTF_8));
+		}
+		assertTrue(tmp.renameTo(target, lock), "committed under a held lock");
+
+		// the lease runs out while a write is in progress: closing says so
+		OutputStream late = tmp.getOutputStream(lock);
+		late.write("two".getBytes(StandardCharsets.UTF_8));
+		Thread.sleep(1200);
+		assertThrows(LockLostException.class, late::close);
+		assertThrows(LockLostException.class, () -> tmp.renameTo(target, lock));
+		assertThrows(LockLostException.class, () -> target.delete(lock));
+		assertThrows(LockLostException.class, () -> tmp.getOutputStream(lock));
+		assertTrue(target.exists(), "nothing deleted under a lost lock");
+		assertEquals("one", new String(target.getInputStream().readAllBytes(), StandardCharsets.UTF_8),
+				"nothing renamed over the committed file under a lost lock");
+	}
+
 	// ------------------------------------------------------------------ HOST and CLUSTER
 
 	private Worker worker() throws Exception {

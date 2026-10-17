@@ -1,6 +1,8 @@
 package us.bringardner.parley.files.lock;
 
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.Objects;
 
@@ -48,5 +50,38 @@ public final class Locks {
 			Thread.sleep(Math.max(1, Math.min(pause, left / 1_000_000 + 1)));
 			pause = Math.min(pause * 2, MAX_BACKOFF_MS);
 		}
+	}
+
+	/**
+	 * A stream that checks the lock when it is closed: the data is flushed and the stream closed
+	 * either way, then {@link LockLostException} is thrown if the lock was lost, so the caller knows
+	 * not to commit what it wrote. This is the default fencing of
+	 * {@link FileSource#getOutputStream(FileSourceLock)}; a file system that can make the check and
+	 * the write one atomic step does better.
+	 * @param out the stream to write
+	 * @param lock the lock the write is made under
+	 * @return the checking stream
+	 */
+	public static OutputStream checkOnClose(OutputStream out, FileSourceLock lock) {
+		Objects.requireNonNull(out, "out");
+		Objects.requireNonNull(lock, "lock");
+		return new FilterOutputStream(out) {
+			private boolean closed;
+
+			@Override
+			public void write(byte[] b, int off, int len) throws IOException {
+				out.write(b, off, len);
+			}
+
+			@Override
+			public void close() throws IOException {
+				if( closed ) {
+					return;
+				}
+				closed = true;
+				super.close();
+				lock.checkValid();
+			}
+		};
 	}
 }
