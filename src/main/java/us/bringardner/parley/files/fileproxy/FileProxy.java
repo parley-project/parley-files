@@ -30,7 +30,6 @@
 package us.bringardner.parley.files.fileproxy;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -738,7 +737,21 @@ public class FileProxy implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#getInputStream()
 	 */
 	public InputStream getInputStream() throws IOException {
-		return new FileInputStream(target);
+		// Through NIO rather than FileInputStream: on Windows a FileInputStream keeps others from
+		// renaming or deleting the file while it is open, so a reader could make a writer's
+		// commit (rename over it) fail. NIO opens it with FILE_SHARE_DELETE; elsewhere nothing changes.
+		if( target.isDirectory() ) {
+			throw new FileNotFoundException(target + " (Is a directory)");
+		}
+		try {
+			return Files.newInputStream(target.toPath());
+		} catch (java.nio.file.NoSuchFileException | java.nio.file.AccessDeniedException e) {
+			// as FileInputStream reports it, for callers that catch FileNotFoundException
+			FileNotFoundException fnf = new FileNotFoundException(target + (e instanceof java.nio.file.AccessDeniedException
+					? " (Permission denied)" : " (No such file or directory)"));
+			fnf.initCause(e);
+			throw fnf;
+		}
 	}
 
 	/* (non-Javadoc)
@@ -988,12 +1001,22 @@ public class FileProxy implements FileSource {
 	}
 
 	public InputStream getInputStream(long startingPos) throws IOException {
-		InputStream ret = getInputStream();
-		long skipped = ret.skip(startingPos);
-		if( skipped != startingPos) {
-			throw new IOException("Can't skipp to "+startingPos+" skipped="+skipped);
+		if( startingPos < 0 ) {
+			throw new IOException("Can't skipp to "+startingPos);
 		}
-
+		InputStream ret = getInputStream();
+		if( startingPos > 0 ) {
+			// NIO's stream won't skip past the end, as FileInputStream does; a position can
+			java.nio.channels.SeekableByteChannel ch = Files.newByteChannel(target.toPath());
+			ret.close();
+			try {
+				ch.position(startingPos);
+			} catch (IOException | RuntimeException e) {
+				ch.close();
+				throw e;
+			}
+			ret = java.nio.channels.Channels.newInputStream(ch);
+		}
 		return ret;
 	}
 

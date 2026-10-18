@@ -248,10 +248,14 @@ EXCLUSIVE. A lease is enforced by the process holding it, so a thread that forge
 others; what happens to a frozen process depends on the file system. The `us.bringardner.parley.files.lock` package documentation has the full rules.
 
 Writes made under a lock should say so: `getOutputStream(lock)`, `renameTo(dest, lock)` and `delete(lock)`
-are **fenced**, refused once the lock is lost, so a process that stalled past its lease can't commit over the
-next holder's work. Write to a temporary file under the lock, then commit with `renameTo(dest, lock)`.
-By default the lock is checked just before each step; a file system whose `supportsFencedWrites()` is true
-makes the check and the write one atomic step.
+are **fenced**: each step is refused once the lock is known to be lost. Write to a temporary file under the
+lock, then commit with `renameTo(dest, lock)`. By default the check is *check-then-act*: the lock is checked
+just before each step, so a holder that stalls between the check and the step (a GC pause, a frozen VM) can
+still make that one step after its lease ran out. Keep the lease well above the time the work takes, or use a
+`LockRenewer`, and use temporary names no other holder uses. A file system whose `supportsFencedWrites()` is
+true would make the check and the write one atomic step (it would refuse a write with an older fencing token
+than one it has seen); none in parley-files does yet, so every `supportsFencedWrites()` here is false and
+fencing tokens are handed out but not checked by the store.
 
 How far the locks reach is `getLockScope()`:
 

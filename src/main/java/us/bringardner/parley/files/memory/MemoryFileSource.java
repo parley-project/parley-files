@@ -1663,7 +1663,7 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
 		return LockManager.get().tryAcquire(this,
-				"memory|" + System.identityHashCode(getFileSourceFactory()) + "|" + getCanonicalPath(),
+				"memory|" + ((MemoryFileSourceFactory) getFileSourceFactory()).lockId() + "|" + getCanonicalPath(),
 				mode, lease, LockBackend.inProcess());
 	}
 
