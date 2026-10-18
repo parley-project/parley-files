@@ -3,14 +3,12 @@ package us.bringardner.parley.files.test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.lock.FileSourceLock;
-import us.bringardner.parley.files.lock.LockMode;
 import us.bringardner.parley.files.memory.MemoryFileSourceFactory;
 
 /** The in-memory file system has the default locks: PROCESS scope. */
@@ -34,8 +32,8 @@ public class MemoryLockTests extends AbstractLockTests {
 		MemoryFileSourceFactory b = new MemoryFileSourceFactory();
 		a.connect();
 		b.connect();
-		try (FileSourceLock la = a.createFileSource("/same").tryLock(LockMode.EXCLUSIVE, LONG);
-				FileSourceLock lb = b.createFileSource("/same").tryLock(LockMode.EXCLUSIVE, LONG)) {
+		try (FileSourceLock la = a.createFileSource("/same").tryLock();
+				FileSourceLock lb = b.createFileSource("/same").tryLock()) {
 			assertNotNull(la);
 			assertNotNull(lb);
 		}

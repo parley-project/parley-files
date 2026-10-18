@@ -1,10 +1,11 @@
 package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -14,7 +15,6 @@ import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 import us.bringardner.parley.files.lock.FileSourceLock;
-import us.bringardner.parley.files.lock.LockMode;
 
 /**
  * The local file system (FileProxy): HOST scope, so the cross-process cases run against a second
@@ -50,10 +50,10 @@ public class LocalLockTests extends AbstractLockTests {
 		FileSource sub = path("sub");
 		assertTrue(sub.mkdirs());
 		FileSource f = sub.getChild("x");
-		try (FileSourceLock first = f.tryLock(LockMode.EXCLUSIVE, LONG)) {
+		try (FileSourceLock first = f.tryLock()) {
 			assertNotNull(first);
 			assertTrue(sub.getChild(FileProxyFactory.LOCK_DIRECTORY_NAME).mkdirs());
-			assertNull(f.tryLock(LockMode.EXCLUSIVE, LONG), "still held, though its lock file moved");
+			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "still held, though its lock file moved");
 		}
 	}
 
@@ -61,7 +61,7 @@ public class LocalLockTests extends AbstractLockTests {
 	@Test
 	public void lockFilesStayInTheLockDirectory() throws Exception {
 		FileSource f = path("tidy");
-		try (FileSourceLock l = f.tryLock(LockMode.EXCLUSIVE, LONG)) {
+		try (FileSourceLock l = f.tryLock()) {
 			assertNotNull(l);
 			String[] names = new File(dir.getCanonicalPath()).list();
 			assertTrue(names != null && names.length == 1 && names[0].equals(FileProxyFactory.LOCK_DIRECTORY_NAME),

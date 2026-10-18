@@ -1,65 +1,51 @@
 package us.bringardner.parley.files.lock;
 
 import java.io.IOException;
-import java.time.Instant;
 
 import us.bringardner.parley.files.FileSource;
 
 /**
- * A lease on one path, from {@link FileSource#tryLock} or {@link FileSource#lock}.
- * <p>
- * The lock belongs to this object, not to a thread: any thread may renew or close it. It is not
- * reentrant: asking again for a path you hold is refused like any other request, so code that
- * needs the lock further down is passed this object instead.
- * <p>
+ * A lock on one path, from {@link FileSource#lock()} or {@link FileSource#tryLock()}: the FileSource
+ * counterpart of {@link java.nio.channels.FileLock}, and it behaves the same way.
+ * <ul>
+ * <li>It is held on behalf of the whole JVM, not a thread: asking again for a path this JVM holds
+ * throws {@link java.nio.channels.OverlappingFileLockException}, whichever thread asks. So these
+ * locks keep other processes out; threads in one JVM coordinate as they would with FileLock, with
+ * Java locks of their own (parley-net's locks do that for servers).</li>
+ * <li>It is valid until it is released, or the JVM ends. It doesn't expire.</li>
+ * <li>Any thread may release it. Releasing twice is harmless.</li>
+ * <li>It is advisory: it keeps out code that asks for the lock, not plain reads and writes.</li>
+ * </ul>
  * Use it with try-with-resources:
  * <pre>
- * try (FileSourceLock lock = dir.lock(LockMode.EXCLUSIVE, Duration.ofSeconds(30), Duration.ofSeconds(10))) {
- *     ... read, change ...
- *     lock.checkValid();   // still ours? then commit
- *     ... write ...
+ * try (FileSourceLock lock = dir.lock()) {
+ *     ... read, change, write ...
  * }
  * </pre>
- * Choose the lease well above the time the work takes (ten times is a good rule), or keep it
- * alive with a {@link LockRenewer}.
+ * @since 1.1.0
  */
 public interface FileSourceLock extends AutoCloseable {
 
-	/** @return the path this lock is on */
-	FileSource getFileSource();
-
-	/** @return EXCLUSIVE or SHARED */
-	LockMode getMode();
-
 	/**
-	 * A fencing token: higher on every grant of this path within the lock's scope. A store that
-	 * remembers the highest token it has seen can refuse writes from a holder whose lease ran out
-	 * while it was paused.
-	 * @return the token
+	 * @return the path this lock is on (as {@link java.nio.channels.FileLock#channel()} names the channel)
 	 */
-	long getToken();
+	FileSource source();
 
-	/** @return when the lease runs out unless renewed (the real expiry, after any rounding) */
-	Instant getExpiry();
+	/** @return true for a shared lock, false for an exclusive one */
+	boolean isShared();
 
-	/** @return false once the lock was released or its lease ran out */
+	/** @return true until the lock is released */
 	boolean isValid();
 
 	/**
-	 * Extend the lease to now plus {@code lease}.
-	 * @param lease the new lease, more than zero
-	 * @return false if the lock was already lost; a lost lock is never revived
-	 * @throws IOException if the file system could not be reached (the lock stays valid until its expiry)
+	 * Release the lock. Releasing a released lock does nothing.
+	 * @throws IOException if the file system could not be told (the lock is released here anyway)
 	 */
-	boolean renew(java.time.Duration lease) throws IOException;
+	void release() throws IOException;
 
-	/**
-	 * Call before committing a write.
-	 * @throws LockLostException if the lock is no longer held
-	 */
-	void checkValid() throws LockLostException;
-
-	/** Release the lock. Closing a released or lost lock does nothing. */
+	/** {@link #release()}, for try-with-resources. */
 	@Override
-	void close() throws IOException;
+	default void close() throws IOException {
+		release();
+	}
 }

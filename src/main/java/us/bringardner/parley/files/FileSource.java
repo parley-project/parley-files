@@ -37,15 +37,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
-import java.time.Duration;
-import java.util.Objects;
 
 import us.bringardner.parley.files.lock.FileSourceLock;
 import us.bringardner.parley.files.lock.LockBackend;
 import us.bringardner.parley.files.lock.LockManager;
-import us.bringardner.parley.files.lock.LockMode;
 import us.bringardner.parley.files.lock.LockScope;
-import us.bringardner.parley.files.lock.Locks;
 
 
 
@@ -682,7 +678,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * How far this file system's locks reach: {@link LockScope#PROCESS} (this JVM) unless the file
 	 * system does better. An application that runs as several processes on one store checks this at
 	 * start-up and refuses to run if the scope is too narrow.
-	 * @return the scope of {@link #tryLock} and {@link #lock}
+	 * @return the scope of {@link #tryLock(boolean)} and {@link #lock(boolean)}
 	 * @since 1.1.0
 	 */
 	default LockScope getLockScope() {
@@ -690,94 +686,57 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	/**
-	 * Whether a write can be checked against its lock in one atomic step, so a holder whose lease ran
-	 * out can never overwrite the next holder's work. Where false, {@link FileSourceLock#checkValid()}
-	 * before a commit is best effort: keep each locked step much shorter than its lease.
-	 * @return false unless the file system says otherwise
-	 * @since 1.1.0
-	 */
-	default boolean supportsFencedWrites() {
-		return false;
-	}
-
-	/**
-	 * Take a lock on this path now, or return null if another holder has it. The path need not
-	 * exist. Locks are leases, advisory, not reentrant; see the {@code us.bringardner.parley.files.lock}
-	 * package for the full rules.
-	 * @param mode EXCLUSIVE or SHARED
-	 * @param lease how long the lock lasts unless renewed; more than zero
-	 * @return the lock, or null
+	 * {@link #tryLock(boolean) tryLock(false)}: an exclusive lock now, or null.
+	 * @return the lock, or null if another process holds the path
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
-	default FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
-		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), mode, lease, LockBackend.inProcess());
+	default FileSourceLock tryLock() throws IOException {
+		return tryLock(false);
 	}
 
 	/**
-	 * Take a lock on this path, waiting up to {@code wait} for it.
-	 * @param mode EXCLUSIVE or SHARED
-	 * @param lease how long the lock lasts unless renewed; more than zero
-	 * @param wait how long to wait; zero tries once
+	 * Take a lock on this path now, without waiting, as {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)}
+	 * does for a whole file. The path need not exist, and locking it doesn't create it. See the
+	 * {@code us.bringardner.parley.files.lock} package for the rules.
+	 * @param shared true for a shared lock, false for an exclusive one
+	 * @return the lock, or null if another process holds the path
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
+	 *         any thread (locks are held on behalf of the whole JVM)
+	 * @throws IOException if the file system could not be asked
+	 * @since 1.1.0
+	 */
+	default FileSourceLock tryLock(boolean shared) throws IOException {
+		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), shared, LockBackend.inProcess());
+	}
+
+	/**
+	 * {@link #lock(boolean) lock(false)}: an exclusive lock, waiting for it.
 	 * @return the lock
-	 * @throws us.bringardner.parley.files.lock.LockTimeoutException if it didn't come in time
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path
+	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while waiting
 	 * @throws IOException if the file system could not be asked
-	 * @throws InterruptedException if the thread was interrupted while waiting
 	 * @since 1.1.0
 	 */
-	default FileSourceLock lock(LockMode mode, Duration lease, Duration wait) throws IOException, InterruptedException {
-		return Locks.await(this, mode, lease, wait);
+	default FileSourceLock lock() throws IOException {
+		return lock(false);
 	}
 
 	/**
-	 * Open this file for writing under a lock: the write is <i>fenced</i>, so a holder whose lease ran
-	 * out (a stalled process, say) can't commit over the next holder's work. Where
-	 * {@link #supportsFencedWrites()} is true the file system refuses the write atomically; otherwise
-	 * (the default) the lock is checked when the stream is opened and again when it is closed, and
-	 * closing throws {@link us.bringardner.parley.files.lock.LockLostException} if it was lost. Either
-	 * way, treat that exception as "don't commit": write to a temporary file, then commit with
-	 * {@link #renameTo(FileSource, FileSourceLock)}.
-	 * @param lock the lock held for this write (on this path or on a directory that guards it)
-	 * @return the stream
-	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock is already lost
-	 * @throws IOException as {@link #getOutputStream()}
+	 * Take a lock on this path, waiting as long as another process holds it, as
+	 * {@link java.nio.channels.FileChannel#lock(long, long, boolean)} does for a whole file.
+	 * @param shared true for a shared lock, false for an exclusive one
+	 * @return the lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
+	 *         any thread: it doesn't wait for this JVM
+	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while
+	 *         waiting (its interrupt status stays set)
+	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
-	default OutputStream getOutputStream(FileSourceLock lock) throws IOException {
-		Objects.requireNonNull(lock, "lock");
-		lock.checkValid();
-		return Locks.checkOnClose(getOutputStream(), lock);
-	}
-
-	/**
-	 * {@link #renameTo(FileSource)} under a lock (see {@link #getOutputStream(FileSourceLock)}). By
-	 * default the lock is checked just before the rename.
-	 * @param dest the new name
-	 * @param lock the lock held for this change
-	 * @return as {@link #renameTo(FileSource)}
-	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock was lost; nothing is renamed
-	 * @throws IOException as {@link #renameTo(FileSource)}
-	 * @since 1.1.0
-	 */
-	default boolean renameTo(FileSource dest, FileSourceLock lock) throws IOException {
-		Objects.requireNonNull(lock, "lock");
-		lock.checkValid();
-		return renameTo(dest);
-	}
-
-	/**
-	 * {@link #delete()} under a lock (see {@link #getOutputStream(FileSourceLock)}). By default the
-	 * lock is checked just before the delete.
-	 * @param lock the lock held for this change
-	 * @return as {@link #delete()}
-	 * @throws us.bringardner.parley.files.lock.LockLostException if the lock was lost; nothing is deleted
-	 * @throws IOException as {@link #delete()}
-	 * @since 1.1.0
-	 */
-	default boolean delete(FileSourceLock lock) throws IOException {
-		Objects.requireNonNull(lock, "lock");
-		lock.checkValid();
-		return delete();
+	default FileSourceLock lock(boolean shared) throws IOException {
+		return LockManager.await(this, shared);
 	}
 
 }
