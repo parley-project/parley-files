@@ -106,7 +106,7 @@ final class LocalLocks {
 			throw new IOException("The lock directory " + dir + " is not a directory (or is a link)");
 		}
 		UserPrincipal owner = Files.getOwner(dir, LinkOption.NOFOLLOW_LINKS);
-		UserPrincipal me = dir.getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName(System.getProperty("user.name"));
+		UserPrincipal me = currentUser(dir);
 		if( !owner.equals(me) ) {
 			throw new IOException("The lock directory " + dir + " belongs to " + owner.getName()
 					+ ", not to this user: set " + FileProxyFactory.LOCK_DIRECTORY_PROPERTY + " or create a "
@@ -117,6 +117,25 @@ final class LocalLocks {
 			Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"));
 		}
 		return dir.toRealPath();
+	}
+
+	/**
+	 * This process's user as the file system knows it. By name if the name can be looked up; when
+	 * it can't (a container whose user isn't in the passwd file, say), as the owner of a file this
+	 * process creates in {@code dir}, which fails if this user can't write there.
+	 */
+	private static UserPrincipal currentUser(Path dir) throws IOException {
+		try {
+			return dir.getFileSystem().getUserPrincipalLookupService()
+					.lookupPrincipalByName(System.getProperty("user.name", ""));
+		} catch (java.nio.file.attribute.UserPrincipalNotFoundException | UnsupportedOperationException e) {
+			Path probe = Files.createTempFile(dir, ".owner-", ".tmp");
+			try {
+				return Files.getOwner(probe, LinkOption.NOFOLLOW_LINKS);
+			} finally {
+				Files.deleteIfExists(probe);
+			}
+		}
 	}
 
 	static String hashOf(String canonicalPath) {

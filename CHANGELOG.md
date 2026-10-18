@@ -12,6 +12,10 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   `us.bringardner.parley.files.lock` (`FileSourceLock`, `LockMode`, `LockScope`, `LockManager`,
   `LockBackend`, `LockRenewer`, `Locks`, `LockLostException`, `LockTimeoutException`) and the README's
   "Locking" section.
+- **Fenced writes.** `getOutputStream(lock)`, `renameTo(dest, lock)` and `delete(lock)` make a change
+  under a lock, refused once the lock is lost. By default they check the lock just before the step
+  (check-then-act); `Locks.checkOnClose` is that check for streams. No file system here makes the check
+  atomic yet (`supportsFencedWrites()` is false for all of them).
 - Every FileSource gets `PROCESS` locks (all threads in this JVM) from the defaults.
 - Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
   A `.parley-locks` directory in or above the locked path is the lock directory
@@ -21,6 +25,12 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 - In-memory file systems lock per factory instance: the same path in two memory file systems is two files.
 - Tests jar: `AbstractLockTests`, the lock contract for every implementation, with a second-JVM worker
   (`LockWorker`) for the cross-process cases; `MemoryLockTests` and `LocalLockTests` run it here.
+
+### Changed (no code change needed)
+
+- `FileProxy.getInputStream()` opens the file through NIO (`Files.newInputStream`). On Windows the
+  file can now be renamed or deleted while it is being read, as on other systems, so a reader can't
+  make a writer's commit fail. A missing file is still a `FileNotFoundException`.
 
 ## parley-files 1.0.0 (2026-10-16)
 

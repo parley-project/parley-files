@@ -59,6 +59,10 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 	private static final String PROP_NAME = "name";
 	
 	
+	private static final java.util.concurrent.atomic.AtomicLong LOCK_IDS = new java.util.concurrent.atomic.AtomicLong();
+	/** This file system's key for locks (0 until first asked): unique in the JVM, unlike identityHashCode. */
+	private transient long lockId;
+
 	private volatile  MemoryFileSource [] roots;
 	private volatile FileSource currentDirectory;
 	private String name = "MemoryFileSet";
@@ -66,6 +70,14 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 
 	public String getName() {
 		return name;
+	}
+
+	/** @return a number no other MemoryFileSourceFactory in this JVM has, for keying locks */
+	synchronized long lockId() {
+		if( lockId == 0 ) {
+			lockId = LOCK_IDS.incrementAndGet();
+		}
+		return lockId;
 	}
 
 	public void setName(String name) {
