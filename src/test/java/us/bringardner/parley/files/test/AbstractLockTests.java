@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -43,7 +44,8 @@ import us.bringardner.parley.files.lock.LockScope;
  * The lock contract, for every file system: the rules of NIO file locks, on FileSource paths. A file
  * system adds a small subclass (as it does for {@link FileLikeBehaviorTests}) and the suite runs every
  * case the file system's {@link FileSource#getLockScope()} promises, so a file system that claims
- * more than it delivers fails.
+ * more than it delivers fails. Locks are taken on files the test creates, since only existing files
+ * can be locked.
  * <ul>
  * <li>Every scope from {@code PROCESS} up: the in-JVM cases (one hold per JVM, release, paths).</li>
  * <li>{@code HOST} and up: the cross-process cases run a second JVM ({@link LockWorker}) on the same
@@ -112,6 +114,21 @@ public abstract class AbstractLockTests {
 		return dir.getChild(name);
 	}
 
+	/** An existing, empty file in {@link #dir}: only existing files can be locked. */
+	protected FileSource file(String name) throws IOException {
+		FileSource f = dir.getChild(name);
+		if( !f.exists() ) {
+			writeBytes(f, new byte[0]);
+		}
+		return f;
+	}
+
+	protected static void writeBytes(FileSource f, byte[] data) throws IOException {
+		try (OutputStream out = f.getOutputStream()) {
+			out.write(data);
+		}
+	}
+
 	private FileSourceLock keep(FileSourceLock l) {
 		if( l != null ) {
 			held.add(l);
@@ -165,7 +182,7 @@ public abstract class AbstractLockTests {
 	/** 1. The lock says what it is. */
 	@Test
 	public void lockDescribesItself() throws IOException {
-		FileSource f = path("describe");
+		FileSource f = file("describe");
 		FileSourceLock x = tryX(f);
 		assertNotNull(x);
 		assertFalse(x.isShared());
@@ -188,7 +205,7 @@ public abstract class AbstractLockTests {
 	/** 2. A JVM holds a path once: asking again throws, in either mode, from tryLock and lock. */
 	@Test
 	public void secondRequestInThisJvmThrows() throws IOException {
-		FileSource f = path("twice");
+		FileSource f = file("twice");
 		assertNotNull(tryX(f));
 		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "exclusive again");
 		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "shared while exclusive");
@@ -203,14 +220,14 @@ public abstract class AbstractLockTests {
 	/** 2b. Two FileSource objects for one path are one path to the lock. */
 	@Test
 	public void sameFileDifferentObjects() throws IOException {
-		assertNotNull(tryX(path("same")));
+		assertNotNull(tryX(file("same")));
 		assertThrows(OverlappingFileLockException.class, () -> dir.getChild("same").tryLock());
 	}
 
 	/** 2c. The lock is the JVM's, not the thread's: another thread is refused the same way. */
 	@Test
 	public void otherThreadsAreRefusedNotQueued() throws Exception {
-		FileSource f = path("threads");
+		FileSource f = file("threads");
 		assertNotNull(tryX(f));
 		AtomicReference<Throwable> seen = new AtomicReference<>();
 		Thread t = new Thread(() -> {
@@ -229,7 +246,7 @@ public abstract class AbstractLockTests {
 	/** 3. Release frees the path; releasing twice is harmless; any thread may release. */
 	@Test
 	public void releaseFromAnyThread() throws Exception {
-		FileSource f = path("release");
+		FileSource f = file("release");
 		FileSourceLock x = f.tryLock();
 		assertNotNull(x);
 		Thread t = new Thread(() -> {
@@ -248,18 +265,23 @@ public abstract class AbstractLockTests {
 		assertFalse(x.isValid(), "an old lock never comes back");
 	}
 
-	/** 4. A missing path can be locked; locking a directory doesn't lock what's in it. */
+	/** 4. Only what exists can be locked; locking a directory doesn't lock what's in it. */
 	@Test
-	public void noHierarchy() throws IOException {
-		FileSource missing = path("not-there-yet");
+	public void onlyExistingFilesLock() throws IOException {
+		FileSource missing = path("not-there");
 		assertFalse(missing.exists());
-		assertNotNull(tryX(missing));
-		assertFalse(missing.exists(), "locking doesn't create the path");
+		assertThrows(FileNotFoundException.class, () -> missing.tryLock(), "tryLock on a missing file");
+		assertThrows(FileNotFoundException.class, () -> missing.tryLock(true));
+		assertThrows(FileNotFoundException.class, () -> missing.lock(), "lock() doesn't wait for it to appear");
+		assertFalse(missing.exists(), "nothing created");
+		assertNotNull(tryX(file("not-there")), "lockable once it exists");
 
 		FileSource sub = path("sub");
 		assertTrue(sub.mkdirs());
-		assertNotNull(tryX(sub));
-		assertNotNull(tryX(sub.getChild("inside")), "a child is a different path");
+		assertNotNull(tryX(sub), "a directory can be locked");
+		FileSource inside = sub.getChild("inside");
+		writeBytes(inside, new byte[0]);
+		assertNotNull(tryX(inside), "a child is a different path");
 		assertNotNull(tryX(dir), "the parent too");
 	}
 
@@ -271,7 +293,7 @@ public abstract class AbstractLockTests {
 		try {
 			List<Future<?>> all = new ArrayList<>();
 			for (int t = 0; t < threads; t++) {
-				FileSource f = path("own" + t);
+				FileSource f = file("own" + t);
 				all.add(ex.submit(() -> {
 					for (int i = 0; i < 100; i++) {
 						try (FileSourceLock l = f.lock(i % 2 == 0)) {
@@ -287,7 +309,7 @@ public abstract class AbstractLockTests {
 		} finally {
 			ex.shutdownNow();
 		}
-		assertNotNull(tryX(path("own0")), "all released");
+		assertNotNull(tryX(file("own0")), "all released");
 	}
 
 	// ------------------------------------------------------------------ HOST and up
@@ -304,7 +326,7 @@ public abstract class AbstractLockTests {
 	@Test
 	public void crossProcessModes() throws Exception {
 		Worker w = worker();
-		FileSource f = path("xproc");
+		FileSource f = file("xproc");
 		String spec = workerSpec(f);
 
 		assertEquals("GOT", w.ask("lock " + spec + " X"));
@@ -328,7 +350,7 @@ public abstract class AbstractLockTests {
 	@Test
 	public void lockWaitsForAnotherProcess() throws Exception {
 		Worker w = worker();
-		FileSource f = path("xwait");
+		FileSource f = file("xwait");
 		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
 		ExecutorService ex = Executors.newSingleThreadExecutor();
 		try {
@@ -346,7 +368,7 @@ public abstract class AbstractLockTests {
 	@Test
 	public void waitingLockCanBeInterrupted() throws Exception {
 		Worker w = worker();
-		FileSource f = path("xinterrupt");
+		FileSource f = file("xinterrupt");
 		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
 		ExecutorService ex = Executors.newSingleThreadExecutor();
 		try {
@@ -373,7 +395,7 @@ public abstract class AbstractLockTests {
 	@Test
 	public void deadHolderFreesPath() throws Exception {
 		Worker w = worker();
-		FileSource f = path("killed");
+		FileSource f = file("killed");
 		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
 		assertNull(tryX(f));
 		w.kill();

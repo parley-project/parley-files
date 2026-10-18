@@ -50,6 +50,7 @@ public class LocalLockTests extends AbstractLockTests {
 		FileSource sub = path("sub");
 		assertTrue(sub.mkdirs());
 		FileSource f = sub.getChild("x");
+		writeBytes(f, new byte[0]);
 		try (FileSourceLock first = f.tryLock()) {
 			assertNotNull(first);
 			assertTrue(sub.getChild(FileProxyFactory.LOCK_DIRECTORY_NAME).mkdirs());
@@ -60,12 +61,13 @@ public class LocalLockTests extends AbstractLockTests {
 	/** Lock files are kept in the lock directory, never next to the locked path. */
 	@Test
 	public void lockFilesStayInTheLockDirectory() throws Exception {
-		FileSource f = path("tidy");
+		FileSource f = file("tidy");
 		try (FileSourceLock l = f.tryLock()) {
 			assertNotNull(l);
 			String[] names = new File(dir.getCanonicalPath()).list();
-			assertTrue(names != null && names.length == 1 && names[0].equals(FileProxyFactory.LOCK_DIRECTORY_NAME),
-					"only the lock directory in " + java.util.Arrays.toString(names));
+			java.util.Arrays.sort(names);
+			assertTrue(java.util.Arrays.equals(names, new String[] {FileProxyFactory.LOCK_DIRECTORY_NAME, "tidy"}),
+					"only the file and the lock directory in " + java.util.Arrays.toString(names));
 		}
 	}
 }

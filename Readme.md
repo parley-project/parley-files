@@ -248,8 +248,10 @@ The rules are NIO's. `tryLock` returns null if another process holds the path; `
 takes, and throws `FileLockInterruptionException` if the thread is interrupted. A lock is held **on behalf of
 the whole JVM**: asking again for a path this JVM holds, from any thread, throws `OverlappingFileLockException`
 at once. So, as with NIO, these locks keep other processes out, and threads in one JVM coordinate with Java
-locks of their own (parley-net's locks do both for servers). A lock lasts until it is released or the JVM ends,
-covers its path only (not what is in a directory), and the path need not exist. Locks are advisory. The
+locks of their own (parley-net's locks do both for servers). Only an existing file or directory can be locked
+(`FileNotFoundException` otherwise), as a FileChannel needs an existing file. A lock lasts until it is released
+or the JVM ends, and a lock on a directory covers the directory only, not what is in it. Locks are advisory: the
+holder reads and writes the file as usual. The
 `us.bringardner.parley.files.lock` package documentation has the full rules.
 
 How far the locks reach is `getLockScope()`:

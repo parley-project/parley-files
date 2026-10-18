@@ -9,7 +9,8 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 - **Locks on any path**, shaped like NIO's `FileChannel.lock()` and `FileLock`. `FileSource` has five
   new default methods: `tryLock()`, `tryLock(boolean shared)`, `lock()`, `lock(boolean shared)` and
   `getLockScope()`. As with NIO, a lock is held on behalf of the whole JVM (a second request from this
-  JVM throws `OverlappingFileLockException`), `lock` waits for other processes and can be interrupted
+  JVM throws `OverlappingFileLockException`), only an existing file or directory can be locked
+  (`FileNotFoundException` otherwise), `lock` waits for other processes and can be interrupted
   (`FileLockInterruptionException`), and a lock lasts until it is released. See the new package
   `us.bringardner.parley.files.lock` (`FileSourceLock`, `LockScope`, `LockManager`, `LockBackend`) and
   the README's "Locking" section.
