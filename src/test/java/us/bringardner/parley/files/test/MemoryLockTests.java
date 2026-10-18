@@ -32,8 +32,12 @@ public class MemoryLockTests extends AbstractLockTests {
 		MemoryFileSourceFactory b = new MemoryFileSourceFactory();
 		a.connect();
 		b.connect();
-		try (FileSourceLock la = a.createFileSource("/same").tryLock();
-				FileSourceLock lb = b.createFileSource("/same").tryLock()) {
+		FileSource fa = a.createFileSource("/same");
+		FileSource fb = b.createFileSource("/same");
+		writeBytes(fa, new byte[0]);
+		writeBytes(fb, new byte[0]);
+		try (FileSourceLock la = fa.tryLock();
+				FileSourceLock lb = fb.tryLock()) {
 			assertNotNull(la);
 			assertNotNull(lb);
 		}

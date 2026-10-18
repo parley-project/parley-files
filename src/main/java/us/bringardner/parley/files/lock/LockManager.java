@@ -84,6 +84,8 @@ public final class LockManager {
 	 * @param shared true for a shared lock
 	 * @param backend what else to ask
 	 * @return the lock, or null if someone outside this JVM holds the path
+	 * @throws java.io.FileNotFoundException if the path doesn't exist (as a FileChannel can't be
+	 *         opened on a missing file)
 	 * @throws OverlappingFileLockException if this JVM already holds the path (or is taking it)
 	 * @throws IOException if the backend could not be asked
 	 */
@@ -91,6 +93,7 @@ public final class LockManager {
 		Objects.requireNonNull(source, "source");
 		Objects.requireNonNull(key, "key");
 		Objects.requireNonNull(backend, "backend");
+		requireExists(source);
 		Grant g = new Grant(this, key, source, shared, backend);
 		if( held.putIfAbsent(key, g) != null ) {
 			throw new OverlappingFileLockException();
@@ -135,6 +138,18 @@ public final class LockManager {
 				throw new FileLockInterruptionException();
 			}
 			sleep = Math.min(sleep * 2, MAX_POLL_MS);
+		}
+	}
+
+	/**
+	 * The rule every implementation keeps: only an existing file or directory can be locked.
+	 * @param source the path
+	 * @throws java.io.FileNotFoundException if it doesn't exist
+	 * @throws IOException if the file system could not be asked
+	 */
+	public static void requireExists(FileSource source) throws IOException {
+		if( !source.exists() ) {
+			throw new java.io.FileNotFoundException("Can't lock " + source.getAbsolutePath() + ": it doesn't exist");
 		}
 	}
 

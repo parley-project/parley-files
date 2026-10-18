@@ -14,7 +14,9 @@ import us.bringardner.parley.files.FileSource;
  * Java locks of their own (parley-net's locks do that for servers).</li>
  * <li>It is valid until it is released, or the JVM ends. It doesn't expire.</li>
  * <li>Any thread may release it. Releasing twice is harmless.</li>
- * <li>It is advisory: it keeps out code that asks for the lock, not plain reads and writes.</li>
+ * <li>It is advisory: it keeps out code that asks for the lock, not plain reads and writes. The
+ * holder reads and writes the file as usual while it holds the lock.</li>
+ * <li>Only an existing file or directory can be locked.</li>
  * </ul>
  * Use it with try-with-resources:
  * <pre>

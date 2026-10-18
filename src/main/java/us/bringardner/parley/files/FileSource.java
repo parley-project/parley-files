@@ -697,11 +697,12 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	/**
-	 * Take a lock on this path now, without waiting, as {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)}
-	 * does for a whole file. The path need not exist, and locking it doesn't create it. See the
-	 * {@code us.bringardner.parley.files.lock} package for the rules.
+	 * Take a lock on this file (or directory) now, without waiting, as
+	 * {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)} does for a whole file. The file
+	 * must exist. See the {@code us.bringardner.parley.files.lock} package for the rules.
 	 * @param shared true for a shared lock, false for an exclusive one
 	 * @return the lock, or null if another process holds the path
+	 * @throws java.io.FileNotFoundException if it doesn't exist
 	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
 	 *         any thread (locks are held on behalf of the whole JVM)
 	 * @throws IOException if the file system could not be asked
@@ -724,10 +725,12 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	/**
-	 * Take a lock on this path, waiting as long as another process holds it, as
-	 * {@link java.nio.channels.FileChannel#lock(long, long, boolean)} does for a whole file.
+	 * Take a lock on this file (or directory), waiting as long as another process holds it, as
+	 * {@link java.nio.channels.FileChannel#lock(long, long, boolean)} does for a whole file. The file
+	 * must exist.
 	 * @param shared true for a shared lock, false for an exclusive one
 	 * @return the lock
+	 * @throws java.io.FileNotFoundException if it doesn't exist
 	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
 	 *         any thread: it doesn't wait for this JVM
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while

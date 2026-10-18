@@ -15,7 +15,9 @@
  * The rules, as for NIO file locks:
  * <ul>
  * <li>Per path: one exclusive holder, or any number of shared holders and no exclusive one, across
- * processes. A lock covers its path only, not what is in a directory. The path need not exist.</li>
+ * processes. Only an existing file or directory can be locked
+ * ({@link java.io.FileNotFoundException} otherwise), as a FileChannel needs an existing file. A lock
+ * on a directory covers the directory only, not what is in it.</li>
  * <li>A lock is held on behalf of the whole JVM. A JVM holds a path at most once: asking again, from
  * any thread, throws {@link java.nio.channels.OverlappingFileLockException}. Threads in one JVM
  * coordinate with Java locks of their own, as they would with FileLock; parley-net's locks do this
