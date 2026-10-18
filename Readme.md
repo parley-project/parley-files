@@ -226,44 +226,39 @@ For remote file systems the lookup service only knows the connected user and tha
 
 ## Locking
 
-Since 1.1.0, any FileSource can lock a path, so an application can coordinate threads, processes and
-even machines through its storage alone: the same code runs as one process or several, and the file
-system decides how far the locks reach.
+Since 1.1.0, any FileSource can lock a path, the way NIO's `FileChannel.lock()` locks a file, so processes
+sharing a store can keep out of each other's way. The file system decides how far the locks reach.
 
 ```java
-try (FileSourceLock lock = mailbox.lock(LockMode.EXCLUSIVE, Duration.ofSeconds(30), Duration.ofSeconds(10))) {
+try (FileSourceLock lock = mailbox.lock()) {    // exclusive; lock(true) for shared
     Index index = Index.read(mailbox);          // reread: another process may have changed it
     index.add(message);
-    index.write(tmp.getOutputStream(lock));     // fenced: refused if the lock was lost
-    tmp.renameTo(indexFile, lock);              // the commit, fenced too
+    index.write(tmp.getOutputStream());
+    tmp.renameTo(indexFile);
 }
 ```
 
-`tryLock(mode, lease)` returns the lock or null at once; `lock(mode, lease, wait)` waits, and throws
-`LockTimeoutException` if the lock doesn't come. Every lock is a **lease**: it ends at its expiry unless
-renewed, so a holder that dies or hangs can't block everyone forever. `LockRenewer.start(lock, lease)` keeps a
-long-running holder's lease alive. Each grant carries a **fencing token** that only increases, and locks are
-advisory, not reentrant, owned by the lock object rather than a thread, and never upgraded from SHARED to
-EXCLUSIVE. A lease is enforced by the process holding it, so a thread that forgets its lock doesn't block
-others; what happens to a frozen process depends on the file system. The `us.bringardner.parley.files.lock` package documentation has the full rules.
+| FileSource | NIO |
+|---|---|
+| `lock()`, `lock(boolean shared)` | `FileChannel.lock()`, `lock(0, Long.MAX_VALUE, shared)` |
+| `tryLock()`, `tryLock(boolean shared)` | `FileChannel.tryLock()`, `tryLock(0, Long.MAX_VALUE, shared)` |
+| `FileSourceLock`: `source()`, `isShared()`, `isValid()`, `release()`, `close()` | `FileLock`: `channel()`, `isShared()`, `isValid()`, `release()`, `close()` |
 
-Writes made under a lock should say so: `getOutputStream(lock)`, `renameTo(dest, lock)` and `delete(lock)`
-are **fenced**: each step is refused once the lock is known to be lost. Write to a temporary file under the
-lock, then commit with `renameTo(dest, lock)`. By default the check is *check-then-act*: the lock is checked
-just before each step, so a holder that stalls between the check and the step (a GC pause, a frozen VM) can
-still make that one step after its lease ran out. Keep the lease well above the time the work takes, or use a
-`LockRenewer`, and use temporary names no other holder uses. A file system whose `supportsFencedWrites()` is
-true would make the check and the write one atomic step (it would refuse a write with an older fencing token
-than one it has seen); none in parley-files does yet, so every `supportsFencedWrites()` here is false and
-fencing tokens are handed out but not checked by the store.
+The rules are NIO's. `tryLock` returns null if another process holds the path; `lock` waits as long as it
+takes, and throws `FileLockInterruptionException` if the thread is interrupted. A lock is held **on behalf of
+the whole JVM**: asking again for a path this JVM holds, from any thread, throws `OverlappingFileLockException`
+at once. So, as with NIO, these locks keep other processes out, and threads in one JVM coordinate with Java
+locks of their own (parley-net's locks do both for servers). A lock lasts until it is released or the JVM ends,
+covers its path only (not what is in a directory), and the path need not exist. Locks are advisory. The
+`us.bringardner.parley.files.lock` package documentation has the full rules.
 
 How far the locks reach is `getLockScope()`:
 
 | Scope | Meaning | Who has it |
 |---|---|---|
-| `PROCESS` | All threads in this JVM | Every FileSource, by default (the in-memory file system, FTP, ...) |
+| `PROCESS` | This JVM only | Every FileSource, by default (the in-memory file system, FTP, ...) |
 | `HOST` | All processes on this machine | Local files (`FileProxy`) |
-| `CLUSTER` | All processes on all machines sharing the file system | File systems that can coordinate machines |
+| `CLUSTER` | All processes on all machines sharing the file system | None in parley-files yet |
 
 An application that runs as several processes checks the scope when it starts:
 
@@ -283,9 +278,9 @@ operating system frees a dead process's locks at once; a process that is stopped
 until it runs again. File locks are unreliable on NFS and some other network file systems.
 
 **Adding locks to your implementation.** Nothing is required: the default methods give `PROCESS` locks. To do
-better, override `getLockScope()` and `tryLock(...)`, usually by passing a `LockBackend` that asks the rest of
-the world to `LockManager.get().tryAcquire(...)`. Then extend `AbstractLockTests` from the tests jar: it runs
-every case your scope promises, including a second JVM for `HOST` and `CLUSTER` (give it `workerSpec` and
+better, override `getLockScope()` and `tryLock(boolean)`, usually by passing a `LockBackend` that asks the rest
+of the world to `LockManager.get().tryAcquire(...)`. Then extend `AbstractLockTests` from the tests jar: it runs
+every case your scope promises, including a second JVM for `HOST` and up (give it `workerSpec` and
 `fromWorkerSpec` so the second JVM can find the same path).
 
 ## Writing your own implementation

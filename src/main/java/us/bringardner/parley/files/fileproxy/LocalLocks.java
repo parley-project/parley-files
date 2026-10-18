@@ -2,7 +2,6 @@ package us.bringardner.parley.files.fileproxy;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -20,17 +19,15 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import us.bringardner.parley.files.lock.LockBackend;
-import us.bringardner.parley.files.lock.LockMode;
 
 /**
  * Locks on the local file system that reach every process on the machine ({@code HOST} scope).
  * <p>
  * The operating system locks a real, open file, and the path being locked is often a directory or
  * doesn't exist yet. So each locked path gets a lock file in a lock directory, named by the
- * SHA-256 of the path's canonical form: {@code <hash>.lock} carries the OS lock, and
- * {@code <hash>.seq} holds the last fencing token handed out. Neither is ever deleted: they are
- * tiny, and deleting a lock file while another process opens it would let two processes lock two
- * different files.
+ * SHA-256 of the path's canonical form: {@code <hash>.lock} carries the OS lock. It is never
+ * deleted: it is empty, and deleting a lock file while another process opens it would let two
+ * processes lock two different files.
  * <p>
  * The lock directory is the first {@value FileProxyFactory#LOCK_DIRECTORY_NAME} directory found in
  * the locked path or above it. An application marks the root it serves by creating one there, and
@@ -43,13 +40,11 @@ import us.bringardner.parley.files.lock.LockMode;
  * lock directory only while nothing holds locks under it. Within one JVM, locks are keyed by the
  * locked path itself, so a changed lock directory can't let two holders in.
  * <p>
- * Java's file locks belong to the whole JVM, and asking twice for one file from the same JVM
- * throws {@code OverlappingFileLockException};
- * {@link us.bringardner.parley.files.lock.LockManager} sits in front, so only the first holder in
- * this JVM goes to the OS, and later SHARED holders share its OS lock. The OS frees a dead
- * process's locks at once. A lease is enforced by the holding process itself (it releases the OS
- * lock when the lease runs out), so a process that is stopped or frozen keeps its locks until it
- * runs again or dies. File locks are unreliable on NFS and some other network file systems.
+ * Java's file locks belong to the whole JVM, and so do these:
+ * {@link us.bringardner.parley.files.lock.LockManager} sits in front and refuses a second request
+ * for a path this JVM holds, so the OS is asked once per path. The OS frees a dead process's locks
+ * at once; a process that is stopped or frozen keeps them until it runs again or dies. File locks
+ * are unreliable on NFS and some other network file systems.
  * <p>
  * Lock files are opened without following symbolic links. Paths are hashed as Java's canonical
  * form spells them, so on a case-insensitive volume, {@code Foo} and {@code foo} that don't exist
@@ -151,107 +146,51 @@ final class LocalLocks {
 		}
 	}
 
-	/** Open a lock or token file for reading and writing, creating it, never through a link. */
+	/** Open a lock file for reading and writing, creating it, never through a link. */
 	private static FileChannel open(File f) throws IOException {
 		return FileChannel.open(f.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
 				StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
 	}
 
 	/**
-	 * The next token for a path: read, add one, write, all under an OS lock on the token file, so
-	 * tokens increase across processes and restarts. Never less than the clock in microseconds, so
-	 * even a lost or damaged token file can't make tokens go back (unless the clock does too).
-	 * The caller holds the path's LockManager entry, so no other thread of this JVM is here for the
-	 * same file.
-	 */
-	static long nextToken(File seqFile) throws IOException {
-		try (FileChannel ch = open(seqFile); FileLock ignored = ch.lock()) {
-			long last = 0;
-			if( ch.size() == Long.BYTES ) {
-				ByteBuffer buf = ByteBuffer.allocate(Long.BYTES);
-				while (buf.hasRemaining() && ch.read(buf, buf.position()) > 0) {
-					// read all 8 bytes
-				}
-				if( !buf.hasRemaining() ) {
-					buf.flip();
-					last = buf.getLong();
-				}
-			} else if( ch.size() != 0 ) {
-				LOG.warning("Damaged lock token file " + seqFile + " (" + ch.size() + " bytes); starting from the clock");
-			}
-			long next = Math.max(last + 1, System.currentTimeMillis() * 1000);
-			ByteBuffer out = ByteBuffer.allocate(Long.BYTES);
-			out.putLong(next).flip();
-			ch.truncate(0);
-			while (out.hasRemaining()) {
-				ch.write(out, out.position());
-			}
-			ch.force(false);
-			return next;
-		}
-	}
-
-	/**
-	 * The OS side of one locked path. LockManager calls it with the path's monitor held: once per
-	 * grant in this JVM. The first grant takes the OS lock; later SHARED grants share it; the last
-	 * release gives it back.
+	 * The OS side of one locked path. LockManager calls it at most once at a time per path, so this
+	 * JVM never asks the OS twice for one lock file.
 	 */
 	static final class Backend implements LockBackend {
 		private final File lockFile;
-		private final File seqFile;
 		private FileChannel channel;
 		private FileLock osLock;
-		private int holders;
 
-		Backend(File lockFile, File seqFile) {
+		Backend(File lockFile) {
 			this.lockFile = lockFile;
-			this.seqFile = seqFile;
 		}
 
 		@Override
-		public long acquire(LockMode mode) throws IOException {
-			if( holders == 0 ) {
-				FileChannel ch = open(lockFile);
-				FileLock l;
-				try {
-					l = ch.tryLock(0, Long.MAX_VALUE, mode == LockMode.SHARED);
-				} catch (OverlappingFileLockException sameFileElsewhere) {
-					// only if two locked paths share a lock file (a link into the lock directory):
-					// another holder in this JVM has it, so it is busy
-					ch.close();
-					return -1;
-				} catch (IOException | RuntimeException e) {
-					ch.close();
-					throw e;
-				}
-				if( l == null ) {
-					ch.close();
-					return -1;
-				}
-				channel = ch;
-				osLock = l;
-			}
-			long token;
+		public synchronized boolean acquire(boolean shared) throws IOException {
+			FileChannel ch = open(lockFile);
+			FileLock l;
 			try {
-				token = nextToken(seqFile);
+				l = ch.tryLock(0, Long.MAX_VALUE, shared);
+			} catch (OverlappingFileLockException sameFileElsewhere) {
+				// only if two locked paths share a lock file (a link into the lock directory):
+				// this JVM holds it under the other path, so it is busy
+				ch.close();
+				return false;
 			} catch (IOException | RuntimeException e) {
-				if( holders == 0 ) {
-					closeOsLock();
-				}
+				ch.close();
 				throw e;
 			}
-			holders++;
-			return token;
+			if( l == null ) {
+				ch.close();
+				return false;
+			}
+			channel = ch;
+			osLock = l;
+			return true;
 		}
 
 		@Override
-		public void release(LockMode mode) {
-			if( holders > 0 && --holders == 0 ) {
-				closeOsLock();
-			}
-		}
-
-		private void closeOsLock() {
+		public synchronized void release() {
 			try {
 				if( osLock != null ) {
 					osLock.release();

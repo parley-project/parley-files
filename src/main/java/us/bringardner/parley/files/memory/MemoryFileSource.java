@@ -48,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
-import java.time.Duration;
 
 
 import us.bringardner.parley.files.FileSource;
@@ -63,7 +62,6 @@ import us.bringardner.parley.files.ISeekableInputStream;
 import us.bringardner.parley.files.lock.FileSourceLock;
 import us.bringardner.parley.files.lock.LockBackend;
 import us.bringardner.parley.files.lock.LockManager;
-import us.bringardner.parley.files.lock.LockMode;
 
 
 /**
@@ -145,12 +143,12 @@ public class MemoryFileSource implements FileSource {
 	 * because an operation such as rename or delete touches several nodes.
 	 * (Nothing was synchronized, so concurrent use could corrupt the tree.)
 	 */
-	private Object lock() {
+	private Object treeLock() {
 		return theCreator != null ? theCreator : this;
 	}
 
 	MemoryFileSource getChildByName(String name) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource ret = kidsMap.get(name);
 			if( ret == null ) {
 				WeakReference<MemoryFileSource> ref = placeholders().get(name);
@@ -185,7 +183,7 @@ public class MemoryFileSource implements FileSource {
 
 	/** The child of this node with this name, made (as a lookup that doesn't exist) if it isn't there. */
 	MemoryFileSource childNamed(String childName) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource kid = getChildByName(childName);
 			if( kid == null ) {
 				kid = new MemoryFileSource(this, childName, theCreator);
@@ -211,7 +209,7 @@ public class MemoryFileSource implements FileSource {
 		if( theCreator == null || !theCreator.hasLinks || depth > 40 ) {
 			return this;
 		}
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource t = symlinkTarget;
 			if( t != null ) {
 				return t.resolve(depth+1);
@@ -233,8 +231,8 @@ public class MemoryFileSource implements FileSource {
 
 	/** Makes this a link to existing (see {@link MemoryFileSourceFactory#createLink}). */
 	void makeLinkTo(MemoryFileSource existing, boolean hard) throws IOException {
-		synchronized (lock()) {
-			if( existing.lock() != lock() ) {
+		synchronized (treeLock()) {
+			if( existing.treeLock() != treeLock() ) {
 				throw new IOException("Can't link to a file in another memory file system: " + existing.getAbsolutePath());
 			}
 			if( theCreator != null ) {
@@ -315,7 +313,7 @@ public class MemoryFileSource implements FileSource {
 	 * maps after its state changed, and propagate up the tree.
 	 */
 	void updateRetention() {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			if( parent == null ) {
 				return;
 			}
@@ -473,7 +471,7 @@ public class MemoryFileSource implements FileSource {
 	}
 
 	public boolean createNewFile() throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// Same contract as java.io.File.createNewFile(): false if it already
 			// exists, IOException if the parent directory doesn't exist.
 			if( isLinkEntry() ) {
@@ -504,7 +502,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#delete()
 	 */
 	public boolean delete() {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// Same contract as java.io.File.delete(): false if it doesn't exist or
 			// is a directory that isn't empty. (It used to always return true, never
 			// unlinked the node and happily "deleted" non-empty directories.)
@@ -554,7 +552,7 @@ public class MemoryFileSource implements FileSource {
 	 * canonical path its own location instead of its target's.)
 	 */
 	private String lexicalPath() {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			if( cananicalPath == null ) {
 				StringBuilder tmp = new StringBuilder();
 				if( parent != null ) {
@@ -685,7 +683,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#listFiles(us.bringardner.parley.files.FileSourceFilter)
 	 */
 	public FileSource[] listFiles(FileSourceFilter filter) throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// as java.io.File: null when this isn't a directory (missing, or a plain file)
 			if( !isDirectory() ) {
 				return null;
@@ -717,7 +715,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#mkdir()
 	 */
 	public boolean mkdir()  {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// as java.io.File: false if it already exists (this also reset an
 			// existing directory's owner permissions)
 			if( isLinkEntry() ) {
@@ -748,7 +746,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#mkdirs()
 	 */
 	public boolean mkdirs() throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// as java.io.File: true only if it was created (with any parents it needed); false when
 			// there is already a directory, or a file, at the path
 			if( exists() ) {
@@ -760,7 +758,7 @@ public class MemoryFileSource implements FileSource {
 
 	/** True if there is a directory at this path afterwards: it was there, or it and its parents were made. */
 	private boolean ensureDirectory() throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			if( isLinkEntry() ) {
 				return isDirectory();
 			}
@@ -786,7 +784,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#renameTo(us.bringardner.parley.files.FileSource)
 	 */
 	public boolean renameTo(FileSource dest) throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			boolean ret = false;
 			if( isLinkEntry() ) {
 				return renameLinkEntry(dest);
@@ -879,7 +877,7 @@ public class MemoryFileSource implements FileSource {
 		if( newFile == this || equals(newFile) ) {
 			return true;
 		}
-		if( newFile.lock() != lock() || newFile.isRoot || newFile.parent == null || newFile.exists()
+		if( newFile.treeLock() != treeLock() || newFile.isRoot || newFile.parent == null || newFile.exists()
 				|| newFile.isLinkEntry() || !newFile.parent.isDirectory() ) {
 			return false;
 		}
@@ -935,7 +933,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#getInputStream()
 	 */
 	public InputStream getInputStream() throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.getInputStream();
@@ -966,7 +964,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#getOutputStream()
 	 */
 	public OutputStream getOutputStream() throws FileNotFoundException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			checkParentIsDirectory();
 			MemoryFileSource r = resolve();
 			if( r != this ) {
@@ -983,7 +981,7 @@ public class MemoryFileSource implements FileSource {
 				@Override
 				public void close() throws IOException {
 					super.close();
-					synchronized (lock()) {
+					synchronized (treeLock()) {
 						data = super.toByteArray();
 					}
 				}
@@ -1011,7 +1009,7 @@ public class MemoryFileSource implements FileSource {
 			// as a FileOutputStream does: replace what is there
 			return getOutputStream();
 		}
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			checkParentIsDirectory();
 			MemoryFileSource r = resolve();
 			if( r != this ) {
@@ -1039,7 +1037,7 @@ public class MemoryFileSource implements FileSource {
 				public void close() throws IOException {
 					super.close();
 					byte [] tmp = super.toByteArray();
-					synchronized (lock()) {
+					synchronized (treeLock()) {
 						if( tmp.length>0) {
 							if( data.length == 0 ) {
 								data = tmp;
@@ -1124,13 +1122,13 @@ public class MemoryFileSource implements FileSource {
 
 
 	byte[] getData() {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			return data;
 		}
 	}
 
 	void setData(byte[] data) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			this.data = data;
 		}
 	}
@@ -1160,7 +1158,7 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#list()
 	 */
 	public String[] list() {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			// as java.io.File: null when this isn't a directory (missing, or a plain file)
 			if( !isDirectory() ) {
 				return null;
@@ -1269,7 +1267,7 @@ public class MemoryFileSource implements FileSource {
 	}
 
 	public InputStream getInputStream(long startingPos) throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.getInputStream(startingPos);
@@ -1344,7 +1342,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public ISeekableInputStream getSeekableInputStream() throws IOException {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.getSeekableInputStream();
@@ -1469,7 +1467,7 @@ public class MemoryFileSource implements FileSource {
 
 
 	public void addChild(MemoryFileSource file) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			addPlaceholder(file);
 			file.updateRetention();
 		}
@@ -1496,7 +1494,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean setExecutable(boolean b, boolean ownerOnly) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.setExecutable(b, ownerOnly);
@@ -1515,7 +1513,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean setReadable(boolean b, boolean ownerOnly) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.setReadable(b, ownerOnly);
@@ -1534,7 +1532,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean setWritable(boolean b, boolean ownerOnly) {
-		synchronized (lock()) {
+		synchronized (treeLock()) {
 			MemoryFileSource r = resolve();
 			if( r != this ) {
 				return r.setWritable(b, ownerOnly);
@@ -1661,10 +1659,10 @@ public class MemoryFileSource implements FileSource {
 	 * @since 1.1.0
 	 */
 	@Override
-	public FileSourceLock tryLock(LockMode mode, Duration lease) throws IOException {
+	public FileSourceLock tryLock(boolean shared) throws IOException {
 		return LockManager.get().tryAcquire(this,
 				"memory|" + ((MemoryFileSourceFactory) getFileSourceFactory()).lockId() + "|" + getCanonicalPath(),
-				mode, lease, LockBackend.inProcess());
+				shared, LockBackend.inProcess());
 	}
 
 }

@@ -3,18 +3,16 @@ package us.bringardner.parley.files.test;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.lock.FileSourceLock;
-import us.bringardner.parley.files.lock.LockMode;
 
 /**
  * The second JVM of {@link AbstractLockTests}' cross-process cases. It creates the test class
  * named on its command line, then reads commands from standard input and answers each with one
  * line starting with {@value #PREFIX} (anything else on standard output is ignored):
  * <ul>
- * <li>{@code lock <spec> X|S <leaseMs>}: try to lock; {@code GOT <token>} or {@code BUSY}</li>
+ * <li>{@code lock <spec> X|S}: try to lock, exclusive or shared; {@code GOT} or {@code BUSY}</li>
  * <li>{@code release}: release the last lock taken; {@code OK}</li>
  * <li>{@code count <spec> <n>}: add 1 to the counter file n times, each under its lock; {@code DONE}</li>
  * <li>{@code exit}</li>
@@ -40,22 +38,22 @@ public final class LockWorker {
 				switch (w[0]) {
 				case "lock": {
 					FileSource f = test.fromWorkerSpec(w[1]);
-					LockMode mode = "S".equals(w[2]) ? LockMode.SHARED : LockMode.EXCLUSIVE;
-					FileSourceLock l = f.tryLock(mode, Duration.ofMillis(Long.parseLong(w[3])));
+					if( last != null ) {
+						last.release();
+						last = null;
+					}
+					FileSourceLock l = f.tryLock("S".equals(w[2]));
 					if( l == null ) {
 						reply("BUSY");
 					} else {
-						if( last != null ) {
-							last.close();
-						}
 						last = l;
-						reply("GOT " + l.getToken());
+						reply("GOT");
 					}
 					break;
 				}
 				case "release":
 					if( last != null ) {
-						last.close();
+						last.release();
 						last = null;
 					}
 					reply("OK");

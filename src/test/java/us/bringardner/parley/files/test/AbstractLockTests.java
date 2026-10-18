@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -15,11 +16,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.nio.channels.FileLockInterruptionException;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -33,32 +37,23 @@ import org.junit.jupiter.api.Test;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.lock.FileSourceLock;
-import us.bringardner.parley.files.lock.LockLostException;
-import us.bringardner.parley.files.lock.LockMode;
-import us.bringardner.parley.files.lock.LockRenewer;
 import us.bringardner.parley.files.lock.LockScope;
-import us.bringardner.parley.files.lock.LockTimeoutException;
 
 /**
- * The lock contract, for every file system. A file system adds a small subclass (as it does for
- * {@link FileLikeBehaviorTests}) and the suite runs every case the file system's
- * {@link FileSource#getLockScope()} promises, so a file system that claims more than it delivers
- * fails.
+ * The lock contract, for every file system: the rules of NIO file locks, on FileSource paths. A file
+ * system adds a small subclass (as it does for {@link FileLikeBehaviorTests}) and the suite runs every
+ * case the file system's {@link FileSource#getLockScope()} promises, so a file system that claims
+ * more than it delivers fails.
  * <ul>
- * <li>Every scope from {@code PROCESS} up: cases 1 to 9 and the renewer, with threads in this JVM.</li>
- * <li>{@code HOST} and {@code CLUSTER}: cases 10 to 13 run a second JVM ({@link LockWorker}) on the
- * same file system. They need {@link #workerSpec(FileSource)} and {@link #fromWorkerSpec(String)};
- * a subclass that doesn't provide them skips them.</li>
- * <li>{@link FileSource#supportsFencedWrites()} true: case 14 is left to the file system's own tests,
- * because how a write is tied to a lock is particular to each one.</li>
+ * <li>Every scope from {@code PROCESS} up: the in-JVM cases (one hold per JVM, release, paths).</li>
+ * <li>{@code HOST} and up: the cross-process cases run a second JVM ({@link LockWorker}) on the same
+ * file system. They need {@link #workerSpec(FileSource)} and {@link #fromWorkerSpec(String)}; a
+ * subclass that doesn't provide them skips them.</li>
  * </ul>
  * The subclass needs a public no-argument constructor: the worker JVM creates one to call
  * {@link #fromWorkerSpec(String)}.
  */
 public abstract class AbstractLockTests {
-
-	/** Short enough to keep the suite quick, long enough for slow machines. */
-	protected static final Duration LONG = Duration.ofSeconds(30);
 
 	/** The directory this test works in, from {@link #newLockDirectory()}. */
 	protected FileSource dir;
@@ -102,7 +97,7 @@ public abstract class AbstractLockTests {
 	@AfterEach
 	public void releaseEverything() throws IOException {
 		for (FileSourceLock l : held) {
-			l.close();
+			l.release();
 		}
 		held.clear();
 		for (Worker w : workers) {
@@ -125,11 +120,11 @@ public abstract class AbstractLockTests {
 	}
 
 	private FileSourceLock tryX(FileSource f) throws IOException {
-		return keep(f.tryLock(LockMode.EXCLUSIVE, LONG));
+		return keep(f.tryLock());
 	}
 
 	private FileSourceLock tryS(FileSource f) throws IOException {
-		return keep(f.tryLock(LockMode.SHARED, LONG));
+		return keep(f.tryLock(true));
 	}
 
 	private boolean scopeAtLeast(LockScope scope) {
@@ -153,12 +148,10 @@ public abstract class AbstractLockTests {
 		}
 	}
 
-	/** One read-add-write of a counter under an EXCLUSIVE lock on the counter itself. */
-	protected static void increment(FileSource counter) throws IOException, InterruptedException {
-		try (FileSourceLock l = counter.lock(LockMode.EXCLUSIVE, LONG, LONG)) {
-			int v = readCount(counter);
-			l.checkValid();
-			writeCount(counter, v + 1);
+	/** One read-add-write of a counter under an exclusive lock on the counter itself. */
+	protected static void increment(FileSource counter) throws IOException {
+		try (FileSourceLock l = counter.lock()) {
+			writeCount(counter, readCount(counter) + 1);
 		}
 	}
 
@@ -169,52 +162,79 @@ public abstract class AbstractLockTests {
 		assertTrue(scopeAtLeast(LockScope.PROCESS), "a scope of NONE has nothing to test");
 	}
 
-	/** 1. Exclusive excludes exclusive; shared admits shared; each excludes the other. */
+	/** 1. The lock says what it is. */
 	@Test
-	public void modesExcludeEachOther() throws IOException {
-		FileSource f = path("modes");
+	public void lockDescribesItself() throws IOException {
+		FileSource f = path("describe");
 		FileSourceLock x = tryX(f);
 		assertNotNull(x);
-		assertEquals(LockMode.EXCLUSIVE, x.getMode());
-		assertNull(tryX(f), "two EXCLUSIVE holders");
-		assertNull(tryS(f), "SHARED while EXCLUSIVE is held");
-		x.close();
-
-		FileSourceLock s1 = tryS(f);
-		FileSourceLock s2 = tryS(f);
-		assertNotNull(s1);
-		assertNotNull(s2, "SHARED holders share");
-		assertNull(tryX(f), "EXCLUSIVE while SHARED is held");
-		s1.close();
-		assertNull(tryX(f), "EXCLUSIVE while one SHARED is still held");
-		s2.close();
-		assertNotNull(tryX(f), "free again");
+		assertFalse(x.isShared());
+		assertTrue(x.isValid());
+		assertSame(f, x.source());
+		x.release();
+		FileSourceLock s = tryS(f);
+		assertNotNull(s);
+		assertTrue(s.isShared());
+		s.close();
+		assertFalse(s.isValid(), "close() releases");
+		try (FileSourceLock l = f.lock(true)) {
+			assertTrue(l.isShared());
+		}
+		try (FileSourceLock l = f.lock()) {
+			assertFalse(l.isShared(), "lock() is exclusive");
+		}
 	}
 
-	/** 1b. Two FileSource objects for one path see the same lock. */
+	/** 2. A JVM holds a path once: asking again throws, in either mode, from tryLock and lock. */
+	@Test
+	public void secondRequestInThisJvmThrows() throws IOException {
+		FileSource f = path("twice");
+		assertNotNull(tryX(f));
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "exclusive again");
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "shared while exclusive");
+		assertThrows(OverlappingFileLockException.class, () -> f.lock(), "lock() doesn't wait for this JVM");
+		held.remove(0).release();
+
+		assertNotNull(tryS(f));
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "shared twice in one JVM, as in NIO");
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "exclusive while shared");
+	}
+
+	/** 2b. Two FileSource objects for one path are one path to the lock. */
 	@Test
 	public void sameFileDifferentObjects() throws IOException {
 		assertNotNull(tryX(path("same")));
-		assertNull(tryX(dir.getChild("same")), "a second object for the same path");
+		assertThrows(OverlappingFileLockException.class, () -> dir.getChild("same").tryLock());
 	}
 
-	/** 2. Not reentrant: asking again for a held path is refused. */
+	/** 2c. The lock is the JVM's, not the thread's: another thread is refused the same way. */
 	@Test
-	public void notReentrant() throws IOException {
-		FileSource f = path("reentrant");
+	public void otherThreadsAreRefusedNotQueued() throws Exception {
+		FileSource f = path("threads");
 		assertNotNull(tryX(f));
-		assertNull(tryX(f), "the same thread asking again");
+		AtomicReference<Throwable> seen = new AtomicReference<>();
+		Thread t = new Thread(() -> {
+			try {
+				f.lock().release();
+			} catch (Throwable e) {
+				seen.set(e);
+			}
+		});
+		t.start();
+		t.join(10_000);
+		assertFalse(t.isAlive(), "lock() didn't wait for this JVM's holder");
+		assertTrue(seen.get() instanceof OverlappingFileLockException, "got " + seen.get());
 	}
 
-	/** 3. Close releases; closing twice is harmless; another thread may close. */
+	/** 3. Release frees the path; releasing twice is harmless; any thread may release. */
 	@Test
-	public void closeReleasesFromAnyThread() throws Exception {
-		FileSource f = path("close");
-		FileSourceLock x = f.tryLock(LockMode.EXCLUSIVE, LONG);
+	public void releaseFromAnyThread() throws Exception {
+		FileSource f = path("release");
+		FileSourceLock x = f.tryLock();
 		assertNotNull(x);
 		Thread t = new Thread(() -> {
 			try {
-				x.close();
+				x.release();
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -222,83 +242,13 @@ public abstract class AbstractLockTests {
 		t.start();
 		t.join(10_000);
 		assertFalse(x.isValid());
+		x.release();
 		x.close();
-		assertThrows(LockLostException.class, x::checkValid);
 		assertNotNull(tryX(f), "released by the other thread");
+		assertFalse(x.isValid(), "an old lock never comes back");
 	}
 
-	/** 4. A lease runs out: the path can be taken, and the old lock knows it lost it. */
-	@Test
-	public void leaseExpires() throws Exception {
-		FileSource f = path("expires");
-		FileSourceLock x = f.tryLock(LockMode.EXCLUSIVE, Duration.ofMillis(300));
-		assertNotNull(x);
-		assertTrue(x.isValid());
-		Thread.sleep(700);
-		assertFalse(x.isValid(), "past its lease");
-		assertThrows(LockLostException.class, x::checkValid);
-		assertNotNull(tryX(f), "another caller gets the path");
-		assertFalse(x.renew(LONG), "a lost lease is never revived");
-		x.close();
-		assertNull(tryX(f), "closing the lost lock doesn't release the new holder's");
-	}
-
-	/** 5. renew() before expiry keeps the path past the original expiry. */
-	@Test
-	public void renewExtends() throws Exception {
-		FileSource f = path("renew");
-		FileSourceLock x = keep(f.tryLock(LockMode.EXCLUSIVE, Duration.ofMillis(1500)));
-		assertNotNull(x);
-		Thread.sleep(300);
-		assertTrue(x.renew(Duration.ofSeconds(10)));
-		Thread.sleep(1700);
-		assertTrue(x.isValid(), "renewed past the first expiry");
-		assertNull(tryX(f));
-		assertTrue(x.getExpiry().isAfter(java.time.Instant.now()));
-	}
-
-	/** 5b. The renewer keeps a short lease alive, and stops when closed. */
-	@Test
-	public void renewerKeepsLockAlive() throws Exception {
-		FileSource f = path("renewer");
-		Duration lease = Duration.ofMillis(600);
-		FileSourceLock x = keep(f.tryLock(LockMode.EXCLUSIVE, lease));
-		assertNotNull(x);
-		try (LockRenewer r = LockRenewer.start(x, lease)) {
-			Thread.sleep(2000);
-			assertTrue(x.isValid(), "kept alive for several leases");
-			assertFalse(r.isLost());
-		}
-		long deadline = System.nanoTime() + 5_000_000_000L;
-		while (x.isValid() && System.nanoTime() < deadline) {
-			Thread.sleep(50);
-		}
-		assertFalse(x.isValid(), "expires once the renewer stops");
-	}
-
-	/** 5c. A renewer refuses a lease too short to renew in time. */
-	@Test
-	public void renewerRefusesTinyLease() throws IOException {
-		FileSourceLock x = keep(path("tiny").tryLock(LockMode.EXCLUSIVE, LONG));
-		assertThrows(IllegalArgumentException.class, () -> LockRenewer.start(x, Duration.ofMillis(10)));
-	}
-
-	/** 6. Tokens for one path strictly increase. */
-	@Test
-	public void tokensIncrease() throws IOException {
-		FileSource f = path("tokens");
-		long last = Long.MIN_VALUE;
-		for (int i = 0; i < 20; i++) {
-			LockMode mode = i % 3 == 0 ? LockMode.SHARED : LockMode.EXCLUSIVE;
-			try (FileSourceLock l = f.tryLock(mode, LONG)) {
-				assertNotNull(l);
-				assertTrue(l.getToken() > last, "token " + l.getToken() + " after " + last);
-				last = l.getToken();
-			}
-		}
-	}
-
-	/** 7. A missing path can be locked; locking a directory doesn't lock what's in it. */
+	/** 4. A missing path can be locked; locking a directory doesn't lock what's in it. */
 	@Test
 	public void noHierarchy() throws IOException {
 		FileSource missing = path("not-there-yet");
@@ -313,98 +263,34 @@ public abstract class AbstractLockTests {
 		assertNotNull(tryX(dir), "the parent too");
 	}
 
-	/** 8. lock(..., wait) times out while held, and succeeds when the holder releases in time. */
+	/** 5. Many paths, many threads: each thread its own path, nothing refused, all released. */
 	@Test
-	public void lockWaits() throws Exception {
-		FileSource f = path("wait");
-		FileSourceLock x = f.tryLock(LockMode.EXCLUSIVE, LONG);
-		assertNotNull(x);
-		long start = System.nanoTime();
-		assertThrows(LockTimeoutException.class, () -> f.lock(LockMode.EXCLUSIVE, LONG, Duration.ofMillis(300)));
-		assertTrue(System.nanoTime() - start >= 250_000_000L, "waited about as long as asked");
-
-		ExecutorService ex = Executors.newSingleThreadExecutor();
-		try {
-			Future<FileSourceLock> waiting = ex.submit(() -> f.lock(LockMode.EXCLUSIVE, LONG, Duration.ofSeconds(10)));
-			Thread.sleep(300);
-			assertFalse(waiting.isDone());
-			x.close();
-			assertNotNull(keep(waiting.get(10, TimeUnit.SECONDS)), "got it once released");
-		} finally {
-			ex.shutdownNow();
-		}
-	}
-
-	/** 8b. Bad arguments are refused. */
-	@Test
-	public void badArguments() throws IOException {
-		FileSource f = path("args");
-		assertThrows(IllegalArgumentException.class, () -> f.tryLock(LockMode.EXCLUSIVE, Duration.ZERO));
-		assertThrows(IllegalArgumentException.class, () -> f.tryLock(LockMode.EXCLUSIVE, Duration.ofSeconds(-1)));
-		assertThrows(NullPointerException.class, () -> f.tryLock(null, LONG));
-		assertNotNull(tryX(f), "refused requests hold nothing");
-	}
-
-	/** 9. No lost updates: 8 threads each add 1 to a counter 200 times under the lock. */
-	@Test
-	public void noLostUpdatesAcrossThreads() throws Exception {
-		FileSource counter = path("counter");
-		writeCount(counter, 0);
+	public void separatePathsDontContend() throws Exception {
 		int threads = 8;
-		int each = 200;
 		ExecutorService ex = Executors.newFixedThreadPool(threads);
-		AtomicReference<Throwable> failure = new AtomicReference<>();
 		try {
 			List<Future<?>> all = new ArrayList<>();
 			for (int t = 0; t < threads; t++) {
+				FileSource f = path("own" + t);
 				all.add(ex.submit(() -> {
-					try {
-						for (int i = 0; i < each; i++) {
-							increment(counter);
+					for (int i = 0; i < 100; i++) {
+						try (FileSourceLock l = f.lock(i % 2 == 0)) {
+							assertTrue(l.isValid());
 						}
-					} catch (Throwable e) {
-						failure.compareAndSet(null, e);
 					}
+					return null;
 				}));
 			}
 			for (Future<?> fu : all) {
-				fu.get(5, TimeUnit.MINUTES);
+				fu.get(2, TimeUnit.MINUTES);
 			}
 		} finally {
 			ex.shutdownNow();
 		}
-		if( failure.get() != null ) {
-			throw new AssertionError("an increment failed", failure.get());
-		}
-		assertEquals(threads * each, readCount(counter));
+		assertNotNull(tryX(path("own0")), "all released");
 	}
 
-	/** 9b. Writes under a lock: allowed while it is held; refused, and nothing committed, once it is lost. */
-	@Test
-	public void fencedWrites() throws Exception {
-		FileSource target = path("fenced.txt");
-		FileSource tmp = path("fenced.tmp");
-		FileSourceLock lock = dir.tryLock(LockMode.EXCLUSIVE, Duration.ofMillis(800));
-		assertNotNull(lock);
-		try (OutputStream out = tmp.getOutputStream(lock)) {
-			out.write("one".getBytes(StandardCharsets.UTF_8));
-		}
-		assertTrue(tmp.renameTo(target, lock), "committed under a held lock");
-
-		// the lease runs out while a write is in progress: closing says so
-		OutputStream late = tmp.getOutputStream(lock);
-		late.write("two".getBytes(StandardCharsets.UTF_8));
-		Thread.sleep(1200);
-		assertThrows(LockLostException.class, late::close);
-		assertThrows(LockLostException.class, () -> tmp.renameTo(target, lock));
-		assertThrows(LockLostException.class, () -> target.delete(lock));
-		assertThrows(LockLostException.class, () -> tmp.getOutputStream(lock));
-		assertTrue(target.exists(), "nothing deleted under a lost lock");
-		assertEquals("one", new String(target.getInputStream().readAllBytes(), StandardCharsets.UTF_8),
-				"nothing renamed over the committed file under a lost lock");
-	}
-
-	// ------------------------------------------------------------------ HOST and CLUSTER
+	// ------------------------------------------------------------------ HOST and up
 
 	private Worker worker() throws Exception {
 		assumeTrue(scopeAtLeast(LockScope.HOST), "locks reach only " + dir.getLockScope());
@@ -414,61 +300,90 @@ public abstract class AbstractLockTests {
 		return w;
 	}
 
-	/** 10. A lock held in one process excludes the other, both ways. */
+	/** 10. Exclusive excludes everything, shared admits shared, across processes, both ways. */
 	@Test
-	public void crossProcessExclusion() throws Exception {
+	public void crossProcessModes() throws Exception {
 		Worker w = worker();
 		FileSource f = path("xproc");
 		String spec = workerSpec(f);
 
-		assertTrue(w.ask("lock " + spec + " X 30000").startsWith("GOT"));
+		assertEquals("GOT", w.ask("lock " + spec + " X"));
 		assertNull(tryX(f), "held by the other process");
-		assertNull(tryS(f), "SHARED while the other process holds EXCLUSIVE");
+		assertNull(tryS(f), "shared while the other process holds exclusive");
 		assertEquals("OK", w.ask("release"));
 		assertNotNull(tryX(f), "released by the other process");
-		assertEquals("BUSY", w.ask("lock " + spec + " X 30000"), "held here");
-		held.get(held.size() - 1).close();
+		assertEquals("BUSY", w.ask("lock " + spec + " X"), "held here");
+		assertEquals("BUSY", w.ask("lock " + spec + " S"), "shared while held exclusive here");
+		held.remove(held.size() - 1).release();
 
-		assertTrue(w.ask("lock " + spec + " S 30000").startsWith("GOT"));
-		assertNotNull(tryS(f), "SHARED in both processes");
-		assertNull(tryX(f), "EXCLUSIVE while the other process holds SHARED");
+		assertEquals("GOT", w.ask("lock " + spec + " S"));
+		FileSourceLock s = tryS(f);
+		assertNotNull(s, "shared in both processes");
+		s.release();
+		held.remove(s);
+		assertNull(tryX(f), "exclusive while the other process holds shared");
 	}
 
-	/** 11. Killing the holder frees the path: at once for HOST, when the lease ends for CLUSTER. */
+	/** 11. lock() waits for another process, and gets the path once it is released. */
+	@Test
+	public void lockWaitsForAnotherProcess() throws Exception {
+		Worker w = worker();
+		FileSource f = path("xwait");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			Future<FileSourceLock> waiting = ex.submit(() -> f.lock());
+			Thread.sleep(300);
+			assertFalse(waiting.isDone(), "waits while the other process holds it");
+			assertEquals("OK", w.ask("release"));
+			assertNotNull(keep(waiting.get(10, TimeUnit.SECONDS)), "got it once released");
+		} finally {
+			ex.shutdownNow();
+		}
+	}
+
+	/** 11b. Interrupting a waiting lock() throws FileLockInterruptionException and holds nothing. */
+	@Test
+	public void waitingLockCanBeInterrupted() throws Exception {
+		Worker w = worker();
+		FileSource f = path("xinterrupt");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			Future<Boolean> waiting = ex.submit(() -> {
+				try {
+					f.lock().release();
+					return false;
+				} catch (FileLockInterruptionException e) {
+					return Thread.currentThread().isInterrupted();
+				}
+			});
+			Thread.sleep(300);
+			waiting.cancel(true);
+			ex.shutdown();
+			assertTrue(ex.awaitTermination(10, TimeUnit.SECONDS), "the waiter stopped");
+		} finally {
+			ex.shutdownNow();
+		}
+		assertEquals("OK", w.ask("release"));
+		assertNotNull(tryX(f), "the interrupted request holds nothing");
+	}
+
+	/** 12. Killing the holder frees the path at once. */
 	@Test
 	public void deadHolderFreesPath() throws Exception {
 		Worker w = worker();
 		FileSource f = path("killed");
-		long leaseMs = 2000;
-		assertTrue(w.ask("lock " + workerSpec(f) + " X " + leaseMs).startsWith("GOT"));
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
 		assertNull(tryX(f));
 		w.kill();
-		long wait = dir.getLockScope() == LockScope.HOST ? 2000 : leaseMs + 5000;
-		assertNotNull(keep(f.lock(LockMode.EXCLUSIVE, LONG, Duration.ofMillis(wait))), "freed after the holder died");
-	}
-
-	/** 12. Tokens increase across processes. */
-	@Test
-	public void tokensIncreaseAcrossProcesses() throws Exception {
-		Worker w = worker();
-		FileSource f = path("xtokens");
-		String spec = workerSpec(f);
-		long last = Long.MIN_VALUE;
-		for (int i = 0; i < 6; i++) {
-			long token;
-			if( i % 2 == 0 ) {
-				String r = w.ask("lock " + spec + " X 30000");
-				assertTrue(r.startsWith("GOT"), r);
-				token = Long.parseLong(r.substring(4).trim());
-				assertEquals("OK", w.ask("release"));
-			} else {
-				try (FileSourceLock l = f.tryLock(LockMode.EXCLUSIVE, LONG)) {
-					assertNotNull(l);
-					token = l.getToken();
-				}
-			}
-			assertTrue(token > last, "token " + token + " after " + last);
-			last = token;
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			assertNotNull(keep(ex.submit(() -> f.lock()).get(10, TimeUnit.SECONDS)), "freed when the holder died");
+		} catch (ExecutionException e) {
+			throw new AssertionError(e.getCause());
+		} finally {
+			ex.shutdownNow();
 		}
 	}
 
@@ -485,35 +400,6 @@ public abstract class AbstractLockTests {
 		}
 		assertEquals("DONE", w.reply(Duration.ofMinutes(5)));
 		assertEquals(2 * each, readCount(counter));
-	}
-
-	/** 10b. Releasing one of two SHARED holders here still keeps the other process out. */
-	@Test
-	public void partialSharedReleaseAcrossProcesses() throws Exception {
-		Worker w = worker();
-		FileSource f = path("xshared");
-		FileSourceLock s1 = tryS(f);
-		FileSourceLock s2 = tryS(f);
-		assertNotNull(s1);
-		assertNotNull(s2);
-		assertEquals("BUSY", w.ask("lock " + workerSpec(f) + " X 30000"));
-		s1.close();
-		assertEquals("BUSY", w.ask("lock " + workerSpec(f) + " X 30000"), "one SHARED holder is left");
-		s2.close();
-		assertTrue(w.ask("lock " + workerSpec(f) + " X 30000").startsWith("GOT"), "both released");
-	}
-
-	/** 11b. A lease that runs out here, never closed, frees the path for the other process. */
-	@Test
-	public void expiryHereFreesPathThere() throws Exception {
-		Worker w = worker();
-		FileSource f = path("xexpire");
-		FileSourceLock x = f.tryLock(LockMode.EXCLUSIVE, Duration.ofMillis(400));
-		assertNotNull(x);
-		assertEquals("BUSY", w.ask("lock " + workerSpec(f) + " X 30000"));
-		Thread.sleep(1200);
-		assertTrue(w.ask("lock " + workerSpec(f) + " X 30000").startsWith("GOT"), "freed when the lease ran out");
-		assertFalse(x.isValid());
 	}
 
 	// ------------------------------------------------------------------ the worker JVM

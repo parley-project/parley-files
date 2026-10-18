@@ -7,8 +7,8 @@ package us.bringardner.parley.files.lock;
 public enum LockScope {
 
 	/**
-	 * No locking. A file system that reports NONE must also override {@code tryLock} to throw
-	 * {@link UnsupportedOperationException}; the defaults give PROCESS locks.
+	 * No locking. A file system that reports NONE must also override {@code tryLock(boolean)} to
+	 * throw {@link UnsupportedOperationException}; the defaults give PROCESS locks.
 	 */
 	NONE,
 
@@ -18,6 +18,6 @@ public enum LockScope {
 	/** All processes on this machine that use the same lock directory. */
 	HOST,
 
-	/** All processes on all machines that share the file system. */
+	/** All processes on all machines that share the file system (no file system in parley-files offers this). */
 	CLUSTER
 }
