@@ -269,7 +269,10 @@ final class FileSourceFileChannel extends FileChannel {
 			}
 			buf.flip();
 			while (buf.hasRemaining()) {
-				target.write(buf);
+				if( target.write(buf) == 0 ) {
+					// a non-blocking target that takes nothing now: what was sent, as NIO's transferTo does
+					return done + buf.position();
+				}
 			}
 			done += n;
 		}

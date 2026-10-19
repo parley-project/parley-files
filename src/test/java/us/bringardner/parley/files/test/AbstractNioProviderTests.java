@@ -101,6 +101,51 @@ public abstract class AbstractNioProviderTests extends FileSourceTestSupport {
 		});
 	}
 
+	/**
+	 * transferTo a target that stops taking bytes (a full non-blocking socket, say): it returns what
+	 * was sent instead of trying again for ever, as NIO's does.
+	 */
+	@Test
+	public void transferToStopsWhenTheTargetTakesNothing() throws Exception {
+		Path dir = nioDir("transferTo");
+		Files.createDirectories(dir);
+		Path f = dir.resolve("data");
+		byte[] data = new byte[100];
+		for (int i = 0; i < data.length; i++) {
+			data[i] = (byte) i;
+		}
+		Files.write(f, data);
+		java.io.ByteArrayOutputStream got = new java.io.ByteArrayOutputStream();
+		java.nio.channels.WritableByteChannel takesTen = new java.nio.channels.WritableByteChannel() {
+			@Override
+			public int write(java.nio.ByteBuffer src) {
+				int n = Math.min(src.remaining(), 10 - got.size());
+				for (int i = 0; i < n; i++) {
+					got.write(src.get());
+				}
+				return n;
+			}
+
+			@Override
+			public boolean isOpen() {
+				return true;
+			}
+
+			@Override
+			public void close() {
+			}
+		};
+		try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(f, java.nio.file.StandardOpenOption.READ)) {
+			long sent = org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(10),
+					() -> ch.transferTo(0, data.length, takesTen), "returns instead of spinning");
+			assertEquals(10, sent, "what the target took");
+			assertEquals(10, got.size());
+			assertTrue(Arrays.equals(Arrays.copyOf(data, 10), got.toByteArray()));
+		} finally {
+			deleteIfExists(dir);
+		}
+	}
+
 	@Test
 	public void testFileAttributes2() throws Exception {
 		Path dir = nioDir("attributes2");
