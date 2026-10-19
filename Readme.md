@@ -270,9 +270,12 @@ try (FileChannel ch = FileChannel.open(file.toPath(), StandardOpenOption.READ, S
 
 NIO's rules hold (a shared lock needs a readable channel and an exclusive one a writable channel; closing the
 channel releases its locks). For a local file the channel's reading and writing are a real JDK `FileChannel` on the
-file, so `map()` gives a real memory map and `force()` syncs to the disk; elsewhere `map()` throws
-`UnsupportedOperationException` (a mapped buffer can only come from the JDK's own files), `force()` makes the data
-as durable as the file system can (see `Syncable` below), and what a channel can do
+file, so `map()` gives a real memory map and `force()` syncs to the disk. Elsewhere a mapped buffer can't come from
+the file itself (only the JDK makes them, from its own files), so `map()` in `READ_ONLY` and `PRIVATE` modes maps a
+local copy of the region, read when it is mapped (exactly what those modes promise, at the cost of reading the
+region; later changes to the file aren't seen), and `READ_WRITE` throws `UnsupportedOperationException`, since a
+copy can't send its changes back. `force()` makes the data as durable as the file system can (see `Syncable`
+below), and what a channel can do
 depends on the file system (over FTP, which has no random access, open it for reading or with `APPEND`).
 
 How far the locks reach is `getLockScope()`:

@@ -22,7 +22,8 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   whose `lock()` and `tryLock()` are the FileSource's locks, as `FileLock`s, so NIO locking code runs
   unchanged, regions included; closing the channel releases its locks. For a local file the channel's
   I/O is a real JDK `FileChannel`, so `map()` is a real memory map and `force()` syncs to the disk;
-  elsewhere `map()` throws `UnsupportedOperationException` and `force()` calls `Syncable.sync()`.
+  elsewhere `map()` maps a local copy of the region in `READ_ONLY` and `PRIVATE` modes (`READ_WRITE`
+  throws `UnsupportedOperationException`: a copy can't write back), and `force()` calls `Syncable.sync()`.
 - **`Syncable`**: a stream that can make its writes durable (`sync()`: flush, then as `fsync`).
   `IRandomAccessStream` is Syncable (by default it does nothing more), and so are the local random access
   stream (it syncs the file) and the memory file system's (it saves); `IRandomAccessIoController.sync()`

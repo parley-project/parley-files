@@ -34,8 +34,11 @@ import us.bringardner.parley.files.lock.FileSourceLock;
  * <p>
  * Where it differs from a local FileChannel:
  * <ul>
- * <li>{@link #map} works for local files only (a mapped buffer can only come from the JDK's own
- * files); elsewhere it throws {@link UnsupportedOperationException}.</li>
+ * <li>{@link #map} is a real memory map for a local file. Elsewhere (a mapped buffer can only come
+ * from the JDK's own files) {@code READ_ONLY} and {@code PRIVATE} map a local copy of the region,
+ * which is what those modes promise: a {@code READ_ONLY} map never writes, and a {@code PRIVATE}
+ * one keeps its changes to itself. {@code READ_WRITE} throws {@link UnsupportedOperationException}:
+ * a copy can't send its changes back as a real map does.</li>
  * <li>{@link #force} sends what is held and makes it as durable as the file system can (see
  * {@link us.bringardner.parley.files.Syncable}): on the disk for a local file, committed for a
  * database, synced by an SFTP server that can, only sent over FTP.</li>
@@ -292,18 +295,75 @@ final class FileSourceFileChannel extends FileChannel {
 	}
 
 	/**
-	 * A real memory map, for a local file. Other file systems can't map: a mapped buffer can only
-	 * come from the JDK's own files.
-	 * @throws UnsupportedOperationException if the file isn't local
+	 * Map a region of the file into memory. For a local file it is a real map, in every mode. On
+	 * other file systems a mapped buffer can't come from the file itself (only the JDK makes them,
+	 * from its own files), so {@code READ_ONLY} and {@code PRIVATE} map a copy of the region, read
+	 * into a temporary local file now: exactly what those modes promise, at the cost of reading the
+	 * region. Later changes to the file aren't seen by the map (a real map may see them).
+	 * @throws UnsupportedOperationException for {@code READ_WRITE} on a file that isn't local: a
+	 *         copy can't send its changes back as a real map does
 	 */
 	@Override
 	public MappedByteBuffer map(MapMode mode, long position, long size) throws IOException {
 		ensureOpen();
-		if( local == null ) {
-			throw new UnsupportedOperationException("Only a local file can be memory-mapped; "
-					+ file.getAbsolutePath() + " is on " + file.getFileSourceFactory().getTypeId());
+		if( local != null ) {
+			return local.map(mode, position, size);
 		}
-		return local.map(mode, position, size);
+		java.util.Objects.requireNonNull(mode, "mode");
+		if( position < 0 ) {
+			throw new IllegalArgumentException("negative position " + position);
+		}
+		if( size < 0 || size > Integer.MAX_VALUE || position + size < 0 ) {
+			throw new IllegalArgumentException("Bad map size " + size + " at position " + position);
+		}
+		if( mode == MapMode.READ_WRITE ) {
+			throw new UnsupportedOperationException("READ_WRITE needs a local file: a map of " + file.getAbsolutePath()
+					+ " (on " + file.getFileSourceFactory().getTypeId() + ") would be a copy, which can't send its changes back."
+					+ " READ_ONLY and PRIVATE work");
+		}
+		if( mode != MapMode.READ_ONLY && mode != MapMode.PRIVATE ) {
+			throw new UnsupportedOperationException("Map mode " + mode);
+		}
+		if( !readable ) {
+			throw new NonReadableChannelException();
+		}
+		if( mode == MapMode.PRIVATE && !writable ) {
+			throw new NonWritableChannelException();
+		}
+		return mapCopy(mode, position, (int) size);
+	}
+
+	/** Read the region into a temporary local file and map that; the file goes as soon as it is mapped. */
+	private MappedByteBuffer mapCopy(MapMode mode, long position, int size) throws IOException {
+		java.nio.file.Path tmp = java.nio.file.Files.createTempFile("parley-map-", ".tmp");
+		try (FileChannel copy = FileChannel.open(tmp, java.nio.file.StandardOpenOption.READ, java.nio.file.StandardOpenOption.WRITE)) {
+			ByteBuffer buf = ByteBuffer.allocate(Math.max(1, Math.min(TRANSFER_BUFFER, size)));
+			long done = 0;
+			while (done < size) {
+				buf.clear();
+				buf.limit((int) Math.min(buf.capacity(), size - done));
+				int n = read(buf, position + done);
+				if( n <= 0 ) {
+					break; // past the end of the file: the rest of the map is zeros
+				}
+				buf.flip();
+				while (buf.hasRemaining()) {
+					done += copy.write(buf, done);
+				}
+			}
+			if( size > 0 && copy.size() < size ) {
+				copy.write(ByteBuffer.wrap(new byte[1]), size - 1L); // zeros to the end
+			}
+			return copy.map(mode, 0, size);
+		} finally {
+			try {
+				// the map stays valid without the file (where the system can't delete a mapped
+				// file, it goes when the JVM ends)
+				java.nio.file.Files.deleteIfExists(tmp);
+			} catch (IOException e) {
+				tmp.toFile().deleteOnExit();
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------ locking
