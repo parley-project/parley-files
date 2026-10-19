@@ -1276,13 +1276,15 @@ public class FileProxy implements FileSource {
 	@Override
 	public FileSourceLock tryLock(long position, long size, boolean shared) throws IOException {
 		size = LockManager.checkRange(position, size);
+		LockManager.requireExists(this);
 		File canonical = new File(getCanonicalPath());
 		File dir = LocalLocks.lockDirectoryFor(canonical);
-		String hash = LocalLocks.hashOf(canonical.getPath());
-		// keyed by the locked path, not the lock file: this JVM's regions of a path are one set
-		// whichever lock directory each request found
-		return LockManager.get().tryAcquire(this, "fileproxy|" + canonical.getPath(), position, size, shared,
-				new LocalLocks.Backend(new File(dir, hash + ".lock")));
+		// the file's identity (its file key, where the system has one), so hard links and other
+		// spellings of one file are one file to the lock, as they are to an OS lock
+		String identity = LocalLocks.identityOf(canonical);
+		// this JVM's regions of the file are one set whichever lock directory each request found
+		return LockManager.get().tryAcquire(this, "fileproxy|" + identity, position, size, shared,
+				new LocalLocks.Backend(new File(dir, LocalLocks.hashOf(identity) + ".lock")));
 	}
 
 	/** A FileOutputStream that is {@link us.bringardner.parley.files.Syncable}: sync() is fsync. */

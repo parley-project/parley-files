@@ -35,7 +35,11 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   A `.parley-locks` directory in or above the locked path is the lock directory
   (`FileProxyFactory.LOCK_DIRECTORY_NAME`); otherwise the `parley.files.lockDirectory` system property
   (`FileProxyFactory.LOCK_DIRECTORY_PROPERTY`), or `parley-locks-<user>` in the system temp directory, created
-  private to the user. Lock files are empty, never deleted, and opened without following symbolic links.
+  private to the user, with a warning the first time it is used (processes run as other users don't see
+  those locks). Lock files are empty, never deleted, and opened without following symbolic links. A lock
+  is on the file, not its name: lock files are named by the file's key (device and inode) where the
+  system has one (Linux, macOS), so hard links and other spellings of one file are one file to the lock
+  and a renamed file keeps its locks; Windows, without file keys, goes by the canonical path.
 - In-memory file systems lock per factory instance: the same path in two memory file systems is two files.
 - Tests jar: `AbstractLockTests`, the lock contract for every implementation, with a second-JVM worker
   (`LockWorker`) for the cross-process cases; `MemoryLockTests` and `LocalLockTests` run it here.
