@@ -548,6 +548,28 @@ public abstract class AbstractLockTests {
 		assertNotNull(tryX(f), "the interrupted request holds nothing");
 	}
 
+	/** 11c. Closing the channel from another thread stops a waiting lock(): AsynchronousCloseException. */
+	@Test
+	public void closingTheChannelStopsAWaitingLock() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xclose");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		FileChannel ch = writeChannel(f);
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			Future<FileLock> waiting = ex.submit(() -> ch.lock());
+			Thread.sleep(300);
+			ch.close();
+			java.util.concurrent.ExecutionException e = assertThrows(java.util.concurrent.ExecutionException.class,
+					() -> waiting.get(10, TimeUnit.SECONDS));
+			assertTrue(e.getCause() instanceof java.nio.channels.AsynchronousCloseException, "closed while waiting: " + e.getCause());
+		} finally {
+			ex.shutdownNow();
+		}
+		assertEquals("OK", w.ask("release"));
+		assertNotNull(tryX(f), "the stopped request holds nothing");
+	}
+
 	/** 12. Killing the holder frees the path at once. */
 	@Test
 	public void deadHolderFreesPath() throws Exception {
