@@ -6,6 +6,14 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 
 ### Added
 
+- **Capabilities.** `FileSource.getCapabilities()` says what a file system can guarantee: its lock scope,
+  whether `createNewFile()`, `mkdir()` and replace are atomic, whether `sync()` is durable, whether its
+  operations are applied in one order (`FileSourceCapabilities`). A file system that declares nothing gets
+  `FileSourceCapabilities.defaults(lockScope)`: what the FileSource contract requires. Local files and the
+  memory file system declare theirs; the README has every Parley factory's.
+- **`renameTo(dest, replaceExisting)`**: rename over an existing file. One atomic step on local files (the
+  operating system's rename) and in memory; elsewhere, by default, `dest` is deleted and then the file renamed.
+  `renameTo(dest)` still never replaces anything.
 - **Locks on any path**, shaped like NIO's `FileChannel.lock()` and `FileLock`. `FileSource` has seven
   new default methods: `tryLock()`, `tryLock(boolean shared)`, `tryLock(position, size, shared)`,
   `lock()`, `lock(boolean shared)`, `lock(position, size, shared)` and `getLockScope()`. A lock covers a
