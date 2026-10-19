@@ -26,6 +26,12 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 
 ### Changed (no code change needed)
 
+- **Contract: `createNewFile()` and `mkdir()` must be atomic.** Their documentation now says so: of
+  several callers (threads, processes, machines) racing to create one path, exactly one is told `true`
+  and the others `false`, never an exception for having lost. Code that coordinates through files
+  depends on it. `FileLikeBehaviorTests` checks it for every implementation (`createNewFileIsAtomic()`
+  lets one that can't, FTP, say so).
+
 - `FileProxy.getInputStream()` opens the file through NIO (`Files.newInputStream`). On Windows the
   file can now be renamed or deleted while it is being read, as on other systems, so a reader can't
   make a writer's commit fail. A missing file is still a `FileNotFoundException`.

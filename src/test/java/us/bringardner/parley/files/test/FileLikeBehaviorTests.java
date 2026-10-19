@@ -106,6 +106,14 @@ public abstract class FileLikeBehaviorTests {
 		return true;
 	}
 
+	/**
+	 * Whether {@link FileSource#createNewFile()} keeps its contract (atomic: one winner when several
+	 * race). True unless a backend can't, and documents why (FTP has no exclusive create).
+	 */
+	protected boolean createNewFileIsAtomic() {
+		return true;
+	}
+
 	/** Called before each test, to give the backend an empty tree to work in. */
 	protected abstract void newTree() throws Exception;
 
@@ -337,6 +345,59 @@ public abstract class FileLikeBehaviorTests {
 		same("plain.txt/under", "exists");
 		same("plain.txt/under", "createNewFile");
 		same("plain.txt/under/deeper", "mkdirs");
+	}
+
+	/** Racers per round, and rounds, for the atomic-create cases. */
+	private static final int RACERS = 8;
+	private static final int ROUNDS = 10;
+
+	private interface Create {
+		boolean create(FileSource f) throws IOException;
+	}
+
+	/** createNewFile() is atomic: of several callers racing for one path, exactly one wins. */
+	@Test
+	void createNewFileIsAtomicWhenRacing() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(createNewFileIsAtomic(), "this backend can't create atomically");
+		race("race-file-", FileSource::createNewFile, "createNewFile");
+	}
+
+	/** mkdir() is atomic: of several callers racing for one path, exactly one wins. */
+	@Test
+	void mkdirIsAtomicWhenRacing() throws Exception {
+		race("race-dir-", FileSource::mkdir, "mkdir");
+	}
+
+	private void race(String prefix, Create op, String what) throws Exception {
+		java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(RACERS);
+		try {
+			for (int round = 0; round < ROUNDS; round++) {
+				String name = prefix + round;
+				java.util.concurrent.CyclicBarrier start = new java.util.concurrent.CyclicBarrier(RACERS);
+				List<java.util.concurrent.Future<Boolean>> racers = new ArrayList<>();
+				for (int i = 0; i < RACERS; i++) {
+					FileSource f = sourceFor(name); // each racer its own object, as separate callers have
+					racers.add(ex.submit(() -> {
+						start.await(30, java.util.concurrent.TimeUnit.SECONDS);
+						return op.create(f);
+					}));
+				}
+				int wins = 0;
+				for (java.util.concurrent.Future<Boolean> r : racers) {
+					try {
+						if( r.get(2, java.util.concurrent.TimeUnit.MINUTES) ) {
+							wins++;
+						}
+					} catch (java.util.concurrent.ExecutionException e) {
+						throw new AssertionError(what + " of " + name + ": a caller that lost got an exception, not false", e.getCause());
+					}
+				}
+				assertEquals(1, wins, what + " of " + name + ": " + wins + " of " + RACERS + " racing callers were told they created it");
+				assertTrue(sourceFor(name).exists(), name + " exists");
+			}
+		} finally {
+			ex.shutdownNow();
+		}
 	}
 
 	@Test
