@@ -715,6 +715,35 @@ public class FileProxy implements FileSource {
 	}
 
 
+	/**
+	 * With {@code replaceExisting}, one atomic move over the file already there (the operating
+	 * system's rename): nobody sees it missing.
+	 * @since 1.1.0
+	 */
+	@Override
+	public boolean renameTo(FileSource dest, boolean replaceExisting) throws IOException {
+		if( !replaceExisting ) {
+			return renameTo(dest);
+		}
+		if( !(dest instanceof FileProxy) || !exists() || isDirectory() || ((FileProxy) dest).target.isDirectory() ) {
+			return false;
+		}
+		java.nio.file.Path from = target.toPath();
+		java.nio.file.Path to = ((FileProxy) dest).target.toPath();
+		try {
+			try {
+				Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+			} catch (java.nio.file.AtomicMoveNotSupportedException across) {
+				// another file system: no single step is possible
+				Files.move(from, to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			}
+		} catch (IOException e) {
+			return false;
+		}
+		name = null;
+		return true;
+	}
+
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#setLastModified(long)
 	 */
@@ -1266,6 +1295,18 @@ public class FileProxy implements FileSource {
 	@Override
 	public LockScope getLockScope() {
 		return LockScope.HOST;
+	}
+
+	/**
+	 * Local files: locks reach the machine (HOST), create, mkdir and replace are atomic (the
+	 * operating system's own), sync is fsync, and operations are applied in one order. On a network
+	 * file system (NFS, SMB) these are only as good as that file system makes them.
+	 * @since 1.1.0
+	 */
+	@Override
+	public us.bringardner.parley.files.FileSourceCapabilities getCapabilities() {
+		return us.bringardner.parley.files.FileSourceCapabilities.defaults(LockScope.HOST).withAtomicReplace(true)
+				.withDurableSync(true).withOrderedOperations(true);
 	}
 
 	/**

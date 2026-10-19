@@ -388,6 +388,29 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public boolean renameTo(FileSource dest)  throws IOException ;
 
+	/**
+	 * Rename this file to {@code dest}, replacing {@code dest} if it is a file and
+	 * {@code replaceExisting} is true. {@link #renameTo(FileSource)} never replaces anything.
+	 * <p>
+	 * Where {@link #getCapabilities()} says {@link FileSourceCapabilities#atomicReplace()}, the
+	 * replace is one step: anyone looking finds the old file or the new one, never neither. The
+	 * default deletes {@code dest} first and then renames: for that moment {@code dest} is missing,
+	 * and if the rename then fails it stays missing.
+	 * @param dest where it goes
+	 * @param replaceExisting true to replace a file already there (never a directory)
+	 * @return true if it was renamed
+	 * @throws IOException if the file system can't be asked
+	 * @since 1.1.0
+	 */
+	default boolean renameTo(FileSource dest, boolean replaceExisting) throws IOException {
+		if( replaceExisting && dest != null && dest.exists() && !dest.equals(this) ) {
+			if( dest.isDirectory() || !dest.delete() ) {
+				return false;
+			}
+		}
+		return renameTo(dest);
+	}
+
 	public boolean setLastModifiedTime(long time) throws IOException;
 
 	public boolean setLastAccessTime(long time) throws IOException;
@@ -706,6 +729,18 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	default LockScope getLockScope() {
 		return LockScope.PROCESS;
+	}
+
+	/**
+	 * What this file system can guarantee: its lock scope, whether create, mkdir and replace are
+	 * atomic, whether sync is durable, whether its operations are applied in one order. A file
+	 * system that doesn't say gets {@link FileSourceCapabilities#defaults(LockScope)}: what the
+	 * FileSource contract requires, and nothing more. Each file system documents its own.
+	 * @return the capabilities
+	 * @since 1.1.0
+	 */
+	default FileSourceCapabilities getCapabilities() {
+		return FileSourceCapabilities.defaults(getLockScope());
 	}
 
 	/**

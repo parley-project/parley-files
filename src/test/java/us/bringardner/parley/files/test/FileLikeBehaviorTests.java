@@ -1,6 +1,7 @@
 package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -108,10 +109,10 @@ public abstract class FileLikeBehaviorTests {
 
 	/**
 	 * Whether {@link FileSource#createNewFile()} keeps its contract (atomic: one winner when several
-	 * race). True unless a backend can't, and documents why (FTP has no exclusive create).
+	 * race): what the file system declares in {@link FileSource#getCapabilities()}.
 	 */
-	protected boolean createNewFileIsAtomic() {
-		return true;
+	protected boolean createNewFileIsAtomic() throws Exception {
+		return sourceFor("").getCapabilities().atomicCreateNewFile();
 	}
 
 	/** Called before each test, to give the backend an empty tree to work in. */
@@ -366,6 +367,87 @@ public abstract class FileLikeBehaviorTests {
 	@Test
 	void mkdirIsAtomicWhenRacing() throws Exception {
 		race("race-dir-", FileSource::mkdir, "mkdir");
+	}
+
+	// ------------------------------------------------------------------ capabilities
+
+	/** The capabilities agree with the lock scope the file system reports. */
+	@Test
+	void capabilitiesAgreeWithTheLockScope() throws Exception {
+		FileSource f = sourceFor("");
+		assertEquals(f.getLockScope(), f.getCapabilities().lockScope());
+	}
+
+	/** renameTo(dest, true) replaces a file; renameTo(dest, false) and renameTo(dest) never do. */
+	@Test
+	void renameReplacingReplacesAFile() throws Exception {
+		FileSource from = sourceFor("replace-from");
+		FileSource to = sourceFor("replace-to");
+		writeAll(from, "new");
+		writeAll(to, "old");
+		assertFalse(from.renameTo(to), "renameTo never replaces");
+		assertFalse(from.renameTo(to, false), "nor renameTo(dest, false)");
+		assertEquals("old", readAll(sourceFor("replace-to")));
+		assertTrue(from.renameTo(to, true), "renameTo(dest, true) does");
+		assertEquals("new", readAll(sourceFor("replace-to")));
+		assertFalse(sourceFor("replace-from").exists());
+		FileSource fresh = sourceFor("replace-fresh");
+		writeAll(fresh, "x");
+		assertTrue(fresh.renameTo(sourceFor("replace-none"), true), "with nothing in the way too");
+		FileSource dir = sourceFor("replace-dir");
+		assertTrue(dir.mkdir());
+		FileSource f2 = sourceFor("replace-file2");
+		writeAll(f2, "y");
+		assertFalse(f2.renameTo(dir, true), "a directory is never replaced");
+		assertTrue(dir.isDirectory());
+	}
+
+	/** Where replace is declared atomic, a reader never finds the file missing while it is replaced. */
+	@Test
+	void anAtomicReplaceNeverLeavesTheFileMissing() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(sourceFor("").getCapabilities().atomicReplace(),
+				"replace isn't declared atomic here");
+		FileSource target = sourceFor("atomic-target");
+		writeAll(target, "0");
+		java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
+		java.util.concurrent.atomic.AtomicInteger missing = new java.util.concurrent.atomic.AtomicInteger();
+		Thread reader = new Thread(() -> {
+			try {
+				FileSource look = sourceFor("atomic-target");
+				while (!stop.get()) {
+					if( !look.exists() ) {
+						missing.incrementAndGet();
+					}
+				}
+			} catch (Exception e) {
+				missing.addAndGet(1000);
+			}
+		});
+		reader.start();
+		try {
+			for (int i = 1; i <= 100; i++) {
+				FileSource tmp = sourceFor("atomic-tmp-" + i);
+				writeAll(tmp, String.valueOf(i));
+				assertTrue(tmp.renameTo(sourceFor("atomic-target"), true));
+			}
+		} finally {
+			stop.set(true);
+			reader.join(10_000);
+		}
+		assertEquals(0, missing.get(), "the target was missing while it was replaced");
+		assertEquals("100", readAll(sourceFor("atomic-target")));
+	}
+
+	private static void writeAll(FileSource f, String content) throws java.io.IOException {
+		try (java.io.OutputStream out = f.getOutputStream()) {
+			out.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		}
+	}
+
+	private static String readAll(FileSource f) throws java.io.IOException {
+		try (java.io.InputStream in = f.getInputStream()) {
+			return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+		}
 	}
 
 	private void race(String prefix, Create op, String what) throws Exception {
