@@ -591,8 +591,16 @@ public abstract class AbstractLockTests {
 
 		Worker(Class<?> testClass) throws IOException {
 			String java = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
-			ProcessBuilder pb = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"),
-					LockWorker.class.getName(), testClass.getName());
+			List<String> cmd = new ArrayList<>(List.of(java, "-cp", System.getProperty("java.class.path")));
+			// the parley settings this JVM runs with (a lock directory, say), so the worker locks alike
+			for (String name : System.getProperties().stringPropertyNames()) {
+				if( name.startsWith("parley.") ) {
+					cmd.add("-D" + name + "=" + System.getProperty(name));
+				}
+			}
+			cmd.add(LockWorker.class.getName());
+			cmd.add(testClass.getName());
+			ProcessBuilder pb = new ProcessBuilder(cmd);
 			pb.redirectError(ProcessBuilder.Redirect.INHERIT);
 			process = pb.start();
 			in = new PrintWriter(process.getOutputStream(), true, StandardCharsets.UTF_8);

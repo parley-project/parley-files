@@ -94,6 +94,46 @@ public class LocalLockTests extends AbstractLockTests {
 		}
 	}
 
+	/**
+	 * With the lock directory property set, hard links in two trees that each have their own lock
+	 * directory are one file to the lock, in another process too: the property wins over the trees.
+	 */
+	@Test
+	public void theLockDirectoryPropertyJoinsHardLinksInDifferentTrees() throws Exception {
+		Path one = Path.of(dir.getCanonicalPath(), "one");
+		Path two = Path.of(dir.getCanonicalPath(), "two");
+		Files.createDirectories(one.resolve(FileProxyFactory.LOCK_DIRECTORY_NAME));
+		Files.createDirectories(two.resolve(FileProxyFactory.LOCK_DIRECTORY_NAME));
+		FileSource a = path("one/original");
+		writeBytes(a, new byte[0]);
+		Path link = two.resolve("link");
+		try {
+			Files.createLink(link, Path.of(a.getCanonicalPath()));
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.jupiter.api.Assumptions.assumeTrue(false, "no hard links here: " + e);
+		}
+		org.junit.jupiter.api.Assumptions.assumeTrue(Files.readAttributes(link, java.nio.file.attribute.BasicFileAttributes.class).fileKey() != null,
+				"no file keys here (Windows): hard links are different files to the lock");
+		FileSource b = path("two/link");
+		Path shared = Files.createDirectories(Path.of(dir.getCanonicalPath(), "host-locks"));
+		String before = System.getProperty(FileProxyFactory.LOCK_DIRECTORY_PROPERTY);
+		System.setProperty(FileProxyFactory.LOCK_DIRECTORY_PROPERTY, shared.toString());
+		try (FileSourceLock l = a.tryLock()) {
+			assertNotNull(l);
+			Worker w = worker(); // started with the property
+			assertEquals("BUSY", w.ask("lock " + workerSpec(b) + " X"), "another process finds it locked through the other tree's link");
+			try (java.util.stream.Stream<Path> files = Files.list(shared)) {
+				assertTrue(files.anyMatch(p -> p.toString().endsWith(".lock")), "the lock file is in the property's directory");
+			}
+		} finally {
+			if( before == null ) {
+				System.clearProperty(FileProxyFactory.LOCK_DIRECTORY_PROPERTY);
+			} else {
+				System.setProperty(FileProxyFactory.LOCK_DIRECTORY_PROPERTY, before);
+			}
+		}
+	}
+
 	/** A lock is on the file, not its name: renamed, the file keeps it. */
 	@Test
 	public void aRenamedFileKeepsItsLock() throws Exception {
