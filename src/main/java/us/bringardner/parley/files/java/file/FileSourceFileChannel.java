@@ -24,7 +24,8 @@ import us.bringardner.parley.files.lock.FileSourceLock;
 /**
  * A {@link FileChannel} on a FileSource, from {@code FileChannel.open(path, ...)} on a FileSource path,
  * so NIO code runs unchanged on any FileSource. Reading, writing and seeking go to the channel
- * {@code newByteChannel} opens; locking goes to the FileSource's own locks
+ * {@code newByteChannel} opens, or, for a local file, to a real JDK FileChannel on it (which also
+ * gives {@link #map} and a real {@link #force}); locking always goes to the FileSource's own locks
  * ({@link FileSource#tryLock(long, long, boolean)}), region for region, wrapped as {@link FileLock}s,
  * with NIO's rules: a lock is held for the whole JVM
  * ({@link java.nio.channels.OverlappingFileLockException} for an overlapping one), a shared lock
@@ -33,8 +34,11 @@ import us.bringardner.parley.files.lock.FileSourceLock;
  * <p>
  * Where it differs from a local FileChannel:
  * <ul>
- * <li>{@link #map} is not supported (a mapped buffer can only come from the JDK's own files).</li>
- * <li>{@link #force} does nothing: each write goes to the file system as it is made.</li>
+ * <li>{@link #map} works for local files only (a mapped buffer can only come from the JDK's own
+ * files); elsewhere it throws {@link UnsupportedOperationException}.</li>
+ * <li>{@link #force} sends what is held and makes it as durable as the file system can (see
+ * {@link us.bringardner.parley.files.Syncable}): on the disk for a local file, committed for a
+ * database, synced by an SFTP server that can, only sent over FTP.</li>
  * <li>What can be done depends on the file system: without random access (FTP), a channel can only
  * read, or write from the start or the end.</li>
  * </ul>
@@ -47,13 +51,26 @@ final class FileSourceFileChannel extends FileChannel {
 
 	private final FileSource file;
 	private final SeekableByteChannel ch;
+	/** For a local file: the JDK's own channel on it (also {@code ch}); null otherwise. */
+	private final FileChannel local;
 	private final boolean readable;
 	private final boolean writable;
 	private final Set<Lock> locks = ConcurrentHashMap.newKeySet();
 
+	/** A channel over what {@code newByteChannel} opened. */
 	FileSourceFileChannel(FileSource file, SeekableByteChannel ch, boolean readable, boolean writable) {
+		this(file, ch, null, readable, writable);
+	}
+
+	/** A channel on a local file: I/O on the JDK's channel, locks from the FileSource. */
+	FileSourceFileChannel(FileSource file, FileChannel local, boolean readable, boolean writable) {
+		this(file, local, local, readable, writable);
+	}
+
+	private FileSourceFileChannel(FileSource file, SeekableByteChannel ch, FileChannel local, boolean readable, boolean writable) {
 		this.file = file;
 		this.ch = ch;
+		this.local = local;
 		this.readable = readable;
 		this.writable = writable;
 	}
@@ -151,14 +168,31 @@ final class FileSourceFileChannel extends FileChannel {
 		return this;
 	}
 
-	/** Nothing to do: every write has already gone to the file system. */
+	/**
+	 * Send what is held and make it as durable as the file system can: the JDK's force for a local
+	 * file (to the disk), otherwise {@link us.bringardner.parley.files.Syncable#sync()} on the stream
+	 * being written.
+	 */
 	@Override
 	public void force(boolean metaData) throws IOException {
 		ensureOpen();
+		if( local != null ) {
+			local.force(metaData);
+		} else if( ch instanceof FileSourceChannels.Base ) {
+			((FileSourceChannels.Base) ch).force();
+		}
 	}
 
 	@Override
-	public synchronized int read(ByteBuffer dst, long position) throws IOException {
+	public int read(ByteBuffer dst, long position) throws IOException {
+		if( local != null ) {
+			ensureOpen();
+			return local.read(dst, position);
+		}
+		return readAt(dst, position);
+	}
+
+	private synchronized int readAt(ByteBuffer dst, long position) throws IOException {
 		ensureOpen();
 		if( position < 0 ) {
 			throw new IllegalArgumentException("negative position " + position);
@@ -176,7 +210,15 @@ final class FileSourceFileChannel extends FileChannel {
 	}
 
 	@Override
-	public synchronized int write(ByteBuffer src, long position) throws IOException {
+	public int write(ByteBuffer src, long position) throws IOException {
+		if( local != null ) {
+			ensureOpen();
+			return local.write(src, position);
+		}
+		return writeAt(src, position);
+	}
+
+	private synchronized int writeAt(ByteBuffer src, long position) throws IOException {
 		ensureOpen();
 		if( position < 0 ) {
 			throw new IllegalArgumentException("negative position " + position);
@@ -200,6 +242,9 @@ final class FileSourceFileChannel extends FileChannel {
 	@Override
 	public long transferTo(long position, long count, WritableByteChannel target) throws IOException {
 		ensureOpen();
+		if( local != null ) {
+			return local.transferTo(position, count, target);
+		}
 		if( position < 0 || count < 0 ) {
 			throw new IllegalArgumentException("negative position or count");
 		}
@@ -224,6 +269,9 @@ final class FileSourceFileChannel extends FileChannel {
 	@Override
 	public long transferFrom(ReadableByteChannel src, long position, long count) throws IOException {
 		ensureOpen();
+		if( local != null ) {
+			return local.transferFrom(src, position, count);
+		}
 		if( position < 0 || count < 0 ) {
 			throw new IllegalArgumentException("negative position or count");
 		}
@@ -243,10 +291,19 @@ final class FileSourceFileChannel extends FileChannel {
 		return done;
 	}
 
-	/** Not supported: a mapped buffer can only come from the JDK's own files. */
+	/**
+	 * A real memory map, for a local file. Other file systems can't map: a mapped buffer can only
+	 * come from the JDK's own files.
+	 * @throws UnsupportedOperationException if the file isn't local
+	 */
 	@Override
 	public MappedByteBuffer map(MapMode mode, long position, long size) throws IOException {
-		throw new UnsupportedOperationException("A FileSource channel can't be memory-mapped");
+		ensureOpen();
+		if( local == null ) {
+			throw new UnsupportedOperationException("Only a local file can be memory-mapped; "
+					+ file.getAbsolutePath() + " is on " + file.getFileSourceFactory().getTypeId());
+		}
+		return local.map(mode, position, size);
 	}
 
 	// ------------------------------------------------------------------ locking

@@ -20,7 +20,13 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 - **`FileChannel` on FileSource paths.** `FileChannel.open(path, ...)` on a FileSource path (the NIO
   provider's `newFileChannel`, which used to throw `UnsupportedOperationException`) gives a `FileChannel`
   whose `lock()` and `tryLock()` are the FileSource's locks, as `FileLock`s, so NIO locking code runs
-  unchanged, regions included. `map()` isn't supported; closing the channel releases its locks.
+  unchanged, regions included; closing the channel releases its locks. For a local file the channel's
+  I/O is a real JDK `FileChannel`, so `map()` is a real memory map and `force()` syncs to the disk;
+  elsewhere `map()` throws `UnsupportedOperationException` and `force()` calls `Syncable.sync()`.
+- **`Syncable`**: a stream that can make its writes durable (`sync()`: flush, then as `fsync`).
+  `IRandomAccessStream` is Syncable (by default it does nothing more), and so are the local random access
+  stream (it syncs the file) and the memory file system's (it saves); `IRandomAccessIoController.sync()`
+  is the hook under it.
 - Every FileSource gets `PROCESS` locks (this JVM only) from the defaults.
 - Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
   A `.parley-locks` directory in or above the locked path is the lock directory
@@ -32,6 +38,9 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   (`LockWorker`) for the cross-process cases; `MemoryLockTests` and `LocalLockTests` run it here.
 
 ### Changed (no code change needed)
+
+- The memory file system's output streams show what was written at each `flush()`, as a local
+  file does at once; before, nothing showed until the stream was closed.
 
 - **Contract: `createNewFile()` and `mkdir()` must be atomic.** Their documentation now says so: of
   several callers (threads, processes, machines) racing to create one path, exactly one is told `true`

@@ -91,6 +91,12 @@ public class FileProxyRandomAccessIoController implements IRandomAccessIoControl
 		// Nothing to do
 	}
 
+	/** Every write is already in the file; this puts it on the disk (fsync). */
+	@Override
+	public void sync() throws IOException {
+		channel.force(true);
+	}
+
 	@Override
 	public FileSource getFile() {
 		return file;

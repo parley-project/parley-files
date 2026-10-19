@@ -29,7 +29,16 @@ import java.io.Closeable;
 import java.io.DataInput;
 import java.io.DataOutput;
 
-public interface IRandomAccessStream extends DataOutput, DataInput, Closeable  {
+public interface IRandomAccessStream extends DataOutput, DataInput, Closeable, Syncable  {
+
+	/**
+	 * Send what is held and make it durable as far as the file system can (see {@link Syncable}).
+	 * The default does nothing, for a stream that holds nothing back.
+	 * @since 1.1.0
+	 */
+	@Override
+	default void sync() throws java.io.IOException {
+	}
 
 		
 	public long length() throws java.io.IOException;

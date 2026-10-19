@@ -45,5 +45,14 @@ public interface IRandomAccessIoController extends AutoCloseable {
 	long length() throws IOException;
 	void setLength(long newLength) throws IOException;
 	void save() throws IOException;
+
+	/**
+	 * After {@link #save()}: ask the file system to make what was written durable (see
+	 * {@link Syncable}). The default does nothing more than save already did.
+	 * @throws IOException if it can't be synced
+	 * @since 1.1.0
+	 */
+	default void sync() throws IOException {
+	}
 	FileSource getFile();
 }

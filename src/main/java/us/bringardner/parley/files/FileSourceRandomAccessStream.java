@@ -184,6 +184,14 @@ public class FileSourceRandomAccessStream extends AbstractRandomAccessStream {
 		}
 	}
 
+	/** Saves what the controller holds, then has it synced (see {@link Syncable}). */
+	@Override
+	public void sync() throws IOException {
+		checkOpen();
+		io.save();
+		io.sync();
+	}
+
 	@Override
 	public void close() throws IOException {
 		if( closed ) {

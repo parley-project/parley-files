@@ -295,4 +295,72 @@ public abstract class AbstractNioProviderTests extends FileSourceTestSupport {
 		assertEquals(expect.contains(PosixFilePermission.OWNER_WRITE), Files.isWritable(dir), "Files.isWritable "+unixPerms);
 		assertEquals(expect.contains(PosixFilePermission.OWNER_EXECUTE), Files.isExecutable(dir), "Files.isExecutable "+unixPerms);
 	}
+
+	// ------------------------------------------------------------------ FileChannel: force and map
+
+	/**
+	 * Whether data written to a channel can be read back through the FileSource as soon as
+	 * {@code force} returns, before the channel is closed. True unless the file system only stores
+	 * a file when its upload ends (FTP).
+	 */
+	protected boolean forcedWritesAreVisibleBeforeClose() {
+		return true;
+	}
+
+	private static boolean isLocal(Path p) {
+		return ((FileSourcePath) p).getFileSource() instanceof us.bringardner.parley.files.fileproxy.FileProxy;
+	}
+
+	/** force() sends what the channel holds (a buffered stream used to keep it until close). */
+	@Test
+	public void fileChannelForceSendsWhatIsHeld() throws Exception {
+		org.junit.jupiter.api.Assumptions.assumeTrue(forcedWritesAreVisibleBeforeClose(), "stored only when the upload ends");
+		Path dir = nioDir("force");
+		Files.createDirectories(dir);
+		Path file = dir.resolve("forced.txt");
+		byte[] data = "forced to the file system".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.CREATE,
+				java.nio.file.StandardOpenOption.TRUNCATE_EXISTING, java.nio.file.StandardOpenOption.WRITE)) {
+			ch.write(java.nio.ByteBuffer.wrap(data));
+			ch.force(true);
+			FileSource fs = factory.createFileSource(((FileSourcePath) file).getFileSource().getAbsolutePath());
+			try (java.io.InputStream in = fs.getInputStream()) {
+				assertEquals(new String(data, java.nio.charset.StandardCharsets.UTF_8),
+						new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8), "readable before the channel is closed");
+			}
+		} finally {
+			deleteIfExists(dir);
+		}
+	}
+
+	/** map() is a real memory map for a local file, and unsupported elsewhere. */
+	@Test
+	public void fileChannelMapsOnlyLocalFiles() throws Exception {
+		Path dir = nioDir("map");
+		Files.createDirectories(dir);
+		Path file = dir.resolve("mapped.bin");
+		try {
+			Files.write(file, new byte[] {1, 2, 3, 4});
+			try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ,
+					java.nio.file.StandardOpenOption.WRITE)) {
+				if( isLocal(file) ) {
+					java.nio.MappedByteBuffer m = ch.map(java.nio.channels.FileChannel.MapMode.READ_WRITE, 0, 4);
+					assertEquals(3, m.get(2));
+					m.put(0, (byte) 9);
+					m.force();
+					ch.force(true);
+					assertEquals(9, Files.readAllBytes(file)[0], "the map writes the file");
+				} else {
+					org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
+							() -> ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, 4));
+				}
+			} catch (UnsupportedOperationException | IOException noRandomAccess) {
+				// READ and WRITE need random access, which some file systems lack (FTP): nothing to map
+				org.junit.jupiter.api.Assumptions.assumeTrue(isLocal(file), "no random access here: " + noRandomAccess);
+				throw noRandomAccess;
+			}
+		} finally {
+			deleteIfExists(dir);
+		}
+	}
 }
