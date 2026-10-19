@@ -57,10 +57,12 @@ public final class LockManager {
 
 	/**
 	 * A key that names a path on one file system: its type, its URL and the canonical path, so two
-	 * FileSource objects for the same file get the same key.
+	 * FileSource objects for the same file get the same key. Where the canonical path can't be found
+	 * (a server that won't show the directories above the user's, say), the absolute path is used:
+	 * two names for one file (through a link) are then two paths to this JVM's lock table.
 	 * @param source the path
 	 * @return the key
-	 * @throws IOException if the canonical path can't be found
+	 * @throws IOException if neither path can be found
 	 */
 	public static String keyOf(FileSource source) throws IOException {
 		FileSourceFactory factory = source.getFileSourceFactory();
@@ -74,7 +76,13 @@ public final class LockManager {
 			}
 			fileSystem = factory.getTypeId() + "|" + url;
 		}
-		return fileSystem + "|" + source.getCanonicalPath();
+		String path;
+		try {
+			path = source.getCanonicalPath();
+		} catch (IOException e) {
+			path = source.getAbsolutePath();
+		}
+		return fileSystem + "|" + path;
 	}
 
 	/**
