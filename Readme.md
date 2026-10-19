@@ -311,14 +311,19 @@ if (root.getLockScope().compareTo(LockScope.HOST) < 0) {
 }
 ```
 
-**Local files.** The operating system locks real files, so each locked path gets a lock file, named by a hash
-of the path, in a lock directory: the first `.parley-locks` directory in the locked path or above it. An
-application marks the root it serves by creating `.parley-locks` there, and every process serving that root
-shares its locks. Without one, the `parley.files.lockDirectory` system property names the directory, or else
-`parley-locks-<user>` in the system temp directory is used, private to the user. Every process locking a path
-must find the same lock directory, so create or remove one only while nothing is locked under it. The
-operating system frees a dead process's locks at once; a process that is stopped or frozen keeps its locks
-until it runs again. File locks are unreliable on NFS and some other network file systems.
+**Local files.** The operating system locks real files, so each locked file gets a lock file in a lock directory:
+the first `.parley-locks` directory in the locked path or above it. An application marks the root it serves by
+creating `.parley-locks` there, and every process serving that root shares its locks. Without one, the
+`parley.files.lockDirectory` system property names the directory, or else `parley-locks-<user>` in the system temp
+directory is used, **private to the user**: processes run as other users don't see those locks, and a warning is
+logged the first time it is used. Every process locking a file must find the same lock directory, so create or
+remove one only while nothing is locked under it. A lock is on the file, not its name, as an OS lock is: the lock
+file is named by the file's identity (its file key, device and inode, on Linux, macOS and other Unix systems), so
+hard links and other spellings of one file (`Foo` and `foo` on a case-insensitive volume) are one file to the lock,
+and a renamed file keeps its locks. Windows has no file keys, so there the canonical path stands in and hard links
+are different files to the lock. The operating system frees a dead process's locks at once; a process that is
+stopped or frozen keeps its locks until it runs again. File locks are unreliable on NFS and some other network file
+systems.
 
 **Making writes durable.** A stream that can make what it wrote durable implements `Syncable`: `sync()` sends what
 it holds, as `flush()` does, then asks the file system to keep it, as `fsync` does. Local files are synced to the

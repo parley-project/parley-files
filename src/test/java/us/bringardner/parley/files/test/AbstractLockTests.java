@@ -427,7 +427,11 @@ public abstract class AbstractLockTests {
 
 	// ------------------------------------------------------------------ HOST and up
 
-	private Worker worker() throws Exception {
+	/**
+	 * A second JVM on this file system, for a subclass's own cross-process cases; the test is skipped
+	 * where the scope or the subclass doesn't allow one.
+	 */
+	protected Worker worker() throws Exception {
 		assumeTrue(scopeAtLeast(LockScope.HOST), "locks reach only " + dir.getLockScope());
 		assumeTrue(workerSpec(dir) != null, getClass().getSimpleName() + " doesn't run lock workers");
 		Worker w = new Worker(getClass());
@@ -580,7 +584,7 @@ public abstract class AbstractLockTests {
 	// ------------------------------------------------------------------ the worker JVM
 
 	/** A second JVM running {@link LockWorker}, driven line by line. */
-	static final class Worker {
+	protected static final class Worker {
 		private final Process process;
 		private final PrintWriter in;
 		private final BlockingQueue<String> replies = new LinkedBlockingQueue<>();
@@ -629,7 +633,7 @@ public abstract class AbstractLockTests {
 			return r;
 		}
 
-		String ask(String command) throws InterruptedException, IOException {
+		public String ask(String command) throws InterruptedException, IOException {
 			send(command);
 			return reply(Duration.ofSeconds(60));
 		}

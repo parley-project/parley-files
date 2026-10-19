@@ -1,10 +1,12 @@
 package us.bringardner.parley.files.test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,6 +70,43 @@ public class LocalLockTests extends AbstractLockTests {
 			java.util.Arrays.sort(names);
 			assertTrue(java.util.Arrays.equals(names, new String[] {FileProxyFactory.LOCK_DIRECTORY_NAME, "tidy"}),
 					"only the file and the lock directory in " + java.util.Arrays.toString(names));
+		}
+	}
+
+	/** Two hard links are one file to the lock, in this JVM and in another, as they are to an OS lock. */
+	@Test
+	public void hardLinksAreOneFile() throws Exception {
+		FileSource a = file("original");
+		Path link = Path.of(path("link").getCanonicalPath());
+		try {
+			Files.createLink(link, Path.of(a.getCanonicalPath()));
+		} catch (UnsupportedOperationException | IOException e) {
+			org.junit.jupiter.api.Assumptions.assumeTrue(false, "no hard links here: " + e);
+		}
+		org.junit.jupiter.api.Assumptions.assumeTrue(Files.readAttributes(link, java.nio.file.attribute.BasicFileAttributes.class).fileKey() != null,
+				"no file keys here (Windows): hard links are different files to the lock");
+		FileSource b = path("link");
+		try (FileSourceLock l = a.tryLock()) {
+			assertNotNull(l);
+			assertThrows(OverlappingFileLockException.class, () -> b.tryLock(), "the link is the same file, held by this JVM");
+			Worker w = worker();
+			assertEquals("BUSY", w.ask("lock " + workerSpec(b) + " X"), "and another process finds it locked through the link");
+		}
+	}
+
+	/** A lock is on the file, not its name: renamed, the file keeps it. */
+	@Test
+	public void aRenamedFileKeepsItsLock() throws Exception {
+		FileSource f = file("before");
+		try (FileSourceLock l = f.tryLock()) {
+			assertNotNull(l);
+			FileSource after = path("after");
+			assertTrue(f.renameTo(after));
+			org.junit.jupiter.api.Assumptions.assumeTrue(Files.readAttributes(Path.of(after.getCanonicalPath()),
+					java.nio.file.attribute.BasicFileAttributes.class).fileKey() != null, "no file keys here (Windows)");
+			assertThrows(OverlappingFileLockException.class, () -> after.tryLock(), "held under its new name");
+			Worker w = worker();
+			assertEquals("BUSY", w.ask("lock " + workerSpec(after) + " X"), "in another process too");
 		}
 	}
 }

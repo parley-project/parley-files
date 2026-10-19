@@ -48,7 +48,7 @@ import us.bringardner.parley.files.FileSourceFactory;
  * <p>
  * <h2>Locks, atomic create and FileChannel</h2>
  * <ul>
- * <li><b>Locks:</b> {@code HOST} scope: every process on this machine that uses the same lock directory ({@value #LOCK_DIRECTORY_NAME}, see {@link #LOCK_DIRECTORY_PROPERTY}). OS locks on a lock file, region for region, so range locks work across processes; a dead process's locks are freed at once.</li>
+ * <li><b>Locks:</b> {@code HOST} scope: every process on this machine that uses the same lock directory ({@value #LOCK_DIRECTORY_NAME}, see {@link #LOCK_DIRECTORY_PROPERTY}). Without either, the fallback directory is private to the user, so processes run as other users don't see the locks (a warning is logged). OS locks on a lock file, region for region, so range locks work across processes; a dead process's locks are freed at once. A lock is on the file, not its name: hard links and other spellings of one file are one file to the lock, and a renamed file keeps its locks (where the system has file keys: Linux, macOS; on Windows hard links are different files to the lock).</li>
  * <li><b>Atomic create:</b> {@code createNewFile()} and {@code mkdir()} are atomic (the operating system decides).</li>
  * <li><b>FileChannel:</b> a real JDK {@code FileChannel} on the file does the reading and writing; locks still come from the FileSource, so they agree with {@code FileSource.lock}.</li>
  * <li><b>map():</b> a real memory map, in every mode.</li>

@@ -33,12 +33,14 @@ import us.bringardner.parley.files.lock.LockBackend;
  * the locked path or above it. An application marks the root it serves by creating one there, and
  * every process serving that root then shares its locks. Without one, the
  * {@value FileProxyFactory#LOCK_DIRECTORY_PROPERTY} system property names the directory, or else
- * {@code parley-locks-<user>} in the system temp directory is used, private to the user (so
- * processes run as different users don't share locks there).
+ * {@code parley-locks-<user>} in the system temp directory is used, private to the user: processes
+ * run as different users don't share locks there, so a warning is logged the first time it is used
+ * (create a {@value FileProxyFactory#LOCK_DIRECTORY_NAME} directory in the root you serve, or set
+ * the property, to share locks between users).
  * <p>
  * Every process locking a path must find the same lock directory for it: create, move or delete a
  * lock directory only while nothing holds locks under it. Within one JVM, locks are keyed by the
- * locked path itself, so a changed lock directory can't let two holders in.
+ * locked file itself, so a changed lock directory can't let two holders in.
  * <p>
  * Java's file locks belong to the whole JVM, and so do these:
  * {@link us.bringardner.parley.files.lock.LockManager} sits in front and refuses a region that
@@ -46,9 +48,14 @@ import us.bringardner.parley.files.lock.LockBackend;
  * at once; a process that is stopped or frozen keeps them until it runs again or dies. File locks
  * are unreliable on NFS and some other network file systems.
  * <p>
- * Lock files are opened without following symbolic links. Paths are hashed as Java's canonical
- * form spells them, so on a case-insensitive volume, {@code Foo} and {@code foo} that don't exist
- * yet are different paths to the lock.
+ * A lock is on the file, not its name, as an OS lock is: the lock file's name is a hash of the file's
+ * identity, its file key (device and inode) where the system has one (Linux, macOS and other Unix
+ * systems), so two hard links to a file, or {@code Foo} and {@code foo} on a case-insensitive volume,
+ * are one file to the lock, and a renamed file keeps its locks. Where the system has no file key
+ * (Windows), the canonical path stands in; Windows spells an existing file's canonical path in its
+ * on-disk case, so only hard links are then different files to the lock. Two names for one file that
+ * find different lock directories (hard links in different trees) are different files to the lock.
+ * Lock files are opened without following symbolic links.
  */
 final class LocalLocks {
 
@@ -78,7 +85,32 @@ final class LocalLocks {
 			}
 			return dir.getCanonicalFile();
 		}
-		return privateFallback().toFile();
+		File fallback = privateFallback().toFile();
+		if( WARNED_FALLBACK.compareAndSet(false, true) ) {
+			LOG.warning("No " + FileProxyFactory.LOCK_DIRECTORY_NAME + " directory in or above " + canonical + " and "
+					+ FileProxyFactory.LOCK_DIRECTORY_PROPERTY + " isn't set, so local file locks use " + fallback
+					+ ", which is private to the user " + System.getProperty("user.name")
+					+ ": processes run as other users don't see these locks. To share them, create a "
+					+ FileProxyFactory.LOCK_DIRECTORY_NAME + " directory in the root you serve, or set "
+					+ FileProxyFactory.LOCK_DIRECTORY_PROPERTY + ".");
+		}
+		return fallback;
+	}
+
+	/** The fallback has been reported (once per JVM). */
+	private static final java.util.concurrent.atomic.AtomicBoolean WARNED_FALLBACK = new java.util.concurrent.atomic.AtomicBoolean();
+
+	/**
+	 * What names a file to the locks: its file key (device and inode) where the system has one, so
+	 * hard links and other spellings of one file are one file; its canonical path otherwise.
+	 * @param canonical the file, canonical; it exists
+	 * @return the identity
+	 * @throws IOException if the file's attributes can't be read
+	 */
+	static String identityOf(File canonical) throws IOException {
+		Object key = java.nio.file.Files.readAttributes(canonical.toPath(), java.nio.file.attribute.BasicFileAttributes.class)
+				.fileKey();
+		return key != null ? "key:" + key : "path:" + canonical.getPath();
 	}
 
 	/** {@code parley-locks-<user>} in the temp directory, created for this user only and checked. */
