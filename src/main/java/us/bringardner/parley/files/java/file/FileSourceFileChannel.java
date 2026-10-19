@@ -385,7 +385,8 @@ final class FileSourceFileChannel extends FileChannel {
 			if( Thread.currentThread().isInterrupted() ) {
 				interrupted();
 			}
-			FileLock l = tryLock(position, size, shared);
+			// not tryLock: its open check would report a close meanwhile as ClosedChannelException
+			FileLock l = attempt(position, size, shared);
 			if( l != null ) {
 				return l;
 			}
@@ -412,6 +413,14 @@ final class FileSourceFileChannel extends FileChannel {
 	@Override
 	public FileLock tryLock(long position, long size, boolean shared) throws IOException {
 		check(position, size, shared);
+		return attempt(position, size, shared);
+	}
+
+	/**
+	 * One try, the arguments checked: the lock, or null if another process holds an overlapping
+	 * region; AsynchronousCloseException if the channel is closed meanwhile.
+	 */
+	private FileLock attempt(long position, long size, boolean shared) throws IOException {
 		FileSourceLock l = file.tryLock(position, size, shared);
 		if( l == null ) {
 			return null;
