@@ -11,7 +11,8 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   `lock()`, `lock(boolean shared)`, `lock(position, size, shared)` and `getLockScope()`. A lock covers a
   region of the file (`FileSourceLock.position()`, `size()`, `overlaps()`); the methods without one
   lock the whole file, and a size of zero means to the end. As with NIO, a lock is held on behalf of
-  the whole JVM (a region overlapping one this JVM holds throws `OverlappingFileLockException`; regions
+  the whole JVM (a region overlapping one this JVM holds, or one another of its threads waits for in
+  `lock`, throws `OverlappingFileLockException`; regions
   that don't overlap are held side by side), shared regions may overlap across processes, only an existing file or directory can be locked
   (`FileNotFoundException` otherwise), `lock` waits for other processes and can be interrupted
   (`FileLockInterruptionException`), and a lock lasts until it is released. See the new package
