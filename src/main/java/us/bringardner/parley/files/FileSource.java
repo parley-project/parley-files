@@ -709,6 +709,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @since 1.1.0
 	 */
 	default FileSourceLock tryLock(boolean shared) throws IOException {
+		LockManager.requireExists(this);
 		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), shared, LockBackend.inProcess());
 	}
 
