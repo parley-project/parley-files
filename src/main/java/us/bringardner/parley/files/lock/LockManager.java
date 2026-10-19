@@ -164,15 +164,21 @@ public final class LockManager {
 		}
 	}
 
-	/** Called with e's monitor held. */
+	/**
+	 * Called with e's monitor held. The backend is closed before the entry leaves the map: until
+	 * then a new locker of the path finds this entry and waits on its monitor, so no second backend
+	 * for the path exists while this one closes. (On some systems closing a channel releases every
+	 * lock the JVM holds on the file, so closing the old one could drop a new backend's lock.)
+	 */
 	private void closeIfEmpty(Entry e) {
 		if( e.grants.isEmpty() ) {
 			e.dead = true;
-			held.remove(e.key, e);
 			try {
 				e.backend.close();
 			} catch (RuntimeException ex) {
 				LOG.log(Level.WARNING, "Lock backend " + e.backend + " failed to close for " + e.key, ex);
+			} finally {
+				held.remove(e.key, e);
 			}
 		}
 	}
