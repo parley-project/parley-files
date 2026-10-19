@@ -10,6 +10,7 @@ import java.nio.channels.NonWritableChannelException;
 import java.nio.channels.SeekableByteChannel;
 
 import us.bringardner.parley.files.FileSource;
+import us.bringardner.parley.files.Syncable;
 import us.bringardner.parley.files.IRandomAccessStream;
 
 /**
@@ -24,7 +25,7 @@ final class FileSourceChannels {
 
 	private static final int BUFFER_SIZE = 8192;
 
-	private abstract static class Base implements SeekableByteChannel {
+	abstract static class Base implements SeekableByteChannel {
 		protected final FileSource file;
 		protected final boolean deleteOnClose;
 		protected long position;
@@ -67,6 +68,26 @@ final class FileSourceChannels {
 		}
 
 		protected abstract void closeImpl() throws IOException;
+
+		/**
+		 * What {@link java.nio.channels.FileChannel#force(boolean)} does: send what is held and make
+		 * it durable as far as the file system can (see {@link Syncable}). Nothing to do by default.
+		 */
+		void force() throws IOException {
+			ensureOpen();
+		}
+
+		/** Flush a stream, then sync it if it can be. */
+		static void sync(java.io.OutputStream out) throws IOException {
+			if( out instanceof Syncable ) {
+				((Syncable) out).sync();
+			} else if( out instanceof java.io.FileOutputStream ) {
+				out.flush();
+				((java.io.FileOutputStream) out).getFD().sync();
+			} else {
+				out.flush();
+			}
+		}
 
 		/** Copy from src into a byte array (uses the backing array when there is one). */
 		protected static int drain(ByteBuffer src, IoWriter writer) throws IOException {
@@ -242,6 +263,12 @@ final class FileSourceChannels {
 		}
 
 		@Override
+		void force() throws IOException {
+			ensureOpen();
+			sync(out);
+		}
+
+		@Override
 		protected void closeImpl() throws IOException {
 			out.close();
 		}
@@ -326,6 +353,12 @@ final class FileSourceChannels {
 				position = size;
 			}
 			return this;
+		}
+
+		@Override
+		void force() throws IOException {
+			ensureOpen();
+			ra.sync();
 		}
 
 		@Override

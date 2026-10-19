@@ -977,13 +977,19 @@ public class MemoryFileSource implements FileSource {
 				throw new FileNotFoundException();
 			}
 
+			// the file shows what was written at each flush (as a FileOutputStream's file does at once)
 			ByteArrayOutputStream ret = new ByteArrayOutputStream() {
 				@Override
-				public void close() throws IOException {
-					super.close();
+				public void flush() {
 					synchronized (treeLock()) {
 						data = super.toByteArray();
 					}
+				}
+
+				@Override
+				public void close() throws IOException {
+					super.close();
+					flush();
 				}
 			};
 			boolean created = fileType == FileType.Undefined;
@@ -1036,7 +1042,14 @@ public class MemoryFileSource implements FileSource {
 				@Override
 				public void close() throws IOException {
 					super.close();
+					flush();
+				}
+
+				/** Appends what was written since the last flush, so the file shows it. */
+				@Override
+				public synchronized void flush() {
 					byte [] tmp = super.toByteArray();
+					super.reset();
 					synchronized (treeLock()) {
 						if( tmp.length>0) {
 							if( data.length == 0 ) {

@@ -491,16 +491,26 @@ public class FileSourceFileSystemProvider extends FileSystemProvider {
 	}
 
 	/**
-	 * Used by {@code FileChannel.open}: a channel over what {@link #newByteChannel} opens, with
-	 * locking from the FileSource's own locks (see {@code FileSourceFileChannel}), so NIO code that
-	 * locks files runs unchanged on any FileSource.
+	 * Used by {@code FileChannel.open}: a channel over what {@link #newByteChannel} opens (for a
+	 * local file, over the JDK's own channel on it), with locking from the FileSource's own locks
+	 * (see {@code FileSourceFileChannel}), so NIO code runs unchanged on any FileSource.
 	 */
 	@Override
 	public FileChannel newFileChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs)
 			throws IOException {
 		Opts o = new Opts(options);
+		FileSource file = fileOf(path);
+		if( file instanceof us.bringardner.parley.files.fileproxy.FileProxy ) {
+			// a local file: the JDK's own channel does the I/O (and can map and force), the FileSource
+			// still does the locking, so locks agree with FileSource.lock on the same file
+			java.io.File target = ((us.bringardner.parley.files.fileproxy.FileProxy) file).getTarget();
+			FileChannel local = FileChannel.open(target.toPath(), options, attrs);
+			return new FileSourceFileChannel(file, local, o.read, o.write);
+		}
 		SeekableByteChannel ch = newByteChannel(path, options, attrs);
-		FileSource file = o.write ? fileOf(path) : resolve(path, new LinkOption[0]);
+		if( !o.write ) {
+			file = resolve(path, new LinkOption[0]);
+		}
 		return new FileSourceFileChannel(file, ch, o.read, o.write);
 	}
 

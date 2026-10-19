@@ -269,7 +269,10 @@ try (FileChannel ch = FileChannel.open(file.toPath(), StandardOpenOption.READ, S
 ```
 
 NIO's rules hold (a shared lock needs a readable channel and an exclusive one a writable channel; closing the
-channel releases its locks), with two differences: `map()` isn't supported, and what a channel can do
+channel releases its locks). For a local file the channel's reading and writing are a real JDK `FileChannel` on the
+file, so `map()` gives a real memory map and `force()` syncs to the disk; elsewhere `map()` throws
+`UnsupportedOperationException` (a mapped buffer can only come from the JDK's own files), `force()` makes the data
+as durable as the file system can (see `Syncable` below), and what a channel can do
 depends on the file system (over FTP, which has no random access, open it for reading or with `APPEND`).
 
 How far the locks reach is `getLockScope()`:
@@ -296,6 +299,18 @@ shares its locks. Without one, the `parley.files.lockDirectory` system property 
 must find the same lock directory, so create or remove one only while nothing is locked under it. The
 operating system frees a dead process's locks at once; a process that is stopped or frozen keeps its locks
 until it runs again. File locks are unreliable on NFS and some other network file systems.
+
+**Making writes durable.** A stream that can make what it wrote durable implements `Syncable`: `sync()` sends what
+it holds, as `flush()` does, then asks the file system to keep it, as `fsync` does. Local files are synced to the
+disk, a database commits each write, an SFTP server that offers `fsync@openssh.com` syncs the file, and FTP can only
+send the data. `FileChannel.force()` calls it.
+
+```java
+try (OutputStream out = file.getOutputStream()) {
+    out.write(data);
+    if (out instanceof Syncable) ((Syncable) out).sync(); else out.flush();
+}
+```
 
 **Atomic create.** `createNewFile()` and `mkdir()` must be atomic in every implementation: when several callers
 race to create one path, exactly one is told `true` and the others `false`. That is the one step lock files and
