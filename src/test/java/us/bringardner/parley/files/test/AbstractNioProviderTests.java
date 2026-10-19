@@ -333,31 +333,63 @@ public abstract class AbstractNioProviderTests extends FileSourceTestSupport {
 		}
 	}
 
-	/** map() is a real memory map for a local file, and unsupported elsewhere. */
+	/** READ_ONLY maps work everywhere: a real map for a local file, a copy elsewhere. */
 	@Test
-	public void fileChannelMapsOnlyLocalFiles() throws Exception {
-		Path dir = nioDir("map");
+	public void fileChannelMapsReadOnly() throws Exception {
+		Path dir = nioDir("mapro");
 		Files.createDirectories(dir);
 		Path file = dir.resolve("mapped.bin");
 		try {
 			Files.write(file, new byte[] {1, 2, 3, 4});
-			try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ,
-					java.nio.file.StandardOpenOption.WRITE)) {
+			try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ)) {
+				java.nio.MappedByteBuffer m = ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 1, 2);
+				assertEquals(2, m.capacity());
+				assertEquals(2, m.get(0));
+				assertEquals(3, m.get(1));
+				assertTrue(m.isReadOnly());
+				org.junit.jupiter.api.Assertions.assertThrows(java.nio.channels.NonWritableChannelException.class,
+						() -> ch.map(java.nio.channels.FileChannel.MapMode.PRIVATE, 0, 4), "PRIVATE needs a writable channel, as in NIO");
+			}
+		} finally {
+			deleteIfExists(dir);
+		}
+	}
+
+	/**
+	 * PRIVATE keeps its changes to itself everywhere; READ_WRITE writes the file where it is local and
+	 * is refused elsewhere (a copy can't write back).
+	 */
+	@Test
+	public void fileChannelMapsPrivateAndReadWrite() throws Exception {
+		Path dir = nioDir("maprw");
+		Files.createDirectories(dir);
+		Path file = dir.resolve("mapped.bin");
+		try {
+			Files.write(file, new byte[] {1, 2, 3, 4});
+			java.nio.channels.FileChannel ch;
+			try {
+				ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ, java.nio.file.StandardOpenOption.WRITE);
+			} catch (UnsupportedOperationException | IOException noRandomAccess) {
+				// READ and WRITE need random access, which some file systems lack (FTP)
+				org.junit.jupiter.api.Assumptions.assumeTrue(isLocal(file), "no random access here: " + noRandomAccess);
+				throw noRandomAccess;
+			}
+			try {
+				java.nio.MappedByteBuffer p = ch.map(java.nio.channels.FileChannel.MapMode.PRIVATE, 0, 4);
+				p.put(0, (byte) 7);
+				assertEquals(7, p.get(0));
+				assertEquals(1, Files.readAllBytes(file)[0], "a PRIVATE map's changes stay in the map");
 				if( isLocal(file) ) {
 					java.nio.MappedByteBuffer m = ch.map(java.nio.channels.FileChannel.MapMode.READ_WRITE, 0, 4);
-					assertEquals(3, m.get(2));
 					m.put(0, (byte) 9);
 					m.force();
-					ch.force(true);
 					assertEquals(9, Files.readAllBytes(file)[0], "the map writes the file");
 				} else {
 					org.junit.jupiter.api.Assertions.assertThrows(UnsupportedOperationException.class,
-							() -> ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, 4));
+							() -> ch.map(java.nio.channels.FileChannel.MapMode.READ_WRITE, 0, 4));
 				}
-			} catch (UnsupportedOperationException | IOException noRandomAccess) {
-				// READ and WRITE need random access, which some file systems lack (FTP): nothing to map
-				org.junit.jupiter.api.Assumptions.assumeTrue(isLocal(file), "no random access here: " + noRandomAccess);
-				throw noRandomAccess;
+			} finally {
+				ch.close();
 			}
 		} finally {
 			deleteIfExists(dir);
