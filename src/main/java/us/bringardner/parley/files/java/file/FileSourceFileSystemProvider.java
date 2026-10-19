@@ -490,10 +490,18 @@ public class FileSourceFileSystemProvider extends FileSystemProvider {
 		throw new UnsupportedOperationException("AsynchronousFileChannel Not supported");
 	}
 
+	/**
+	 * Used by {@code FileChannel.open}: a channel over what {@link #newByteChannel} opens, with
+	 * locking from the FileSource's own locks (see {@code FileSourceFileChannel}), so NIO code that
+	 * locks files runs unchanged on any FileSource.
+	 */
 	@Override
 	public FileChannel newFileChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs)
 			throws IOException {
-		throw new UnsupportedOperationException("FileChannel Not supported");
+		Opts o = new Opts(options);
+		SeekableByteChannel ch = newByteChannel(path, options, attrs);
+		FileSource file = o.write ? fileOf(path) : resolve(path, new LinkOption[0]);
+		return new FileSourceFileChannel(file, ch, o.read, o.write);
 	}
 
 	@Override

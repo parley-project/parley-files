@@ -14,6 +14,10 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   (`FileLockInterruptionException`), and a lock lasts until it is released. See the new package
   `us.bringardner.parley.files.lock` (`FileSourceLock`, `LockScope`, `LockManager`, `LockBackend`) and
   the README's "Locking" section.
+- **`FileChannel` on FileSource paths.** `FileChannel.open(path, ...)` on a FileSource path (the NIO
+  provider's `newFileChannel`, which used to throw `UnsupportedOperationException`) gives a `FileChannel`
+  whose `lock()` and `tryLock()` are the FileSource's locks, as `FileLock`s, so NIO locking code runs
+  unchanged. A range locks the whole file; `map()` isn't supported; closing the channel releases its locks.
 - Every FileSource gets `PROCESS` locks (this JVM only) from the defaults.
 - Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
   A `.parley-locks` directory in or above the locked path is the lock directory

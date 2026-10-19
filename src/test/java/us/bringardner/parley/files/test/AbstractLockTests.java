@@ -17,9 +17,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.FileLockInterruptionException;
+import java.nio.channels.NonReadableChannelException;
+import java.nio.channels.NonWritableChannelException;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -202,6 +208,72 @@ public abstract class AbstractLockTests {
 		}
 	}
 
+	// ------------------------------------------------------------------ through NIO
+
+	/** A channel opened for writing (APPEND works on every file system, random access or not). */
+	private static FileChannel writeChannel(FileSource f) throws IOException {
+		return FileChannel.open(f.toPath(), StandardOpenOption.APPEND);
+	}
+
+	private static FileChannel readChannel(FileSource f) throws IOException {
+		return FileChannel.open(f.toPath(), StandardOpenOption.READ);
+	}
+
+	/** 1n. FileChannel.lock() on a FileSource path is the FileSource's lock, as a FileLock. */
+	@Test
+	public void fileChannelLocksTheFile() throws IOException {
+		FileSource f = file("channel");
+		try (FileChannel ch = writeChannel(f); FileLock l = ch.lock()) {
+			assertSame(ch, l.channel());
+			assertFalse(l.isShared());
+			assertTrue(l.isValid());
+			assertEquals(0, l.position());
+			assertEquals(Long.MAX_VALUE, l.size());
+			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "held by the JVM, as through FileSource");
+			assertThrows(OverlappingFileLockException.class, () -> ch.tryLock(), "and through the channel");
+		}
+		assertNotNull(tryX(f), "released");
+		held.remove(held.size() - 1).release();
+		try (FileChannel ch = readChannel(f); FileLock l = ch.lock(0, Long.MAX_VALUE, true)) {
+			assertTrue(l.isShared());
+			assertSame(ch, l.channel());
+		}
+		try (FileChannel ch = writeChannel(f); FileLock l = ch.tryLock(10, 20, false)) {
+			assertNotNull(l);
+			assertEquals(10, l.position(), "the range asked for is reported");
+			assertEquals(20, l.size());
+			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "but the whole file is locked");
+		}
+	}
+
+	/** 1o. NIO's rules for which channel may lock how, and closing the channel releases its locks. */
+	@Test
+	public void fileChannelRules() throws IOException {
+		FileSource f = file("channelrules");
+		try (FileChannel r = readChannel(f)) {
+			assertThrows(NonWritableChannelException.class, () -> r.lock(), "exclusive needs a writable channel");
+		}
+		try (FileChannel w = writeChannel(f)) {
+			assertThrows(NonReadableChannelException.class, () -> w.lock(0, Long.MAX_VALUE, true), "shared needs a readable channel");
+			assertThrows(IllegalArgumentException.class, () -> w.tryLock(-1, 1, false));
+		}
+		FileChannel ch = writeChannel(f);
+		FileLock l = ch.lock();
+		ch.close();
+		assertFalse(l.isValid(), "closing the channel releases its lock");
+		assertThrows(ClosedChannelException.class, l::release);
+		assertThrows(ClosedChannelException.class, () -> ch.tryLock());
+		assertNotNull(tryX(f), "free again");
+		held.remove(held.size() - 1).release();
+		FileChannel ch2 = writeChannel(f);
+		FileLock l2 = ch2.lock();
+		l2.release();
+		assertFalse(l2.isValid());
+		assertTrue(ch2.isOpen(), "releasing a lock leaves the channel open");
+		l2.release(); // twice is harmless
+		ch2.close();
+	}
+
 	/** 2. A JVM holds a path once: asking again throws, in either mode, from tryLock and lock. */
 	@Test
 	public void secondRequestInThisJvmThrows() throws IOException {
@@ -344,6 +416,22 @@ public abstract class AbstractLockTests {
 		s.release();
 		held.remove(s);
 		assertNull(tryX(f), "exclusive while the other process holds shared");
+	}
+
+	/** 10n. Through NIO too: a FileChannel's tryLock() is refused while another process holds the file. */
+	@Test
+	public void crossProcessThroughFileChannel() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xchannel");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		try (FileChannel ch = writeChannel(f)) {
+			assertNull(ch.tryLock(), "held by the other process");
+			assertEquals("OK", w.ask("release"));
+			try (FileLock l = ch.tryLock()) {
+				assertNotNull(l, "free once released");
+				assertEquals("BUSY", w.ask("lock " + workerSpec(f) + " S"), "and the other process is kept out");
+			}
+		}
 	}
 
 	/** 11. lock() waits for another process, and gets the path once it is released. */
