@@ -351,6 +351,37 @@ of the world to `LockManager.get().tryAcquire(...)`. Then extend `AbstractLockTe
 every case your scope promises, including a second JVM for `HOST` and up (give it `workerSpec` and
 `fromWorkerSpec` so the second JVM can find the same path).
 
+## Capabilities
+
+Code that needs a guarantee from the file system (a lock framework choosing how to keep its locks, a safe
+replace of a shared file) asks `getCapabilities()` instead of knowing file systems by name:
+
+```java
+FileSourceCapabilities c = root.getCapabilities();
+c.lockScope();            // how far tryLock/lock reach (as getLockScope())
+c.atomicCreateNewFile();  // createNewFile() is test-and-create
+c.atomicMkdir();          // mkdir() is test-and-create
+c.atomicReplace();        // renameTo(dest, true) replaces in one step: nobody finds dest missing
+c.durableSync();          // Syncable.sync() makes writes durable
+c.orderedOperations();    // every operation, from every client, is applied in one order
+```
+
+`renameTo(dest)` never replaces an existing file; `renameTo(dest, true)` does (never a directory). Where replace
+isn't atomic it deletes `dest` and then renames, so for that moment `dest` is missing.
+
+A file system that declares nothing gets `FileSourceCapabilities.defaults(lockScope)`: the atomic `createNewFile()`
+and `mkdir()` the FileSource contract requires, and nothing more. What Parley's factories declare:
+
+| Parley factory | Lock scope | Atomic create | Atomic mkdir | Atomic replace | Durable sync | Ordered |
+|---|---|---|---|---|---|---|
+| `FileProxyFactory` (local files) | `HOST` | yes | yes | yes | yes (`fsync`) | yes |
+| `MemoryFileSourceFactory` | `PROCESS` | yes | yes | yes | no (nothing is durable) | yes |
+| `JdbcFileSourceFactory` (parley-files-jdbc) | `CLUSTER` on PostgreSQL, MySQL 8, MariaDB 10.3+; else `PROCESS` | yes | yes | no | yes (each write is committed) | yes |
+| `SftpFileSourceFactory` (parley-files-sftp) | `PROCESS` | yes | yes | no | no (depends on the server) | yes |
+| `FtpFileSourceFactory`, `FtpsFileSourceFactory` (parley-files-ftp) | `PROCESS` | **no** | yes | no | no | yes |
+
+As with locks, other factories found at run time declare and document their own.
+
 ## Writing your own implementation
 
 1. Implement `FileSource` for your storage, and extend `FileSourceFactory`. The factory's `getTypeId()` is the id used in URLs and `getFileSourceFactory(...)`. The factory needs a public no-argument constructor.
@@ -369,7 +400,9 @@ on any difference (names, creating and deleting, renaming, permissions, times, s
 links, random access, listings with a filter, file sizes around the usual block sizes). Extend it and give it
 a tree to work in (`newTree()` and `sourceFor(path)`). The hooks, such as `supportsSymbolicLinks()` and
 `supportsRandomAccess()`, say what your file system can't do. If your implementation adds locking, extend
-`AbstractLockTests` too (see [Locking](#locking)).
+`AbstractLockTests` too (see [Locking](#locking)). Declare what your file system guarantees by overriding
+`getCapabilities()` (see [Capabilities](#capabilities)); `FileLikeBehaviorTests` checks the declarations it can
+(a racing `createNewFile()`, an atomic replace that never leaves the file missing).
 
 ## Migrating from File to FileSource
 

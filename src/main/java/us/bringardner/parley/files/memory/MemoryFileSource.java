@@ -780,9 +780,38 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/**
+	 * Memory: locks reach this JVM (PROCESS); create, mkdir and replace are atomic (the tree is
+	 * locked for each); nothing is durable; operations are applied in one order.
+	 * @since 1.1.0
+	 */
+	@Override
+	public us.bringardner.parley.files.FileSourceCapabilities getCapabilities() {
+		return us.bringardner.parley.files.FileSourceCapabilities.defaults(getLockScope()).withAtomicReplace(true)
+				.withOrderedOperations(true);
+	}
+
+	/**
+	 * With {@code replaceExisting}, the file already there is replaced while the tree is locked, so
+	 * nobody sees it missing.
+	 * @since 1.1.0
+	 */
+	@Override
+	public boolean renameTo(FileSource dest, boolean replaceExisting) throws IOException {
+		synchronized (treeLock()) {
+			if( replaceExisting && dest instanceof MemoryFileSource && dest.exists() && !dest.equals(this) ) {
+				if( dest.isDirectory() || !exists() || isDirectory() || !dest.delete() ) {
+					return false;
+				}
+			}
+			return renameTo(dest);
+		}
+	}
+
 	/* (non-Javadoc)
 	 * @see us.bringardner.parley.files.FileSource#renameTo(us.bringardner.parley.files.FileSource)
 	 */
+	@Override
 	public boolean renameTo(FileSource dest) throws IOException {
 		synchronized (treeLock()) {
 			boolean ret = false;
