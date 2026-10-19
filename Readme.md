@@ -242,12 +242,16 @@ try (FileSourceLock lock = mailbox.lock()) {    // exclusive; lock(true) for sha
 |---|---|
 | `lock()`, `lock(boolean shared)` | `FileChannel.lock()`, `lock(0, Long.MAX_VALUE, shared)` |
 | `tryLock()`, `tryLock(boolean shared)` | `FileChannel.tryLock()`, `tryLock(0, Long.MAX_VALUE, shared)` |
+| `lock(position, size, shared)`, `tryLock(position, size, shared)` | `FileChannel.lock(position, size, shared)`, `tryLock(position, size, shared)` |
+| `FileSourceLock`: `position()`, `size()`, `overlaps(position, size)` | `FileLock`: `position()`, `size()`, `overlaps(position, size)` |
 | `FileSourceLock`: `source()`, `isShared()`, `isValid()`, `release()`, `close()` | `FileLock`: `channel()`, `isShared()`, `isValid()`, `release()`, `close()` |
 
 The rules are NIO's. `tryLock` returns null if another process holds the path; `lock` waits as long as it
 takes, and throws `FileLockInterruptionException` if the thread is interrupted. A lock is held **on behalf of
-the whole JVM**: asking again for a path this JVM holds, from any thread, throws `OverlappingFileLockException`
-at once. So, as with NIO, these locks keep other processes out, and threads in one JVM coordinate with Java
+the whole JVM**: asking for a region that overlaps one this JVM holds, from any thread and in either mode, throws
+`OverlappingFileLockException` at once; regions that don't overlap are held side by side. Across processes an
+exclusive region excludes every overlapping lock, and shared regions may overlap. A size of zero locks from the
+position to the end of the file, however long it grows. So, as with NIO, these locks keep other processes out, and threads in one JVM coordinate with Java
 locks of their own (parley-net's locks do both for servers). Only an existing file or directory can be locked
 (`FileNotFoundException` otherwise), as a FileChannel needs an existing file. A lock lasts until it is released
 or the JVM ends, and a lock on a directory covers the directory only, not what is in it. Locks are advisory: the
@@ -265,8 +269,7 @@ try (FileChannel ch = FileChannel.open(file.toPath(), StandardOpenOption.READ, S
 ```
 
 NIO's rules hold (a shared lock needs a readable channel and an exclusive one a writable channel; closing the
-channel releases its locks), with three differences: a lock on a range locks the whole file (every FileSource
-locks whole files; the `FileLock` reports the range asked for), `map()` isn't supported, and what a channel can do
+channel releases its locks), with two differences: `map()` isn't supported, and what a channel can do
 depends on the file system (over FTP, which has no random access, open it for reading or with `APPEND`).
 
 How far the locks reach is `getLockScope()`:

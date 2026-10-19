@@ -25,15 +25,14 @@ import us.bringardner.parley.files.lock.FileSourceLock;
  * A {@link FileChannel} on a FileSource, from {@code FileChannel.open(path, ...)} on a FileSource path,
  * so NIO code runs unchanged on any FileSource. Reading, writing and seeking go to the channel
  * {@code newByteChannel} opens; locking goes to the FileSource's own locks
- * ({@link FileSource#lock(boolean)}), wrapped as {@link FileLock}s, with NIO's rules: a lock is held
- * for the whole JVM ({@link java.nio.channels.OverlappingFileLockException} for a second one), a
- * shared lock needs a readable channel and an exclusive one a writable channel, and closing the
- * channel releases its locks.
+ * ({@link FileSource#tryLock(long, long, boolean)}), region for region, wrapped as {@link FileLock}s,
+ * with NIO's rules: a lock is held for the whole JVM
+ * ({@link java.nio.channels.OverlappingFileLockException} for an overlapping one), a shared lock
+ * needs a readable channel and an exclusive one a writable channel, a size of zero locks to the end
+ * of the file, and closing the channel releases its locks.
  * <p>
  * Where it differs from a local FileChannel:
  * <ul>
- * <li>Every FileSource locks whole files, so a lock on a range locks the whole file. The FileLock
- * still reports the position and size asked for.</li>
  * <li>{@link #map} is not supported (a mapped buffer can only come from the JDK's own files).</li>
  * <li>{@link #force} does nothing: each write goes to the file system as it is made.</li>
  * <li>What can be done depends on the file system: without random access (FTP), a channel can only
@@ -253,8 +252,7 @@ final class FileSourceFileChannel extends FileChannel {
 	// ------------------------------------------------------------------ locking
 
 	/**
-	 * Lock the file, waiting as long as another process holds it. Every FileSource locks whole files,
-	 * so a range locks the whole file.
+	 * Lock a region of the file, waiting as long as another process holds an overlapping one.
 	 * @throws FileLockInterruptionException if the thread is interrupted while waiting (the channel
 	 *         is then closed, as an interruptible channel is)
 	 * @throws AsynchronousCloseException if another thread closes the channel while this one waits
@@ -293,15 +291,15 @@ final class FileSourceFileChannel extends FileChannel {
 		throw new FileLockInterruptionException();
 	}
 
-	/** Lock the file now, or return null if another process holds it. A range locks the whole file. */
+	/** Lock a region of the file now, or return null if another process holds an overlapping one. */
 	@Override
 	public FileLock tryLock(long position, long size, boolean shared) throws IOException {
 		check(position, size, shared);
-		FileSourceLock l = file.tryLock(shared);
+		FileSourceLock l = file.tryLock(position, size, shared);
 		if( l == null ) {
 			return null;
 		}
-		Lock lock = new Lock(this, position, size, shared, l);
+		Lock lock = new Lock(this, l.position(), l.size(), shared, l);
 		locks.add(lock);
 		if( !isOpen() ) {
 			// closed meanwhile: don't leave a lock behind the channel

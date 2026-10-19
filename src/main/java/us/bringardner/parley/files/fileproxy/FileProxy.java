@@ -1269,18 +1269,19 @@ public class FileProxy implements FileSource {
 	}
 
 	/**
-	 * A lock that every process on this machine sees, through an OS lock on a lock file
-	 * (see {@link FileProxyFactory#LOCK_DIRECTORY_NAME}).
+	 * A lock that every process on this machine sees, through an OS lock on the same region of a lock
+	 * file (see {@link FileProxyFactory#LOCK_DIRECTORY_NAME}).
 	 * @since 1.1.0
 	 */
 	@Override
-	public FileSourceLock tryLock(boolean shared) throws IOException {
+	public FileSourceLock tryLock(long position, long size, boolean shared) throws IOException {
+		size = LockManager.checkRange(position, size);
 		File canonical = new File(getCanonicalPath());
 		File dir = LocalLocks.lockDirectoryFor(canonical);
 		String hash = LocalLocks.hashOf(canonical.getPath());
-		// keyed by the locked path, not the lock file: this JVM holds a path once whichever lock
-		// directory each request found
-		return LockManager.get().tryAcquire(this, "fileproxy|" + canonical.getPath(), shared,
+		// keyed by the locked path, not the lock file: this JVM's regions of a path are one set
+		// whichever lock directory each request found
+		return LockManager.get().tryAcquire(this, "fileproxy|" + canonical.getPath(), position, size, shared,
 				new LocalLocks.Backend(new File(dir, hash + ".lock")));
 	}
 
