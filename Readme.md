@@ -286,9 +286,14 @@ How far the locks reach is `getLockScope()`:
 | `HOST` | All processes on this machine | Local files (`FileProxy`) |
 | `CLUSTER` | All processes on all machines sharing the file system | None in parley-files yet |
 
-**What each file system does.** Every factory's class documentation and README say this for it in full:
+**What each file system does.** These are the factories the Parley project provides: the two in parley-files and
+the ones in Parley's own parley-files-* projects. They aren't the only ones there can be. A factory is found at run
+time (through `ServiceLoader`), so others may be on the class path, from anyone; how far their locks reach, whether
+their `createNewFile()` is atomic, and what their `map()` and `force()` do is theirs to document, as each of these
+does in its class documentation and README. Code that depends on any of it checks `getLockScope()` and reads the
+factory's documentation rather than assuming the table below.
 
-| Factory | Locks reach | Atomic `createNewFile()` | `map()` | `force()` |
+| Parley factory | Locks reach | Atomic `createNewFile()` | `map()` | `force()` |
 |---|---|---|---|---|
 | `FileProxyFactory` (local files) | `HOST` | yes | a real map, every mode | `fsync` to the disk |
 | `MemoryFileSourceFactory` | `PROCESS` (per factory) | yes | `READ_ONLY`, `PRIVATE`: a copy | makes writes visible (nothing more durable) |
@@ -296,7 +301,7 @@ How far the locks reach is `getLockScope()`:
 | `SftpFileSourceFactory` (parley-files-sftp) | `PROCESS` | yes | `READ_ONLY`, `PRIVATE`: a copy | sends, then `fsync@openssh.com` (parley-ssh, MINA; not JSch) |
 | `FtpFileSourceFactory`, `FtpsFileSourceFactory` (parley-files-ftp) | `PROCESS` | **no** (`mkdir()` is) | `READ_ONLY`: a copy | only sends the data |
 
-Range locks work on all of them; `READ_WRITE` maps need a local file.
+Range locks work on all of these; `READ_WRITE` maps need a local file.
 
 An application that runs as several processes checks the scope when it starts:
 
