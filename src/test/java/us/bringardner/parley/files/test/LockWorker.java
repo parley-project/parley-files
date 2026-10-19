@@ -12,7 +12,8 @@ import us.bringardner.parley.files.lock.FileSourceLock;
  * named on its command line, then reads commands from standard input and answers each with one
  * line starting with {@value #PREFIX} (anything else on standard output is ignored):
  * <ul>
- * <li>{@code lock <spec> X|S}: try to lock, exclusive or shared; {@code GOT} or {@code BUSY}</li>
+ * <li>{@code lock <spec> X|S [position size]}: try to lock (the whole file, or a region), exclusive or
+ * shared; {@code GOT} or {@code BUSY}</li>
  * <li>{@code release}: release the last lock taken; {@code OK}</li>
  * <li>{@code count <spec> <n>}: add 1 to the counter file n times, each under its lock; {@code DONE}</li>
  * <li>{@code exit}</li>
@@ -42,7 +43,10 @@ public final class LockWorker {
 						last.release();
 						last = null;
 					}
-					FileSourceLock l = f.tryLock("S".equals(w[2]));
+					boolean shared = "S".equals(w[2]);
+					FileSourceLock l = w.length >= 5
+							? f.tryLock(Long.parseLong(w[3]), Long.parseLong(w[4]), shared)
+							: f.tryLock(shared);
 					if( l == null ) {
 						reply("BUSY");
 					} else {

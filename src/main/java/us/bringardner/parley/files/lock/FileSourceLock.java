@@ -8,8 +8,10 @@ import us.bringardner.parley.files.FileSource;
  * A lock on one path, from {@link FileSource#lock()} or {@link FileSource#tryLock()}: the FileSource
  * counterpart of {@link java.nio.channels.FileLock}, and it behaves the same way.
  * <ul>
- * <li>It is held on behalf of the whole JVM, not a thread: asking again for a path this JVM holds
- * throws {@link java.nio.channels.OverlappingFileLockException}, whichever thread asks. So these
+ * <li>It covers a region of the file: from {@link #position()}, {@link #size()} bytes (the whole
+ * file, for the methods that take no region). It is held on behalf of the whole JVM, not a thread:
+ * asking for a region that overlaps one this JVM holds throws
+ * {@link java.nio.channels.OverlappingFileLockException}, whichever thread asks. So these
  * locks keep other processes out; threads in one JVM coordinate as they would with FileLock, with
  * Java locks of their own (parley-net's locks do that for servers).</li>
  * <li>It is valid until it is released, or the JVM ends. It doesn't expire.</li>
@@ -33,8 +35,24 @@ public interface FileSourceLock extends AutoCloseable {
 	 */
 	FileSource source();
 
+	/** @return where the locked region starts */
+	long position();
+
+	/** @return the locked region's size ({@code Long.MAX_VALUE - position} for "to the end") */
+	long size();
+
 	/** @return true for a shared lock, false for an exclusive one */
 	boolean isShared();
+
+	/**
+	 * Whether this lock's region overlaps another, as {@link java.nio.channels.FileLock#overlaps} says.
+	 * @param position where the other region starts
+	 * @param size the other region's size
+	 * @return true if they share a byte
+	 */
+	default boolean overlaps(long position, long size) {
+		return LockManager.overlaps(position(), size(), position, size);
+	}
 
 	/** @return true until the lock is released */
 	boolean isValid();

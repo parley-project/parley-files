@@ -709,61 +709,101 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	/**
-	 * {@link #tryLock(boolean) tryLock(false)}: an exclusive lock now, or null.
-	 * @return the lock, or null if another process holds the path
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path
+	 * {@link #tryLock(long, long, boolean) tryLock(0, Long.MAX_VALUE, false)}: an exclusive lock on
+	 * the whole file now, or null.
+	 * @return the lock, or null if another process holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
 	default FileSourceLock tryLock() throws IOException {
-		return tryLock(false);
+		return tryLock(0, Long.MAX_VALUE, false);
 	}
 
 	/**
-	 * Take a lock on this file (or directory) now, without waiting, as
-	 * {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)} does for a whole file. The file
-	 * must exist. See the {@code us.bringardner.parley.files.lock} package for the rules.
+	 * {@link #tryLock(long, long, boolean) tryLock(0, Long.MAX_VALUE, shared)}: a lock on the whole
+	 * file now, or null.
 	 * @param shared true for a shared lock, false for an exclusive one
-	 * @return the lock, or null if another process holds the path
-	 * @throws java.io.FileNotFoundException if it doesn't exist
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
-	 *         any thread (locks are held on behalf of the whole JVM)
+	 * @return the lock, or null if another process holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
 	default FileSourceLock tryLock(boolean shared) throws IOException {
-		LockManager.requireExists(this);
-		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), shared, LockBackend.inProcess());
+		return tryLock(0, Long.MAX_VALUE, shared);
 	}
 
 	/**
-	 * {@link #lock(boolean) lock(false)}: an exclusive lock, waiting for it.
+	 * Take a lock on a region of this file (or directory) now, without waiting, as
+	 * {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)} does. The file must exist.
+	 * The region need not be inside the file: it may reach past its end, so a lock can cover what is
+	 * yet to be appended. See the {@code us.bringardner.parley.files.lock} package for the rules.
+	 * <p>
+	 * File systems override this method (and {@link #getLockScope()}) to lock beyond this JVM; every
+	 * other locking method comes to it.
+	 * @param position where the region starts; not negative
+	 * @param size the region's size; not negative, and position + size must not overflow. Zero means
+	 *        from position to the end of the file, however long it grows (as in NIO)
+	 * @param shared true for a shared lock, false for an exclusive one
+	 * @return the lock, or null if another process holds a lock that overlaps the region (and isn't
+	 *         shared like this one)
+	 * @throws IllegalArgumentException if position or size is negative, or they overflow
+	 * @throws java.io.FileNotFoundException if it doesn't exist
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds a lock that
+	 *         overlaps the region, from any thread (locks are held on behalf of the whole JVM)
+	 * @throws IOException if the file system could not be asked
+	 * @since 1.1.0
+	 */
+	default FileSourceLock tryLock(long position, long size, boolean shared) throws IOException {
+		return LockManager.get().tryAcquire(this, LockManager.keyOf(this), position, size, shared, LockBackend.inProcess());
+	}
+
+	/**
+	 * {@link #lock(long, long, boolean) lock(0, Long.MAX_VALUE, false)}: an exclusive lock on the
+	 * whole file, waiting for it.
 	 * @return the lock
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while waiting
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
 	default FileSourceLock lock() throws IOException {
-		return lock(false);
+		return lock(0, Long.MAX_VALUE, false);
 	}
 
 	/**
-	 * Take a lock on this file (or directory), waiting as long as another process holds it, as
-	 * {@link java.nio.channels.FileChannel#lock(long, long, boolean)} does for a whole file. The file
-	 * must exist.
+	 * {@link #lock(long, long, boolean) lock(0, Long.MAX_VALUE, shared)}: a lock on the whole file,
+	 * waiting for it.
 	 * @param shared true for a shared lock, false for an exclusive one
 	 * @return the lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
+	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while waiting
+	 * @throws IOException if the file system could not be asked
+	 * @since 1.1.0
+	 */
+	default FileSourceLock lock(boolean shared) throws IOException {
+		return lock(0, Long.MAX_VALUE, shared);
+	}
+
+	/**
+	 * Take a lock on a region of this file (or directory), waiting as long as another process holds an
+	 * overlapping lock, as {@link java.nio.channels.FileChannel#lock(long, long, boolean)} does. The
+	 * file must exist.
+	 * @param position where the region starts; not negative
+	 * @param size the region's size; not negative; zero means to the end of the file
+	 * @param shared true for a shared lock, false for an exclusive one
+	 * @return the lock
+	 * @throws IllegalArgumentException if position or size is negative, or they overflow
 	 * @throws java.io.FileNotFoundException if it doesn't exist
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds the path, from
-	 *         any thread: it doesn't wait for this JVM
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds a lock that
+	 *         overlaps the region, from any thread: it doesn't wait for this JVM
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while
 	 *         waiting (its interrupt status stays set)
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
-	default FileSourceLock lock(boolean shared) throws IOException {
-		return LockManager.await(this, shared);
+	default FileSourceLock lock(long position, long size, boolean shared) throws IOException {
+		return LockManager.await(this, position, size, shared);
 	}
 
 }

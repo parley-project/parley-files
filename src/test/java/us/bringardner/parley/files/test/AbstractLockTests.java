@@ -240,9 +240,15 @@ public abstract class AbstractLockTests {
 		}
 		try (FileChannel ch = writeChannel(f); FileLock l = ch.tryLock(10, 20, false)) {
 			assertNotNull(l);
-			assertEquals(10, l.position(), "the range asked for is reported");
+			assertEquals(10, l.position());
 			assertEquals(20, l.size());
-			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "but the whole file is locked");
+			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "the whole file overlaps it");
+			try (FileLock other = ch.tryLock(0, 10, false)) {
+				assertNotNull(other, "the region before it is free");
+			}
+		}
+		try (FileChannel ch = writeChannel(f); FileLock l = ch.lock(5, 0, false)) {
+			assertEquals(Long.MAX_VALUE - 5, l.size(), "size zero: to the end, as NIO reports it");
 		}
 	}
 
@@ -287,6 +293,41 @@ public abstract class AbstractLockTests {
 		assertNotNull(tryS(f));
 		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(true), "shared twice in one JVM, as in NIO");
 		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "exclusive while shared");
+	}
+
+	/** 2r. Regions: ones that don't overlap are held side by side in one JVM; overlapping ones throw. */
+	@Test
+	public void regionsInThisJvm() throws IOException {
+		FileSource f = file("regions");
+		FileSourceLock a = keep(f.tryLock(0, 10, false));
+		FileSourceLock b = keep(f.tryLock(10, 10, true));
+		assertNotNull(a);
+		assertNotNull(b, "a region next to a held one");
+		assertEquals(0, a.position());
+		assertEquals(10, a.size());
+		assertTrue(a.overlaps(5, 1));
+		assertFalse(a.overlaps(10, 5));
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(5, 10, false), "overlaps both");
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(15, 1, true), "shared on shared, still one JVM");
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(), "the whole file overlaps them");
+		FileSourceLock end = keep(f.tryLock(100, 0, false));
+		assertNotNull(end, "size zero: from 100 to the end");
+		assertEquals(Long.MAX_VALUE - 100, end.size());
+		assertThrows(OverlappingFileLockException.class, () -> f.tryLock(1L << 40, 1, false), "to the end means far past it too");
+		assertNotNull(keep(f.tryLock(20, 80, false)), "the gap between them");
+		a.release();
+		assertNotNull(keep(f.tryLock(2, 3, false)), "free once released");
+	}
+
+	/** 2s. Regions are checked as NIO checks them. */
+	@Test
+	public void badRegionsAreRefused() throws IOException {
+		FileSource f = file("badregions");
+		assertThrows(IllegalArgumentException.class, () -> f.tryLock(-1, 10, false));
+		assertThrows(IllegalArgumentException.class, () -> f.tryLock(0, -1, false));
+		assertThrows(IllegalArgumentException.class, () -> f.tryLock(Long.MAX_VALUE, 2, false), "overflows");
+		assertThrows(IllegalArgumentException.class, () -> f.lock(-1, 1, true));
+		assertNotNull(tryX(f), "refused requests hold nothing");
 	}
 
 	/** 2b. Two FileSource objects for one path are one path to the lock. */
@@ -432,6 +473,30 @@ public abstract class AbstractLockTests {
 				assertEquals("BUSY", w.ask("lock " + workerSpec(f) + " S"), "and the other process is kept out");
 			}
 		}
+	}
+
+	/** 10r. Regions across processes: overlapping ones exclude each other unless both are shared. */
+	@Test
+	public void crossProcessRegions() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xregions");
+		String spec = workerSpec(f);
+		assertEquals("GOT", w.ask("lock " + spec + " X 0 10"));
+		assertNull(f.tryLock(), "the whole file overlaps the other process's region");
+		FileSourceLock beside = keep(f.tryLock(10, 10, false));
+		assertNotNull(beside, "a region beside it");
+		assertNull(f.tryLock(2, 5, false), "overlapping the other's, exclusive");
+		assertNull(f.tryLock(2, 5, true), "overlapping the other's, shared against exclusive");
+		beside.release();
+		assertEquals("OK", w.ask("release"));
+
+		assertEquals("GOT", w.ask("lock " + spec + " S 0 10"));
+		FileSourceLock s = keep(f.tryLock(5, 10, true));
+		assertNotNull(s, "shared regions may overlap across processes");
+		s.release();
+		assertNull(f.tryLock(5, 10, false), "exclusive against the other's shared region");
+		assertNotNull(keep(f.tryLock(10, 5, false)), "beside it, exclusive");
+		assertEquals("BUSY", w.ask("lock " + spec + " X 12 1"), "the other process is kept out of ours");
 	}
 
 	/** 11. lock() waits for another process, and gets the path once it is released. */

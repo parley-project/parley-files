@@ -1659,10 +1659,10 @@ public class MemoryFileSource implements FileSource {
 	 * @since 1.1.0
 	 */
 	@Override
-	public FileSourceLock tryLock(boolean shared) throws IOException {
+	public FileSourceLock tryLock(long position, long size, boolean shared) throws IOException {
 		return LockManager.get().tryAcquire(this,
 				"memory|" + ((MemoryFileSourceFactory) getFileSourceFactory()).lockId() + "|" + getCanonicalPath(),
-				shared, LockBackend.inProcess());
+				position, size, shared, LockBackend.inProcess());
 	}
 
 }

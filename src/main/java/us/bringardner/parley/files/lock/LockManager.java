@@ -12,11 +12,13 @@ import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 
 /**
- * The paths locked in this JVM, for every file system. It keeps the rule
- * {@link java.nio.channels.FileChannel#tryLock()} keeps: a JVM holds a path at most once, and asking
- * again throws {@link OverlappingFileLockException}. On its own it gives {@link LockScope#PROCESS}
- * locks, which is what {@link FileSource#tryLock(boolean)} does by default; a file system that can
- * do better passes a {@link LockBackend} that also asks everyone outside this JVM.
+ * The regions locked in this JVM, for every file system. It keeps the rule
+ * {@link java.nio.channels.FileChannel#tryLock(long, long, boolean)} keeps: a JVM never holds two
+ * overlapping regions of one path (in either mode), and asking for one throws
+ * {@link OverlappingFileLockException}; regions that don't overlap are held side by side. On its
+ * own it gives {@link LockScope#PROCESS} locks, which is what
+ * {@link FileSource#tryLock(long, long, boolean)} does by default; a file system that can do better
+ * passes a {@link LockBackend} that also asks everyone outside this JVM.
  * @since 1.1.0
  */
 public final class LockManager {
@@ -30,12 +32,12 @@ public final class LockManager {
 	/** The backend for locks that stay in this JVM. */
 	static final LockBackend IN_PROCESS = new LockBackend() {
 		@Override
-		public boolean acquire(boolean shared) {
+		public boolean acquire(long position, long size, boolean shared) {
 			return true;
 		}
 
 		@Override
-		public void release() {
+		public void release(long position, long size) {
 			// nothing outside the JVM to give back
 		}
 
@@ -50,7 +52,7 @@ public final class LockManager {
 		return INSTANCE;
 	}
 
-	private final ConcurrentHashMap<String, Grant> held = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<String, Entry> held = new ConcurrentHashMap<>();
 
 	private LockManager() {
 	}
@@ -86,42 +88,103 @@ public final class LockManager {
 	}
 
 	/**
-	 * Take a lock now, or return null if another process holds it.
-	 * @param source the path, kept in the lock for {@link FileSourceLock#source()}
-	 * @param key what names the path for this file system (see {@link #keyOf(FileSource)})
-	 * @param shared true for a shared lock
-	 * @param backend what else to ask
-	 * @return the lock, or null if someone outside this JVM holds the path
-	 * @throws java.io.FileNotFoundException if the path doesn't exist (as a FileChannel can't be
-	 *         opened on a missing file)
-	 * @throws OverlappingFileLockException if this JVM already holds the path (or is taking it)
-	 * @throws IOException if the backend could not be asked
+	 * Check a region as NIO does, and resolve a size of zero ("to the end of the file").
+	 * @param position where it starts
+	 * @param size its size
+	 * @return the size to lock: {@code size}, or {@code Long.MAX_VALUE - position} for zero
+	 * @throws IllegalArgumentException if position or size is negative, or they overflow
 	 */
-	public FileSourceLock tryAcquire(FileSource source, String key, boolean shared, LockBackend backend) throws IOException {
-		Objects.requireNonNull(source, "source");
-		Objects.requireNonNull(key, "key");
-		Objects.requireNonNull(backend, "backend");
-		requireExists(source);
-		Grant g = new Grant(this, key, source, shared, backend);
-		if( held.putIfAbsent(key, g) != null ) {
-			throw new OverlappingFileLockException();
+	public static long checkRange(long position, long size) {
+		if( position < 0 || size < 0 || position + size < 0 ) {
+			throw new IllegalArgumentException("Bad lock region: position " + position + ", size " + size);
 		}
-		boolean got = false;
-		try {
-			got = backend.acquire(shared);
-		} finally {
-			if( !got ) {
-				held.remove(key, g);
-			}
-		}
-		return got ? g : null;
+		return size == 0 ? Long.MAX_VALUE - position : size;
 	}
 
 	/**
-	 * What {@link FileSource#lock(boolean)} does by default: {@link FileSource#tryLock(boolean)} until
-	 * it succeeds. Like {@link java.nio.channels.FileChannel#lock()} it waits for other processes as
-	 * long as it takes, but not for this JVM: a path this JVM holds throws at once.
+	 * Whether two regions share a byte (positions and sizes as {@link #checkRange} returns them).
+	 * @return true if they overlap
+	 */
+	public static boolean overlaps(long position1, long size1, long position2, long size2) {
+		return position1 < end(position2, size2) && position2 < end(position1, size1);
+	}
+
+	private static long end(long position, long size) {
+		return size > Long.MAX_VALUE - position ? Long.MAX_VALUE : position + size;
+	}
+
+	/**
+	 * Take a lock on a region now, or return null if another process holds an overlapping one.
+	 * @param source the path, kept in the lock for {@link FileSourceLock#source()}
+	 * @param key what names the path for this file system (see {@link #keyOf(FileSource)})
+	 * @param position where the region starts (checked by {@link #checkRange})
+	 * @param size its size (as {@link #checkRange} returns it)
+	 * @param shared true for a shared lock
+	 * @param backend what else to ask; used for the path until this JVM holds no region of it (a
+	 *        backend for a path already locked here is not used: the first one is)
+	 * @return the lock, or null if someone outside this JVM holds an overlapping region
+	 * @throws java.io.FileNotFoundException if the path doesn't exist (as a FileChannel can't be
+	 *         opened on a missing file)
+	 * @throws OverlappingFileLockException if this JVM already holds an overlapping region
+	 * @throws IOException if the backend could not be asked
+	 */
+	public FileSourceLock tryAcquire(FileSource source, String key, long position, long size, boolean shared,
+			LockBackend backend) throws IOException {
+		Objects.requireNonNull(source, "source");
+		Objects.requireNonNull(key, "key");
+		Objects.requireNonNull(backend, "backend");
+		size = checkRange(position, size);
+		requireExists(source);
+		while (true) {
+			Entry e = held.computeIfAbsent(key, k -> new Entry(k, backend));
+			synchronized (e) {
+				if( e.dead ) {
+					continue; // emptied and removed between computeIfAbsent and here
+				}
+				for (Grant g : e.grants) {
+					if( overlaps(g.position, g.size, position, size) ) {
+						throw new OverlappingFileLockException();
+					}
+				}
+				boolean got = false;
+				try {
+					got = e.backend.acquire(position, size, shared);
+				} finally {
+					if( !got ) {
+						closeIfEmpty(e);
+					}
+				}
+				if( !got ) {
+					return null;
+				}
+				Grant g = new Grant(this, e, source, position, size, shared);
+				e.grants.add(g);
+				return g;
+			}
+		}
+	}
+
+	/** Called with e's monitor held. */
+	private void closeIfEmpty(Entry e) {
+		if( e.grants.isEmpty() ) {
+			e.dead = true;
+			held.remove(e.key, e);
+			try {
+				e.backend.close();
+			} catch (RuntimeException ex) {
+				LOG.log(Level.WARNING, "Lock backend " + e.backend + " failed to close for " + e.key, ex);
+			}
+		}
+	}
+
+	/**
+	 * What {@link FileSource#lock(long, long, boolean)} does by default:
+	 * {@link FileSource#tryLock(long, long, boolean)} until it succeeds. Like
+	 * {@link java.nio.channels.FileChannel#lock()} it waits for other processes as long as it takes,
+	 * but not for this JVM: an overlapping region this JVM holds throws at once.
 	 * @param source the path
+	 * @param position where the region starts
+	 * @param size its size (zero: to the end)
 	 * @param shared true for a shared lock
 	 * @return the lock
 	 * @throws OverlappingFileLockException if this JVM already holds the path
@@ -129,13 +192,14 @@ public final class LockManager {
 	 *         interrupt status stays set)
 	 * @throws IOException if the file system could not be asked
 	 */
-	public static FileSourceLock await(FileSource source, boolean shared) throws IOException {
+	public static FileSourceLock await(FileSource source, long position, long size, boolean shared) throws IOException {
+		checkRange(position, size);
 		long sleep = 1;
 		while (true) {
 			if( Thread.currentThread().isInterrupted() ) {
 				throw new FileLockInterruptionException();
 			}
-			FileSourceLock l = source.tryLock(shared);
+			FileSourceLock l = source.tryLock(position, size, shared);
 			if( l != null ) {
 				return l;
 			}
@@ -161,48 +225,74 @@ public final class LockManager {
 		}
 	}
 
-	/** @return the number of paths locked in this JVM (for tests) */
+	/** @return the number of paths with a region locked in this JVM (for tests) */
 	public int size() {
 		return held.size();
 	}
 
 	void release(Grant g) {
-		synchronized (g) {
+		Entry e = g.entry;
+		synchronized (e) {
 			if( g.released ) {
 				return;
 			}
 			g.released = true;
-		}
-		try {
-			g.backend.release();
-		} catch (RuntimeException ex) {
-			LOG.log(Level.WARNING, "Lock backend " + g.backend + " failed to release " + g.key, ex);
-		} finally {
+			e.grants.remove(g);
+			try {
+				e.backend.release(g.position, g.size);
+			} catch (RuntimeException ex) {
+				LOG.log(Level.WARNING, "Lock backend " + e.backend + " failed to release " + e.key, ex);
+			}
 			// after the backend let go, so the next holder in this JVM finds it free outside too
-			held.remove(g.key, g);
+			closeIfEmpty(e);
+		}
+	}
+
+	/** One path with regions locked in this JVM. Guarded by its own monitor. */
+	static final class Entry {
+		final String key;
+		final LockBackend backend;
+		final java.util.List<Grant> grants = new java.util.ArrayList<>();
+		boolean dead;
+
+		Entry(String key, LockBackend backend) {
+			this.key = key;
+			this.backend = backend;
 		}
 	}
 
 	/** A lock granted by this manager. */
 	static final class Grant implements FileSourceLock {
 		private final LockManager manager;
-		final String key;
+		final Entry entry;
 		private final FileSource source;
+		final long position;
+		final long size;
 		private final boolean shared;
-		final LockBackend backend;
 		volatile boolean released;
 
-		Grant(LockManager manager, String key, FileSource source, boolean shared, LockBackend backend) {
+		Grant(LockManager manager, Entry entry, FileSource source, long position, long size, boolean shared) {
 			this.manager = manager;
-			this.key = key;
+			this.entry = entry;
 			this.source = source;
+			this.position = position;
+			this.size = size;
 			this.shared = shared;
-			this.backend = backend;
 		}
 
 		@Override
 		public FileSource source() {
 			return source;
+		}
+
+		@Override
+		public long position() {
+			return position;
+		}
+
+		@Override
+		public long size() {
+			return size;
 		}
 
 		@Override
@@ -222,7 +312,8 @@ public final class LockManager {
 
 		@Override
 		public String toString() {
-			return (shared ? "shared" : "exclusive") + " lock on " + key + (released ? " (released)" : "");
+			return (shared ? "shared" : "exclusive") + " lock on " + entry.key + " [" + position + ", +" + size + ")"
+					+ (released ? " (released)" : "");
 		}
 	}
 }

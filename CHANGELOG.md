@@ -6,10 +6,13 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 
 ### Added
 
-- **Locks on any path**, shaped like NIO's `FileChannel.lock()` and `FileLock`. `FileSource` has five
-  new default methods: `tryLock()`, `tryLock(boolean shared)`, `lock()`, `lock(boolean shared)` and
-  `getLockScope()`. As with NIO, a lock is held on behalf of the whole JVM (a second request from this
-  JVM throws `OverlappingFileLockException`), only an existing file or directory can be locked
+- **Locks on any path**, shaped like NIO's `FileChannel.lock()` and `FileLock`. `FileSource` has seven
+  new default methods: `tryLock()`, `tryLock(boolean shared)`, `tryLock(position, size, shared)`,
+  `lock()`, `lock(boolean shared)`, `lock(position, size, shared)` and `getLockScope()`. A lock covers a
+  region of the file (`FileSourceLock.position()`, `size()`, `overlaps()`); the methods without one
+  lock the whole file, and a size of zero means to the end. As with NIO, a lock is held on behalf of
+  the whole JVM (a region overlapping one this JVM holds throws `OverlappingFileLockException`; regions
+  that don't overlap are held side by side), shared regions may overlap across processes, only an existing file or directory can be locked
   (`FileNotFoundException` otherwise), `lock` waits for other processes and can be interrupted
   (`FileLockInterruptionException`), and a lock lasts until it is released. See the new package
   `us.bringardner.parley.files.lock` (`FileSourceLock`, `LockScope`, `LockManager`, `LockBackend`) and
@@ -17,7 +20,7 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 - **`FileChannel` on FileSource paths.** `FileChannel.open(path, ...)` on a FileSource path (the NIO
   provider's `newFileChannel`, which used to throw `UnsupportedOperationException`) gives a `FileChannel`
   whose `lock()` and `tryLock()` are the FileSource's locks, as `FileLock`s, so NIO locking code runs
-  unchanged. A range locks the whole file; `map()` isn't supported; closing the channel releases its locks.
+  unchanged, regions included. `map()` isn't supported; closing the channel releases its locks.
 - Every FileSource gets `PROCESS` locks (this JVM only) from the defaults.
 - Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
   A `.parley-locks` directory in or above the locked path is the lock directory

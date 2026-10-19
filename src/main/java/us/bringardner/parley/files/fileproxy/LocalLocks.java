@@ -41,8 +41,8 @@ import us.bringardner.parley.files.lock.LockBackend;
  * locked path itself, so a changed lock directory can't let two holders in.
  * <p>
  * Java's file locks belong to the whole JVM, and so do these:
- * {@link us.bringardner.parley.files.lock.LockManager} sits in front and refuses a second request
- * for a path this JVM holds, so the OS is asked once per path. The OS frees a dead process's locks
+ * {@link us.bringardner.parley.files.lock.LockManager} sits in front and refuses a region that
+ * overlaps one this JVM holds, so the OS is asked once per region, all on one channel. The OS frees a dead process's locks
  * at once; a process that is stopped or frozen keeps them until it runs again or dies. File locks
  * are unreliable on NFS and some other network file systems.
  * <p>
@@ -153,51 +153,82 @@ final class LocalLocks {
 	}
 
 	/**
-	 * The OS side of one locked path. LockManager calls it at most once at a time per path, so this
-	 * JVM never asks the OS twice for one lock file.
+	 * The OS side of one locked path: OS locks on the same regions of its lock file. One channel holds
+	 * them all, open while this JVM holds any region: Java's file locks belong to the JVM, and on some
+	 * systems closing any channel on a file releases every lock the JVM holds on it, so a channel per
+	 * region would lose the others' locks. LockManager calls it at most once at a time.
 	 */
 	static final class Backend implements LockBackend {
 		private final File lockFile;
 		private FileChannel channel;
-		private FileLock osLock;
+		private final java.util.Map<Long, java.util.Map<Long, FileLock>> regions = new java.util.HashMap<>();
 
 		Backend(File lockFile) {
 			this.lockFile = lockFile;
 		}
 
 		@Override
-		public synchronized boolean acquire(boolean shared) throws IOException {
-			FileChannel ch = open(lockFile);
+		public synchronized boolean acquire(long position, long size, boolean shared) throws IOException {
+			boolean opened = false;
+			if( channel == null ) {
+				channel = open(lockFile);
+				opened = true;
+			}
 			FileLock l;
 			try {
-				l = ch.tryLock(0, Long.MAX_VALUE, shared);
+				l = channel.tryLock(position, size, shared);
 			} catch (OverlappingFileLockException sameFileElsewhere) {
 				// only if two locked paths share a lock file (a link into the lock directory):
-				// this JVM holds it under the other path, so it is busy
-				ch.close();
-				return false;
+				// this JVM holds the region under the other path, so it is busy
+				l = null;
 			} catch (IOException | RuntimeException e) {
-				ch.close();
+				if( opened ) {
+					closeChannel();
+				}
 				throw e;
 			}
 			if( l == null ) {
-				ch.close();
+				if( opened ) {
+					closeChannel();
+				}
 				return false;
 			}
-			channel = ch;
-			osLock = l;
+			regions.computeIfAbsent(position, k -> new java.util.HashMap<>()).put(size, l);
 			return true;
 		}
 
 		@Override
-		public synchronized void release() {
-			try {
-				if( osLock != null ) {
-					osLock.release();
-				}
-			} catch (IOException e) {
-				LOG.log(Level.FINE, "Releasing the OS lock on " + lockFile, e);
+		public synchronized void release(long position, long size) {
+			java.util.Map<Long, FileLock> bySize = regions.get(position);
+			FileLock l = bySize == null ? null : bySize.remove(size);
+			if( bySize != null && bySize.isEmpty() ) {
+				regions.remove(position);
 			}
+			if( l != null ) {
+				try {
+					l.release();
+				} catch (IOException e) {
+					LOG.log(Level.FINE, "Releasing an OS lock on " + lockFile, e);
+				}
+			}
+		}
+
+		@Override
+		public synchronized void close() {
+			for (java.util.Map<Long, FileLock> bySize : regions.values()) {
+				for (FileLock l : bySize.values()) {
+					try {
+						l.release();
+					} catch (IOException e) {
+						LOG.log(Level.FINE, "Releasing an OS lock on " + lockFile, e);
+					}
+				}
+			}
+			regions.clear();
+			closeChannel();
+		}
+
+		private void closeChannel() {
 			try {
 				if( channel != null ) {
 					channel.close();
@@ -205,7 +236,6 @@ final class LocalLocks {
 			} catch (IOException e) {
 				LOG.log(Level.FINE, "Closing " + lockFile, e);
 			}
-			osLock = null;
 			channel = null;
 		}
 
