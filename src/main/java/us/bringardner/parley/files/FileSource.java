@@ -166,8 +166,21 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	boolean canOtherExecute() throws IOException;
 
 	/**
-	 * Atomically creates a new, empty file named by this abstract pathname if 
-	 * and only if a file with this name does not yet exist.  
+	 * Atomically creates a new, empty file named by this abstract pathname if
+	 * and only if a file with this name does not yet exist, as
+	 * {@link java.io.File#createNewFile()} does.
+	 * <p>
+	 * <b>Contract: this MUST be atomic.</b> The check for an existing file and the creation are one
+	 * operation with respect to every other user of the same file system: other threads, other
+	 * processes and, for a remote or shared file system, other machines. When several callers race
+	 * to create the same path, exactly one gets {@code true} and every other gets {@code false}
+	 * (never an exception for having lost). Code that coordinates through files (lock files,
+	 * leases) depends on it, so an implementation that can't keep it must say so prominently in its
+	 * own documentation. The shared test suite ({@code FileLikeBehaviorTests}) checks it.
+	 * @return true if this call created the file; false if anything (a file, a directory, a link)
+	 *         was already at the path
+	 * @throws IOException if the file can't be created for another reason (no parent directory, no
+	 *         permission, the file system can't be reached)
 	 */
 	public boolean createNewFile() throws IOException ;
 
@@ -359,6 +372,16 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public FileSource[] listFiles(FileSourceFilter filter) throws IOException ;	
 
+	/**
+	 * Creates the directory named by this abstract pathname, as {@link java.io.File#mkdir()} does.
+	 * <p>
+	 * <b>Contract: this MUST be atomic</b>, as {@link #createNewFile()} is: when several callers race
+	 * to create the same directory, exactly one gets {@code true} and every other gets
+	 * {@code false} (never an exception for having lost).
+	 * @return true if this call created the directory; false if it wasn't created (something is
+	 *         already at the path, or the parent is missing)
+	 * @throws IOException if the file system can't be asked
+	 */
 	public boolean mkdir()  throws IOException ;
 
 	public boolean mkdirs()  throws IOException ;

@@ -279,6 +279,10 @@ must find the same lock directory, so create or remove one only while nothing is
 operating system frees a dead process's locks at once; a process that is stopped or frozen keeps its locks
 until it runs again. File locks are unreliable on NFS and some other network file systems.
 
+**Atomic create.** `createNewFile()` and `mkdir()` must be atomic in every implementation: when several callers
+race to create one path, exactly one is told `true` and the others `false`. That is the one step lock files and
+leases are built on. The shared `FileLikeBehaviorTests` check it.
+
 **Adding locks to your implementation.** Nothing is required: the default methods give `PROCESS` locks. To do
 better, override `getLockScope()` and `tryLock(boolean)`, usually by passing a `LockBackend` that asks the rest
 of the world to `LockManager.get().tryAcquire(...)`. Then extend `AbstractLockTests` from the tests jar: it runs
