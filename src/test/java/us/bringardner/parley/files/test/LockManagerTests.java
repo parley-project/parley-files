@@ -51,18 +51,45 @@ public class LockManagerTests {
 		};
 		FileSourceLock first = LockManager.get().tryAcquire(f, key, 0, 0, false, old);
 		assertNotNull(first);
-		ExecutorService ex = Executors.newFixedThreadPool(2);
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		java.util.concurrent.atomic.AtomicReference<Object> result = new java.util.concurrent.atomic.AtomicReference<>();
+		Thread locker = new Thread(() -> {
+			try {
+				result.set(LockManager.get().tryAcquire(f, key, 0, 0, false, next));
+			} catch (Throwable t) {
+				result.set(t);
+			}
+		}, "second-locker");
 		try {
 			Future<?> releasing = ex.submit(() -> { first.release(); return null; });
-			assertTrue(closing.await(10, TimeUnit.SECONDS));
-			Future<FileSourceLock> second = ex.submit(() -> LockManager.get().tryAcquire(f, key, 0, 0, false, next));
-			Thread.sleep(200); // give the second locker time to get in, if it can
+			assertTrue(closing.await(10, TimeUnit.SECONDS), "the old backend is closing");
+			locker.start();
+			// No sleeping: wait until the second locker shows which way it went. Fixed, it is blocked
+			// on the old entry's monitor; broken, it reaches the new backend while the old one closes.
+			java.lang.management.ThreadMXBean mx = java.lang.management.ManagementFactory.getThreadMXBean();
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+			while (!acquiredWhileClosing.get() && !blockedOnAnEntry(mx, locker)) {
+				assertTrue(System.nanoTime() < deadline, "the second locker neither waited nor got in: " + locker.getState());
+				Thread.onSpinWait();
+			}
 			finishClose.countDown();
 			releasing.get(10, TimeUnit.SECONDS);
-			FileSourceLock l = second.get(10, TimeUnit.SECONDS);
-			assertNotNull(l);
-			l.release();
-		} finally { finishClose.countDown(); ex.shutdownNow(); }
+			locker.join(10_000);
+			assertTrue(result.get() instanceof FileSourceLock, "the second locker gets the lock once the close is done: " + result.get());
+			((FileSourceLock) result.get()).release();
+		} finally {
+			finishClose.countDown();
+			ex.shutdownNow();
+		}
 		assertFalse(acquiredWhileClosing.get(), "the new backend took the lock while the old one was closing");
+	}
+
+	/** Whether the thread is blocked on a LockManager entry's monitor. */
+	private static boolean blockedOnAnEntry(java.lang.management.ThreadMXBean mx, Thread t) {
+		if( t.getState() != Thread.State.BLOCKED ) {
+			return false;
+		}
+		java.lang.management.ThreadInfo info = mx.getThreadInfo(t.getId());
+		return info != null && info.getLockName() != null && info.getLockName().contains("LockManager$Entry");
 	}
 }
