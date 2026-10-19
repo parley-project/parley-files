@@ -712,7 +712,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * {@link #tryLock(long, long, boolean) tryLock(0, Long.MAX_VALUE, false)}: an exclusive lock on
 	 * the whole file now, or null.
 	 * @return the lock, or null if another process holds an overlapping lock
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock,
+	 *         or another of its threads is waiting in lock() for one
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
@@ -725,7 +726,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * file now, or null.
 	 * @param shared true for a shared lock, false for an exclusive one
 	 * @return the lock, or null if another process holds an overlapping lock
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock,
+	 *         or another of its threads is waiting in lock() for one
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
@@ -750,7 +752,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @throws IllegalArgumentException if position or size is negative, or they overflow
 	 * @throws java.io.FileNotFoundException if it doesn't exist
 	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds a lock that
-	 *         overlaps the region, from any thread (locks are held on behalf of the whole JVM)
+	 *         overlaps the region, from any thread (locks are held on behalf of the whole JVM), or
+	 *         another of its threads is waiting in lock() for an overlapping region
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
 	 */
@@ -762,7 +765,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * {@link #lock(long, long, boolean) lock(0, Long.MAX_VALUE, false)}: an exclusive lock on the
 	 * whole file, waiting for it.
 	 * @return the lock
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock,
+	 *         or another of its threads is waiting in lock() for one
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while waiting
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
@@ -776,7 +780,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * waiting for it.
 	 * @param shared true for a shared lock, false for an exclusive one
 	 * @return the lock
-	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock
+	 * @throws java.nio.channels.OverlappingFileLockException if this JVM holds an overlapping lock,
+	 *         or another of its threads is waiting in lock() for one
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while waiting
 	 * @throws IOException if the file system could not be asked
 	 * @since 1.1.0
@@ -796,7 +801,8 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @throws IllegalArgumentException if position or size is negative, or they overflow
 	 * @throws java.io.FileNotFoundException if it doesn't exist
 	 * @throws java.nio.channels.OverlappingFileLockException if this JVM already holds a lock that
-	 *         overlaps the region, from any thread: it doesn't wait for this JVM
+	 *         overlaps the region, from any thread, or another of its threads is already waiting
+	 *         here for an overlapping region: it doesn't wait for this JVM
 	 * @throws java.nio.channels.FileLockInterruptionException if the thread is interrupted while
 	 *         waiting (its interrupt status stays set)
 	 * @throws IOException if the file system could not be asked

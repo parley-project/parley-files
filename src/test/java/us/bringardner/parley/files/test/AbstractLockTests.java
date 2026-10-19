@@ -544,6 +544,7 @@ public abstract class AbstractLockTests {
 		} finally {
 			ex.shutdownNow();
 		}
+		assertNull(f.tryLock(), "busy elsewhere, and the interrupted waiter left no claim in this JVM");
 		assertEquals("OK", w.ask("release"));
 		assertNotNull(tryX(f), "the interrupted request holds nothing");
 	}
@@ -566,6 +567,7 @@ public abstract class AbstractLockTests {
 		} finally {
 			ex.shutdownNow();
 		}
+		assertNull(f.tryLock(), "busy elsewhere, and the stopped waiter left no claim in this JVM");
 		assertEquals("OK", w.ask("release"));
 		assertNotNull(tryX(f), "the stopped request holds nothing");
 	}
@@ -595,6 +597,7 @@ public abstract class AbstractLockTests {
 			ex.shutdownNow();
 		}
 		assertFalse(ch.isOpen(), "an interrupted lock() closes the channel, as NIO's does");
+		assertNull(f.tryLock(), "busy elsewhere, and the interrupted waiter left no claim in this JVM");
 		assertEquals("OK", w.ask("release"));
 		assertNotNull(tryX(f), "the interrupted request holds nothing");
 	}
@@ -633,6 +636,81 @@ public abstract class AbstractLockTests {
 			}
 		} finally {
 			ex.shutdownNow();
+		}
+	}
+
+	/**
+	 * 11f. As with FileChannel.lock: while one thread waits for a region, another thread of the JVM
+	 * asking for an overlapping region gets OverlappingFileLockException, by tryLock or lock, through
+	 * FileSource and through a channel; a region that doesn't overlap is still free to take, and the
+	 * waiter gets its region when the other process lets go.
+	 */
+	@Test
+	public void aSecondThreadCantWaitForTheSameRegion() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xwaiters");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X 0 10"));
+		ExecutorService ex = Executors.newFixedThreadPool(2);
+		try {
+			Future<FileSourceLock> waiting = ex.submit(() -> f.lock(0, 10, false));
+			awaitClaim(f, 5, 1);
+			assertThrows(OverlappingFileLockException.class, () -> f.lock(5, 10, false), "lock: another thread waits for it");
+			Future<FileSourceLock> second = ex.submit(() -> f.lock(0, 1, true));
+			java.util.concurrent.ExecutionException e = assertThrows(java.util.concurrent.ExecutionException.class,
+					() -> second.get(10, TimeUnit.SECONDS));
+			assertTrue(e.getCause() instanceof OverlappingFileLockException, "lock from another thread: " + e.getCause());
+			try (FileChannel ch = writeChannel(f)) {
+				assertThrows(OverlappingFileLockException.class, () -> ch.tryLock(2, 1, false), "through a channel too");
+			}
+			FileSourceLock beside = f.tryLock(20, 5, false);
+			assertNotNull(beside, "a region that doesn't overlap is free");
+			beside.release();
+			assertEquals("OK", w.ask("release"));
+			FileSourceLock got = waiting.get(10, TimeUnit.SECONDS);
+			assertNotNull(got, "the waiter gets its region");
+			assertThrows(OverlappingFileLockException.class, () -> f.tryLock(0, 1, false), "now held");
+			got.release();
+		} finally {
+			ex.shutdownNow();
+		}
+		assertNotNull(tryX(f), "nothing left claimed");
+	}
+
+	/** 11g. The same for a thread waiting in FileChannel.lock(). */
+	@Test
+	public void aSecondThreadCantWaitForTheSameRegionOfAChannel() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xchwaiters");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try (FileChannel ch = writeChannel(f)) {
+			Future<FileLock> waiting = ex.submit(() -> ch.lock());
+			awaitClaim(f, 0, 1);
+			assertThrows(OverlappingFileLockException.class, () -> ch.tryLock(), "the same channel");
+			try (FileChannel other = writeChannel(f)) {
+				assertThrows(OverlappingFileLockException.class, () -> other.lock(), "another channel, lock");
+			}
+			assertEquals("OK", w.ask("release"));
+			FileLock got = waiting.get(10, TimeUnit.SECONDS);
+			assertTrue(got.isValid());
+			got.release();
+		} finally {
+			ex.shutdownNow();
+		}
+		assertNotNull(tryX(f), "nothing left claimed");
+	}
+
+	/** Wait until a thread of this JVM has claimed the region: tryLock throws instead of finding it busy. */
+	private static void awaitClaim(FileSource f, long position, long size) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+		while (true) {
+			try {
+				assertNull(f.tryLock(position, size, false), "held by the other process");
+			} catch (OverlappingFileLockException claimed) {
+				return;
+			}
+			assertTrue(System.nanoTime() < deadline, "the waiting thread never claimed the region");
+			Thread.sleep(5);
 		}
 	}
 

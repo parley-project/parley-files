@@ -249,7 +249,8 @@ try (FileSourceLock lock = mailbox.lock()) {    // exclusive; lock(true) for sha
 The rules are NIO's. `tryLock` returns null if another process holds the path; `lock` waits as long as it
 takes, and throws `FileLockInterruptionException` if the thread is interrupted. A lock is held **on behalf of
 the whole JVM**: asking for a region that overlaps one this JVM holds, from any thread and in either mode, throws
-`OverlappingFileLockException` at once; regions that don't overlap are held side by side. Across processes an
+`OverlappingFileLockException` at once, and so does asking while another thread of this JVM waits in `lock` for an
+overlapping region (only one thread waits for a region); regions that don't overlap are held side by side. Across processes an
 exclusive region excludes every overlapping lock, and shared regions may overlap. A size of zero locks from the
 position to the end of the file, however long it grows. So, as with NIO, these locks keep other processes out, and threads in one JVM coordinate with Java
 locks of their own (parley-net's locks do both for servers). Only an existing file or directory can be locked

@@ -54,6 +54,9 @@ public final class LockManager {
 
 	private final ConcurrentHashMap<String, Entry> held = new ConcurrentHashMap<>();
 
+	/** The wait this thread's lock() is in, for the one tryLock it is making now (see {@link Wait#attempt}). */
+	private static final ThreadLocal<Wait> CURRENT = new ThreadLocal<>();
+
 	private LockManager() {
 	}
 
@@ -125,7 +128,8 @@ public final class LockManager {
 	 * @return the lock, or null if someone outside this JVM holds an overlapping region
 	 * @throws java.io.FileNotFoundException if the path doesn't exist (as a FileChannel can't be
 	 *         opened on a missing file)
-	 * @throws OverlappingFileLockException if this JVM already holds an overlapping region
+	 * @throws OverlappingFileLockException if this JVM already holds an overlapping region, or a thread
+	 *         of this JVM is waiting in lock() for one
 	 * @throws IOException if the backend could not be asked
 	 */
 	public FileSourceLock tryAcquire(FileSource source, String key, long position, long size, boolean shared,
@@ -134,6 +138,12 @@ public final class LockManager {
 		Objects.requireNonNull(key, "key");
 		Objects.requireNonNull(backend, "backend");
 		size = checkRange(position, size);
+		// the wait of a lock() making this request, if one is; only for the request it made
+		Wait w = CURRENT.get();
+		CURRENT.remove();
+		if( w != null && (w.position != position || w.size != size) ) {
+			w = null;
+		}
 		requireExists(source);
 		while (true) {
 			Entry e = held.computeIfAbsent(key, k -> new Entry(k, backend));
@@ -146,16 +156,31 @@ public final class LockManager {
 						throw new OverlappingFileLockException();
 					}
 				}
-				boolean got = false;
-				try {
-					got = e.backend.acquire(position, size, shared);
-				} finally {
-					if( !got ) {
-						closeIfEmpty(e);
+				// as with FileChannel.lock: a thread of this JVM already waiting for an overlapping region
+				for (Wait other : e.waiters) {
+					if( other != w && overlaps(other.position, other.size, position, size) ) {
+						throw new OverlappingFileLockException();
 					}
 				}
+				boolean got;
+				try {
+					got = e.backend.acquire(position, size, shared);
+				} catch (Throwable ex) {
+					closeIfEmpty(e);
+					throw ex;
+				}
 				if( !got ) {
+					if( w != null && w.entry == null ) {
+						// a lock() that waits: its region is claimed in this JVM until it gets it or gives up
+						w.entry = e;
+						e.waiters.add(w);
+					}
+					closeIfEmpty(e);
 					return null;
+				}
+				if( w != null && w.entry == e ) {
+					e.waiters.remove(w);
+					w.entry = null;
 				}
 				Grant g = new Grant(this, e, source, position, size, shared);
 				e.grants.add(g);
@@ -171,7 +196,7 @@ public final class LockManager {
 	 * lock the JVM holds on the file, so closing the old one could drop a new backend's lock.)
 	 */
 	private void closeIfEmpty(Entry e) {
-		if( e.grants.isEmpty() ) {
+		if( e.grants.isEmpty() && e.waiters.isEmpty() ) {
 			e.dead = true;
 			try {
 				e.backend.close();
@@ -193,29 +218,101 @@ public final class LockManager {
 	 * @param size its size (zero: to the end)
 	 * @param shared true for a shared lock
 	 * @return the lock
-	 * @throws OverlappingFileLockException if this JVM already holds the path
+	 * @throws OverlappingFileLockException if this JVM already holds an overlapping region, or another
+	 *         of its threads is already waiting for one
 	 * @throws FileLockInterruptionException if the thread is interrupted while waiting (its
 	 *         interrupt status stays set)
 	 * @throws IOException if the file system could not be asked
 	 */
 	public static FileSourceLock await(FileSource source, long position, long size, boolean shared) throws IOException {
-		checkRange(position, size);
-		long sleep = 1;
-		while (true) {
-			if( Thread.currentThread().isInterrupted() ) {
-				throw new FileLockInterruptionException();
+		try (Wait w = beginWait(position, size)) {
+			long sleep = 1;
+			while (true) {
+				if( Thread.currentThread().isInterrupted() ) {
+					throw new FileLockInterruptionException();
+				}
+				FileSourceLock l = w.attempt(() -> source.tryLock(position, size, shared));
+				if( l != null ) {
+					return l;
+				}
+				try {
+					Thread.sleep(sleep);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					throw new FileLockInterruptionException();
+				}
+				sleep = Math.min(sleep * 2, MAX_POLL_MS);
 			}
-			FileSourceLock l = source.tryLock(position, size, shared);
-			if( l != null ) {
-				return l;
-			}
+		}
+	}
+
+	/**
+	 * Start waiting for a region, for a {@code lock} that waits by calling {@code tryLock} until it
+	 * succeeds (as {@link #await} does). Each try goes through {@link Wait#attempt}: once a try finds
+	 * the region busy, the region is claimed in this JVM until the wait gets it or is closed, so any
+	 * other request from this JVM for an overlapping region throws
+	 * {@link OverlappingFileLockException}, as it does while a thread waits in
+	 * {@link java.nio.channels.FileChannel#lock(long, long, boolean)}. Close the wait when done (try
+	 * with resources).
+	 * @param position where the region starts
+	 * @param size its size (zero: to the end)
+	 * @return the wait
+	 */
+	public static Wait beginWait(long position, long size) {
+		return new Wait(position, checkRange(position, size));
+	}
+
+	/** One try of a wait: a {@code tryLock} call. */
+	@FunctionalInterface
+	public interface Attempt<T> {
+		/**
+		 * @return what the try returned; null if the region is busy
+		 * @throws IOException as tryLock does
+		 */
+		T run() throws IOException;
+	}
+
+	/** A lock() waiting for a region (see {@link #beginWait}). */
+	public static final class Wait implements AutoCloseable {
+		final long position;
+		final long size;
+		/** Where the region is claimed while waiting; null before the first busy try and once got. */
+		volatile Entry entry;
+
+		Wait(long position, long size) {
+			this.position = position;
+			this.size = size;
+		}
+
+		/**
+		 * Make one try as part of this wait.
+		 * @param attempt the try (a tryLock call for this wait's region)
+		 * @param <T> what it returns
+		 * @return what it returned
+		 * @throws IOException as it does
+		 */
+		public <T> T attempt(Attempt<T> attempt) throws IOException {
+			CURRENT.set(this);
 			try {
-				Thread.sleep(sleep);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				throw new FileLockInterruptionException();
+				return attempt.run();
+			} finally {
+				CURRENT.remove();
 			}
-			sleep = Math.min(sleep * 2, MAX_POLL_MS);
+		}
+
+		/** Give up the claim, if it holds one (it got the region, or stopped waiting). */
+		@Override
+		public void close() {
+			Entry e = entry;
+			if( e != null ) {
+				synchronized (e) {
+					if( entry == e ) {
+						e.waiters.remove(this);
+						entry = null;
+						INSTANCE.closeIfEmpty(e);
+					}
+				}
+			}
 		}
 	}
 
@@ -259,6 +356,8 @@ public final class LockManager {
 		final String key;
 		final LockBackend backend;
 		final java.util.List<Grant> grants = new java.util.ArrayList<>();
+		/** lock() calls of this JVM waiting for a region of the path. */
+		final java.util.List<Wait> waiters = new java.util.ArrayList<>();
 		boolean dead;
 
 		Entry(String key, LockBackend backend) {

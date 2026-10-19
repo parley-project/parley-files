@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.lock.FileSourceLock;
+import us.bringardner.parley.files.lock.LockManager;
 
 /**
  * A {@link FileChannel} on a FileSource, from {@code FileChannel.open(path, ...)} on a FileSource path,
@@ -383,26 +384,29 @@ final class FileSourceFileChannel extends FileChannel {
 	@Override
 	public FileLock lock(long position, long size, boolean shared) throws IOException {
 		check(position, size, shared);
-		long sleep = 1;
-		while (true) {
-			if( !isOpen() ) {
-				throw new AsynchronousCloseException();
+		// while it waits, the region is claimed in this JVM: another request for it throws, as NIO's does
+		try (LockManager.Wait w = LockManager.beginWait(position, size)) {
+			long sleep = 1;
+			while (true) {
+				if( !isOpen() ) {
+					throw new AsynchronousCloseException();
+				}
+				if( Thread.currentThread().isInterrupted() ) {
+					interrupted();
+				}
+				// not tryLock: its open check would report a close meanwhile as ClosedChannelException
+				FileLock l = w.attempt(() -> attempt(position, size, shared));
+				if( l != null ) {
+					return l;
+				}
+				try {
+					Thread.sleep(sleep);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					interrupted();
+				}
+				sleep = Math.min(sleep * 2, MAX_POLL_MS);
 			}
-			if( Thread.currentThread().isInterrupted() ) {
-				interrupted();
-			}
-			// not tryLock: its open check would report a close meanwhile as ClosedChannelException
-			FileLock l = attempt(position, size, shared);
-			if( l != null ) {
-				return l;
-			}
-			try {
-				Thread.sleep(sleep);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				interrupted();
-			}
-			sleep = Math.min(sleep * 2, MAX_POLL_MS);
 		}
 	}
 

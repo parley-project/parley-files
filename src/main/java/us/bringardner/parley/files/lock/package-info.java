@@ -22,7 +22,8 @@
  * on a directory covers the directory only, not what is in it.</li>
  * <li>A lock is held on behalf of the whole JVM. A JVM never holds two overlapping regions of a file:
  * asking for one, from any thread and in either mode, throws
- * {@link java.nio.channels.OverlappingFileLockException}; regions that don't overlap are held side by
+ * {@link java.nio.channels.OverlappingFileLockException}, and so does asking while another thread of
+ * the JVM waits in {@code lock} for an overlapping region; regions that don't overlap are held side by
  * side. Threads in one JVM
  * coordinate with Java locks of their own, as they would with FileLock; parley-net's locks do this
  * for servers.</li>
