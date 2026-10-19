@@ -570,6 +570,72 @@ public abstract class AbstractLockTests {
 		assertNotNull(tryX(f), "the stopped request holds nothing");
 	}
 
+	/** 11d. Interrupting a waiting FileChannel.lock(): FileLockInterruptionException, channel closed, nothing held. */
+	@Test
+	public void waitingChannelLockCanBeInterrupted() throws Exception {
+		Worker w = worker();
+		FileSource f = file("xchinterrupt");
+		assertEquals("GOT", w.ask("lock " + workerSpec(f) + " X"));
+		FileChannel ch = writeChannel(f);
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			Future<Boolean> waiting = ex.submit(() -> {
+				try {
+					ch.lock().release();
+					return false;
+				} catch (FileLockInterruptionException e) {
+					return Thread.currentThread().isInterrupted();
+				}
+			});
+			Thread.sleep(300);
+			waiting.cancel(true);
+			ex.shutdown();
+			assertTrue(ex.awaitTermination(10, TimeUnit.SECONDS), "the waiter stopped");
+		} finally {
+			ex.shutdownNow();
+		}
+		assertFalse(ch.isOpen(), "an interrupted lock() closes the channel, as NIO's does");
+		assertEquals("OK", w.ask("release"));
+		assertNotNull(tryX(f), "the interrupted request holds nothing");
+	}
+
+	/**
+	 * 11e. close() racing tryLock() and release() on the channel: once close() returns, the channel
+	 * holds nothing, whatever the other thread was doing.
+	 */
+	@Test
+	public void closeRacingLockAndReleaseLeavesNothingHeld() throws Exception {
+		FileSource f = file("closerace");
+		ExecutorService ex = Executors.newSingleThreadExecutor();
+		try {
+			for (int i = 0; i < 300; i++) {
+				FileChannel ch = writeChannel(f);
+				boolean releaseToo = i % 2 == 0;
+				java.util.concurrent.CyclicBarrier go = new java.util.concurrent.CyclicBarrier(2);
+				Future<?> other = ex.submit(() -> {
+					go.await();
+					try {
+						FileLock l = ch.tryLock();
+						if( l != null && releaseToo ) {
+							l.release();
+						}
+					} catch (ClosedChannelException closed) {
+						// closed first (AsynchronousCloseException is one too)
+					}
+					return null;
+				});
+				go.await();
+				ch.close();
+				FileSourceLock after = f.tryLock();
+				assertNotNull(after, "round " + i + ": free once close() returned");
+				after.release();
+				other.get(10, TimeUnit.SECONDS);
+			}
+		} finally {
+			ex.shutdownNow();
+		}
+	}
+
 	/** 12. Killing the holder frees the path at once. */
 	@Test
 	public void deadHolderFreesPath() throws Exception {

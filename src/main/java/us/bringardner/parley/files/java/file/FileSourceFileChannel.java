@@ -59,6 +59,12 @@ final class FileSourceFileChannel extends FileChannel {
 	private final boolean readable;
 	private final boolean writable;
 	private final Set<Lock> locks = ConcurrentHashMap.newKeySet();
+	/**
+	 * Taking a lock and closing the channel exclude each other: a lock is taken and added to
+	 * {@link #locks} only while the channel is open, and close() empties {@link #locks} after, so it
+	 * never returns with a lock it didn't see.
+	 */
+	private final Object lockGuard = new Object();
 
 	/** A channel over what {@code newByteChannel} opened. */
 	FileSourceFileChannel(FileSource file, SeekableByteChannel ch, boolean readable, boolean writable) {
@@ -421,18 +427,19 @@ final class FileSourceFileChannel extends FileChannel {
 	 * region; AsynchronousCloseException if the channel is closed meanwhile.
 	 */
 	private FileLock attempt(long position, long size, boolean shared) throws IOException {
-		FileSourceLock l = file.tryLock(position, size, shared);
-		if( l == null ) {
-			return null;
+		synchronized (lockGuard) {
+			// isOpen() turns false before implCloseChannel runs, so a close that has begun is seen here
+			if( !isOpen() ) {
+				throw new AsynchronousCloseException();
+			}
+			FileSourceLock l = file.tryLock(position, size, shared);
+			if( l == null ) {
+				return null;
+			}
+			Lock lock = new Lock(this, l.position(), l.size(), shared, l);
+			locks.add(lock);
+			return lock;
 		}
-		Lock lock = new Lock(this, l.position(), l.size(), shared, l);
-		locks.add(lock);
-		if( !isOpen() ) {
-			// closed meanwhile: don't leave a lock behind the channel
-			lock.releaseQuietly();
-			throw new AsynchronousCloseException();
-		}
-		return lock;
 	}
 
 	private void check(long position, long size, boolean shared) throws IOException {
@@ -450,8 +457,11 @@ final class FileSourceFileChannel extends FileChannel {
 
 	@Override
 	protected void implCloseChannel() throws IOException {
-		List<Lock> held = new ArrayList<>(locks);
-		locks.clear();
+		List<Lock> held;
+		synchronized (lockGuard) {
+			held = new ArrayList<>(locks);
+			locks.clear();
+		}
 		for (Lock l : held) {
 			l.releaseQuietly();
 		}
