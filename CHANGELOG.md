@@ -27,7 +27,9 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 - **`Syncable`**: a stream that can make its writes durable (`sync()`: flush, then as `fsync`).
   `IRandomAccessStream` is Syncable (by default it does nothing more), and so are the local random access
   stream (it syncs the file) and the memory file system's (it saves); `IRandomAccessIoController.sync()`
-  is the hook under it.
+  is the hook under it. Local output streams are still `FileOutputStream`s, and `Syncable` (`fsync`).
+- Each factory's class documentation and README say how far its locks reach, whether `createNewFile()`
+  is atomic, and what `map()` and `force()` do there; the README's "Locking" section has them side by side.
 - Every FileSource gets `PROCESS` locks (this JVM only) from the defaults.
 - Local files (`FileProxy`) have `HOST` locks: every process on the machine that uses the same lock directory.
   A `.parley-locks` directory in or above the locked path is the lock directory

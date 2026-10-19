@@ -41,8 +41,19 @@ import us.bringardner.parley.files.FileSourceFactory;
 
 
 /**
- * @author Tony Bringardner
+ * FileSource factory for a file system kept in this JVM's memory. Each factory is a file system of its own.
+ * <p>
+ * <h2>Locks, atomic create and FileChannel</h2>
+ * <ul>
+ * <li><b>Locks:</b> {@code PROCESS} scope: this JVM only, per factory (the same path in two memory file systems is two files). Range locks work.</li>
+ * <li><b>Atomic create:</b> {@code createNewFile()} and {@code mkdir()} are atomic (under the file system's lock).</li>
+ * <li><b>FileChannel:</b> reads and writes the file's bytes through its random access stream.</li>
+ * <li><b>map():</b> {@code READ_ONLY} and {@code PRIVATE} map a copy of the region, made when it is mapped; {@code READ_WRITE} throws {@code UnsupportedOperationException} (a mapped buffer can only come from the JDK's own files, and a copy can't write back).</li>
+ * <li><b>force():</b> makes what was written visible to every reader of the file; there is nothing more durable for memory. Output streams show what was written at each flush.</li>
+ * </ul>
+ * See parley-files' README ("Locking") for the rules every file system keeps.
  *
+ * @author Tony Bringardner
  */
 public class MemoryFileSourceFactory extends FileSourceFactory {
 
