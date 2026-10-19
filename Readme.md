@@ -254,6 +254,21 @@ or the JVM ends, and a lock on a directory covers the directory only, not what i
 holder reads and writes the file as usual. The
 `us.bringardner.parley.files.lock` package documentation has the full rules.
 
+**Through NIO.** On a FileSource path (`file.toPath()`), `FileChannel.open` gives a real `FileChannel`, and its
+`lock()` and `tryLock()` are the FileSource's locks as `FileLock`s, so NIO code runs unchanged on any FileSource:
+
+```java
+try (FileChannel ch = FileChannel.open(file.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
+     FileLock lock = ch.lock()) {
+    ...
+}
+```
+
+NIO's rules hold (a shared lock needs a readable channel and an exclusive one a writable channel; closing the
+channel releases its locks), with three differences: a lock on a range locks the whole file (every FileSource
+locks whole files; the `FileLock` reports the range asked for), `map()` isn't supported, and what a channel can do
+depends on the file system (over FTP, which has no random access, open it for reading or with `APPEND`).
+
 How far the locks reach is `getLockScope()`:
 
 | Scope | Meaning | Who has it |
