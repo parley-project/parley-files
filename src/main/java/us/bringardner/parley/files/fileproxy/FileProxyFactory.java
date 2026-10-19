@@ -44,8 +44,19 @@ import us.bringardner.parley.files.FileSourceFactory;
 
 
 /**
- * @author Tony Bringardner
+ * FileSource factory for the local file system ({@link FileProxy}, over {@code java.io.File}).
+ * <p>
+ * <h2>Locks, atomic create and FileChannel</h2>
+ * <ul>
+ * <li><b>Locks:</b> {@code HOST} scope: every process on this machine that uses the same lock directory ({@value #LOCK_DIRECTORY_NAME}, see {@link #LOCK_DIRECTORY_PROPERTY}). OS locks on a lock file, region for region, so range locks work across processes; a dead process's locks are freed at once.</li>
+ * <li><b>Atomic create:</b> {@code createNewFile()} and {@code mkdir()} are atomic (the operating system decides).</li>
+ * <li><b>FileChannel:</b> a real JDK {@code FileChannel} on the file does the reading and writing; locks still come from the FileSource, so they agree with {@code FileSource.lock}.</li>
+ * <li><b>map():</b> a real memory map, in every mode.</li>
+ * <li><b>force():</b> syncs the file to the disk ({@code fsync}), as the JDK does. Output streams and random access streams are {@code Syncable}: {@code sync()} is {@code fsync} too.</li>
+ * </ul>
+ * See parley-files' README ("Locking") for the rules every file system keeps.
  *
+ * @author Tony Bringardner
  */
 public class FileProxyFactory extends FileSourceFactory {
 

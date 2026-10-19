@@ -286,6 +286,18 @@ How far the locks reach is `getLockScope()`:
 | `HOST` | All processes on this machine | Local files (`FileProxy`) |
 | `CLUSTER` | All processes on all machines sharing the file system | None in parley-files yet |
 
+**What each file system does.** Every factory's class documentation and README say this for it in full:
+
+| Factory | Locks reach | Atomic `createNewFile()` | `map()` | `force()` |
+|---|---|---|---|---|
+| `FileProxyFactory` (local files) | `HOST` | yes | a real map, every mode | `fsync` to the disk |
+| `MemoryFileSourceFactory` | `PROCESS` (per factory) | yes | `READ_ONLY`, `PRIVATE`: a copy | makes writes visible (nothing more durable) |
+| `JdbcFileSourceFactory` (parley-files-jdbc) | `CLUSTER` on PostgreSQL, MySQL 8, MariaDB 10.3+; else `PROCESS` | yes | `READ_ONLY`, `PRIVATE`: a copy | writes what is held; each write is committed |
+| `SftpFileSourceFactory` (parley-files-sftp) | `PROCESS` | yes | `READ_ONLY`, `PRIVATE`: a copy | sends, then `fsync@openssh.com` (parley-ssh, MINA; not JSch) |
+| `FtpFileSourceFactory`, `FtpsFileSourceFactory` (parley-files-ftp) | `PROCESS` | **no** (`mkdir()` is) | `READ_ONLY`: a copy | only sends the data |
+
+Range locks work on all of them; `READ_WRITE` maps need a local file.
+
 An application that runs as several processes checks the scope when it starts:
 
 ```java

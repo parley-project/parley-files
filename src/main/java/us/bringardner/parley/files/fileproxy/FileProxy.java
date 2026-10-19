@@ -756,7 +756,7 @@ public class FileProxy implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#getOutputStream()
 	 */
 	public OutputStream getOutputStream() throws FileNotFoundException {
-		return new FileOutputStream(target);
+		return new SyncableFileOutputStream(target, false);
 	}
 
 	/* (non-Javadoc)
@@ -764,7 +764,7 @@ public class FileProxy implements FileSource {
 	 */
 	public OutputStream getOutputStream(boolean append) throws FileNotFoundException {
 
-		return new FileOutputStream(target,append);
+		return new SyncableFileOutputStream(target, append);
 	}
 
 
@@ -1283,6 +1283,19 @@ public class FileProxy implements FileSource {
 		// whichever lock directory each request found
 		return LockManager.get().tryAcquire(this, "fileproxy|" + canonical.getPath(), position, size, shared,
 				new LocalLocks.Backend(new File(dir, hash + ".lock")));
+	}
+
+	/** A FileOutputStream that is {@link us.bringardner.parley.files.Syncable}: sync() is fsync. */
+	static final class SyncableFileOutputStream extends FileOutputStream implements us.bringardner.parley.files.Syncable {
+		SyncableFileOutputStream(File file, boolean append) throws FileNotFoundException {
+			super(file, append);
+		}
+
+		@Override
+		public void sync() throws IOException {
+			flush();
+			getFD().sync();
+		}
 	}
 
 }
