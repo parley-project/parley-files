@@ -468,8 +468,11 @@ final class FileSourceFileChannel extends FileChannel {
 			if( !acquiredBy().isOpen() ) {
 				throw new ClosedChannelException();
 			}
-			((FileSourceFileChannel) acquiredBy()).locks.remove(this);
+			// released before it leaves the channel's set: a close meanwhile still finds it, and its
+			// release waits for this one (FileSourceLock.release is serialized and idempotent), so
+			// close() never returns with the region held
 			lock.release();
+			((FileSourceFileChannel) acquiredBy()).locks.remove(this);
 		}
 
 		void releaseQuietly() {
