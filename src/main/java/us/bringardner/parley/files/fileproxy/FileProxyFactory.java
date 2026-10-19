@@ -69,14 +69,16 @@ public class FileProxyFactory extends FileSourceFactory {
 	/**
 	 * The name of a lock directory. A directory of this name in a locked path or above it holds that
 	 * path's lock files, so an application that creates one in the root it serves shares its locks
-	 * with every process serving that root.
+	 * with every process serving that root. Not used when {@link #LOCK_DIRECTORY_PROPERTY} is set.
 	 * @since 1.1.0
 	 */
 	public static final String LOCK_DIRECTORY_NAME = ".parley-locks";
 	/**
-	 * System property: the lock directory for paths with no {@value #LOCK_DIRECTORY_NAME} directory
-	 * in or above them. Default: {@code parley-locks-<user>} in the system temp directory, private
-	 * to the user. Every process that shares those paths must use the same one.
+	 * System property: the lock directory for every path, ahead of any {@value #LOCK_DIRECTORY_NAME}
+	 * directory. With one directory for all paths, every name of a file (hard links in different
+	 * trees too) finds the same lock file. Unset: the nearest {@value #LOCK_DIRECTORY_NAME} in or
+	 * above the path, or else {@code parley-locks-<user>} in the system temp directory, private to the
+	 * user. Every process that shares the files must use the same one.
 	 * @since 1.1.0
 	 */
 	public static final String LOCK_DIRECTORY_PROPERTY = "parley.files.lockDirectory";

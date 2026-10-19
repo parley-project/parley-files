@@ -29,11 +29,12 @@ import us.bringardner.parley.files.lock.LockBackend;
  * deleted: it is empty, and deleting a lock file while another process opens it would let two
  * processes lock two different files.
  * <p>
- * The lock directory is the first {@value FileProxyFactory#LOCK_DIRECTORY_NAME} directory found in
- * the locked path or above it. An application marks the root it serves by creating one there, and
- * every process serving that root then shares its locks. Without one, the
- * {@value FileProxyFactory#LOCK_DIRECTORY_PROPERTY} system property names the directory, or else
- * {@code parley-locks-<user>} in the system temp directory is used, private to the user: processes
+ * The lock directory is the one the {@value FileProxyFactory#LOCK_DIRECTORY_PROPERTY} system
+ * property names, for every path, when it is set. Otherwise it is the first
+ * {@value FileProxyFactory#LOCK_DIRECTORY_NAME} directory found in the locked path or above it: an
+ * application marks the root it serves by creating one there, and every process serving that root
+ * then shares its locks. Without either, {@code parley-locks-<user>} in the system temp directory is
+ * used, private to the user: processes
  * run as different users don't share locks there, so a warning is logged the first time it is used
  * (create a {@value FileProxyFactory#LOCK_DIRECTORY_NAME} directory in the root you serve, or set
  * the property, to share locks between users).
@@ -54,7 +55,10 @@ import us.bringardner.parley.files.lock.LockBackend;
  * are one file to the lock, and a renamed file keeps its locks. Where the system has no file key
  * (Windows), the canonical path stands in; Windows spells an existing file's canonical path in its
  * on-disk case, so only hard links are then different files to the lock. Two names for one file that
- * find different lock directories (hard links in different trees) are different files to the lock.
+ * find different lock directories (hard links in trees with their own
+ * {@value FileProxyFactory#LOCK_DIRECTORY_NAME}) are different files to the lock; set the property so
+ * every path uses one directory and they are one file. A Windows and a Unix machine sharing a file
+ * over the network don't see each other's locks (one has a file key, the other doesn't).
  * Lock files are opened without following symbolic links.
  */
 final class LocalLocks {
@@ -71,12 +75,7 @@ final class LocalLocks {
 	 * @throws IOException if the fallback can't be created or isn't private to this user
 	 */
 	static File lockDirectoryFor(File canonical) throws IOException {
-		for (File d = canonical; d != null; d = d.getParentFile()) {
-			File candidate = new File(d, FileProxyFactory.LOCK_DIRECTORY_NAME);
-			if( candidate.isDirectory() ) {
-				return candidate.getCanonicalFile();
-			}
-		}
+		// the property first: one directory for every path, so every name of a file finds it
 		String configured = System.getProperty(FileProxyFactory.LOCK_DIRECTORY_PROPERTY);
 		if( configured != null && !configured.isBlank() ) {
 			File dir = new File(configured);
@@ -84,6 +83,12 @@ final class LocalLocks {
 				throw new IOException("Can't create the lock directory " + dir);
 			}
 			return dir.getCanonicalFile();
+		}
+		for (File d = canonical; d != null; d = d.getParentFile()) {
+			File candidate = new File(d, FileProxyFactory.LOCK_DIRECTORY_NAME);
+			if( candidate.isDirectory() ) {
+				return candidate.getCanonicalFile();
+			}
 		}
 		File fallback = privateFallback().toFile();
 		if( WARNED_FALLBACK.compareAndSet(false, true) ) {
