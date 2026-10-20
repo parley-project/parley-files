@@ -799,13 +799,68 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public boolean renameTo(FileSource dest, boolean replaceExisting) throws IOException {
 		synchronized (treeLock()) {
+			if( !isLinkEntry() ) {
+				MemoryFileSource below = resolve();
+				if( below != this ) {
+					return below.renameTo(dest, replaceExisting); // below a linked directory
+				}
+			}
 			if( replaceExisting && dest instanceof MemoryFileSource && dest.exists() && !dest.equals(this) ) {
-				if( dest.isDirectory() || !exists() || isDirectory() || !dest.delete() ) {
+				MemoryFileSource d = (MemoryFileSource) dest;
+				// everything the rename needs is checked before the file there goes, so a rename that
+				// can't happen (another memory file system, a link, no write permission) never
+				// leaves the destination deleted
+				if( d.theCreator != theCreator || isLinkEntry() || d.isLinkEntry() || isRoot || d.isRoot
+						|| !canOwnerWrite() || d.isDescendantOf(this)
+						|| dest.isDirectory() || !exists() || isDirectory() ) {
+					return false;
+				}
+				if( d.hardLinks.isEmpty() ) {
+					replaceInto(d);
+					return true;
+				}
+				// other names share the file there: they keep the old content, so it goes as a name
+				if( !dest.delete() ) {
 					return false;
 				}
 			}
 			return renameTo(dest);
 		}
+	}
+
+	/**
+	 * Replace the file {@code d} with this one in one step: {@code d} takes this file's content and
+	 * attributes while it stays a file (a reader never finds it missing, even without the tree's
+	 * lock), and this name goes. Under the tree lock; both are plain files of one tree.
+	 */
+	private void replaceInto(MemoryFileSource d) {
+		d.data = data;
+		d.canOwnerRead = canOwnerRead;
+		d.canOwnerWrite = canOwnerWrite;
+		d.canExecute = canExecute;
+		d.canGroupRead = canGroupRead;
+		d.canGroupWrite = canGroupWrite;
+		d.canGroupExecute = canGroupExecute;
+		d.canOtherRead = canOtherRead;
+		d.canOtherWrite = canOtherWrite;
+		d.canOtherExecute = canOtherExecute;
+		d.group = group;
+		d.lastModified = lastModified;
+		d.lastAccessed = lastAccessed;
+		d.createDate = createDate;
+		d.owner = owner;
+		for (MemoryFileSource other : hardLinks) {
+			other.hardTarget = d;
+			d.hardLinks.add(other);
+		}
+		hardLinks.clear();
+		data = null;
+		fileType = FileType.Undefined;
+		canOwnerRead = canOwnerWrite = false;
+		d.updateRetention();
+		updateRetention();
+		touchParent();
+		d.touchParent();
 	}
 
 	/* (non-Javadoc)
