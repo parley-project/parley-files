@@ -367,7 +367,7 @@ c.orderedOperations();    // every operation, from every client, is applied in o
 ```
 
 `renameTo(dest)` never replaces an existing file; `renameTo(dest, true)` does (never a directory). Where replace
-isn't atomic it deletes `dest` and then renames, so for that moment `dest` is missing.
+isn't atomic it moves `dest` aside to a hidden name, renames, then deletes the old file: for that moment `dest` is missing, and if the rename fails the old file is put back.
 
 A file system that declares nothing gets `FileSourceCapabilities.defaults(lockScope)`: the atomic `createNewFile()`
 and `mkdir()` the FileSource contract requires, and nothing more. What Parley's factories declare:

@@ -394,8 +394,9 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * <p>
 	 * Where {@link #getCapabilities()} says {@link FileSourceCapabilities#atomicReplace()}, the
 	 * replace is one step: anyone looking finds the old file or the new one, never neither. The
-	 * default deletes {@code dest} first and then renames: for that moment {@code dest} is missing,
-	 * and if the rename then fails it stays missing.
+	 * default moves {@code dest} aside (to a hidden name next to it), renames, and then deletes the
+	 * old file: for that moment {@code dest} is missing, and if the rename fails the old file is put
+	 * back.
 	 * @param dest where it goes
 	 * @param replaceExisting true to replace a file already there (never a directory)
 	 * @return true if it was renamed
@@ -403,12 +404,31 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @since 1.1.0
 	 */
 	default boolean renameTo(FileSource dest, boolean replaceExisting) throws IOException {
-		if( replaceExisting && dest != null && dest.exists() && !dest.equals(this) ) {
-			if( dest.isDirectory() || !dest.delete() ) {
+		if( !replaceExisting || dest == null || !dest.exists() || dest.equals(this) ) {
+			return renameTo(dest);
+		}
+		if( dest.isDirectory() || !exists() || isDirectory() ) {
+			return false;
+		}
+		FileSource parent = dest.getParentFile();
+		FileSource aside = parent == null ? null
+				: parent.getChild("." + dest.getName() + "." + Long.toHexString(System.nanoTime()) + ".replaced");
+		if( aside == null || !dest.renameTo(aside) ) {
+			// can't move it aside: delete it, as a last resort
+			if( !dest.delete() ) {
 				return false;
 			}
+			return renameTo(dest);
 		}
-		return renameTo(dest);
+		boolean done = false;
+		try {
+			done = renameTo(dest);
+		} finally {
+			if( done || !aside.renameTo(dest) ) {
+				aside.delete(); // replaced (or something else is there now)
+			}
+		}
+		return done;
 	}
 
 	public boolean setLastModifiedTime(long time) throws IOException;

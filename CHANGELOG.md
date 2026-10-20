@@ -12,7 +12,8 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
   `FileSourceCapabilities.defaults(lockScope)`: what the FileSource contract requires. Local files and the
   memory file system declare theirs; the README has every Parley factory's.
 - **`renameTo(dest, replaceExisting)`**: rename over an existing file. One atomic step on local files (the
-  operating system's rename) and in memory; elsewhere, by default, `dest` is deleted and then the file renamed.
+  operating system's rename) and in memory; elsewhere, by default, `dest` is moved aside, the file renamed, and the old one deleted (put back if
+  the rename fails).
   `renameTo(dest)` still never replaces anything.
 - **Locks on any path**, shaped like NIO's `FileChannel.lock()` and `FileLock`. `FileSource` has seven
   new default methods: `tryLock()`, `tryLock(boolean shared)`, `tryLock(position, size, shared)`,

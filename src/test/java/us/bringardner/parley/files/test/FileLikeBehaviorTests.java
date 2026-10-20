@@ -402,6 +402,19 @@ public abstract class FileLikeBehaviorTests {
 		assertTrue(dir.isDirectory());
 	}
 
+	/** A replace that can't happen (nothing to move) leaves the file that was there. */
+	@Test
+	void aReplaceThatCantHappenKeepsTheDestination() throws Exception {
+		FileSource to = sourceFor("keep-to");
+		writeAll(to, "old");
+		assertFalse(sourceFor("keep-missing").renameTo(to, true), "nothing to move");
+		assertEquals("old", readAll(sourceFor("keep-to")));
+		FileSource dir = sourceFor("keep-dir");
+		assertTrue(dir.mkdir());
+		assertFalse(dir.renameTo(to, true), "a directory doesn't replace a file");
+		assertEquals("old", readAll(sourceFor("keep-to")));
+	}
+
 	/** Where replace is declared atomic, a reader never finds the file missing while it is replaced. */
 	@Test
 	void anAtomicReplaceNeverLeavesTheFileMissing() throws Exception {
