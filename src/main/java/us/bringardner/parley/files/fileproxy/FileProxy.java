@@ -734,13 +734,13 @@ public class FileProxy implements FileSource {
 		java.nio.file.Path to = ((FileProxy) dest).target.toPath();
 		try {
 			try {
-				Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				atomicMove(from, to);
 			} catch (java.nio.file.AtomicMoveNotSupportedException across) {
 				// another file system: a copy on dest's own file system, then one step over dest
 				java.nio.file.Path tmp = to.resolveSibling("." + to.getFileName() + "." + Long.toHexString(System.nanoTime()) + ".tmp");
 				Files.copy(from, tmp, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
 				try {
-					Files.move(tmp, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+					atomicMove(tmp, to);
 				} catch (IOException e) {
 					Files.deleteIfExists(tmp);
 					throw e;
@@ -752,6 +752,37 @@ public class FileProxy implements FileSource {
 		}
 		name = null;
 		return true;
+	}
+
+	private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows");
+
+	/**
+	 * One atomic move over whatever is at {@code to}. On Windows a file another program has open for
+	 * a moment (a virus scanner or the search indexer looking at a file just written, say) can't
+	 * be replaced, and the move is refused as access denied or "in use": it is tried again for up to
+	 * about two seconds before giving up. Elsewhere, and for any other failure, the first answer
+	 * stands.
+	 */
+	private static void atomicMove(java.nio.file.Path from, java.nio.file.Path to) throws IOException {
+		for (int attempt = 0; ; attempt++) {
+			try {
+				Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				return;
+			} catch (java.nio.file.AtomicMoveNotSupportedException e) {
+				throw e;
+			} catch (java.nio.file.FileSystemException e) {
+				if( !WINDOWS || attempt >= 40 || e instanceof java.nio.file.NoSuchFileException
+						|| e instanceof java.nio.file.FileAlreadyExistsException || e instanceof java.nio.file.DirectoryNotEmptyException ) {
+					throw e;
+				}
+				try {
+					Thread.sleep(50);
+				} catch (InterruptedException ie) {
+					Thread.currentThread().interrupt();
+					throw new java.io.InterruptedIOException("Interrupted while replacing " + to);
+				}
+			}
+		}
 	}
 
 	/* (non-Javadoc)
