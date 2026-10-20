@@ -14,8 +14,12 @@ public class FileSourceRandomAccessStream extends AbstractRandomAccessStream {
 	private IRandomAccessIoController io;
 	
 	
+	/**
+	 * The file is checked as RandomAccessFile does (readable, and writable in a write mode) unless the
+	 * controller says it did that when it opened the file ({@link IRandomAccessIoController#checksAccessOnOpen()}).
+	 */
 	public FileSourceRandomAccessStream(IRandomAccessIoController iocontroller,String mode) throws IOException {
-		super(iocontroller.getFile(), mode);
+		super(iocontroller.getFile(), mode, !iocontroller.checksAccessOnOpen());
 		this.io = iocontroller;
 	}
 
