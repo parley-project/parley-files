@@ -717,7 +717,9 @@ public class FileProxy implements FileSource {
 
 	/**
 	 * With {@code replaceExisting}, one atomic move over the file already there (the operating
-	 * system's rename): nobody sees it missing.
+	 * system's rename): nobody sees it missing. From another file system (where no rename is
+	 * possible), the file is copied next to {@code dest} first and that copy moved over it in one
+	 * step, so {@code dest} is still never missing or half written; the original goes afterwards.
 	 * @since 1.1.0
 	 */
 	@Override
@@ -734,8 +736,16 @@ public class FileProxy implements FileSource {
 			try {
 				Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
 			} catch (java.nio.file.AtomicMoveNotSupportedException across) {
-				// another file system: no single step is possible
-				Files.move(from, to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				// another file system: a copy on dest's own file system, then one step over dest
+				java.nio.file.Path tmp = to.resolveSibling("." + to.getFileName() + "." + Long.toHexString(System.nanoTime()) + ".tmp");
+				Files.copy(from, tmp, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+				try {
+					Files.move(tmp, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+				} catch (IOException e) {
+					Files.deleteIfExists(tmp);
+					throw e;
+				}
+				Files.delete(from);
 			}
 		} catch (IOException e) {
 			return false;
@@ -1299,8 +1309,11 @@ public class FileProxy implements FileSource {
 
 	/**
 	 * Local files: locks reach the machine (HOST), create, mkdir and replace are atomic (the
-	 * operating system's own), sync is fsync, and operations are applied in one order. On a network
-	 * file system (NFS, SMB) these are only as good as that file system makes them.
+	 * operating system's own; a replace from another file system goes through a copy next to the
+	 * target, see {@link #renameTo(FileSource, boolean)}), sync is fsync, and operations are applied
+	 * in one order. On a network file system (NFS, SMB) these are only as good as that file system
+	 * makes them; one that can't rename in one step at all makes the replace fail rather than leave
+	 * a gap.
 	 * @since 1.1.0
 	 */
 	@Override
