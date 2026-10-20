@@ -448,7 +448,29 @@ public abstract class AbstractRandomAccessStream implements IRandomAccessStream 
 	protected boolean readOnly=false;
 
 	public AbstractRandomAccessStream(FileSource file, String mode) throws IOException {
+		this(file, mode, true);
+	}
+
+	/**
+	 * @param checkAccess true: check the file as RandomAccessFile does (it must be a readable file, and
+	 *        writable in a write mode, which is created if it is missing), from what the FileSource
+	 *        says (canRead(), canWrite()). false: only the mode is checked, because whatever opened the
+	 *        file has done that against the file system itself (see
+	 *        {@link IRandomAccessIoController#checksAccessOnOpen()}).
+	 * @throws IllegalArgumentException for a mode that isn't "r", "rw", "rws", "rwd" or "w"
+	 * @since 1.1.0
+	 */
+	protected AbstractRandomAccessStream(FileSource file, String mode, boolean checkAccess) throws IOException {
 		this.file = file;
+
+		if( !checkAccess ) {
+			if( mode.equals("r")) {
+				readOnly = true;
+			} else if( !(mode.equals("w") || mode.equals("rw") || mode.equals("rws") || mode.equals("rwd"))) {
+				throw new IllegalArgumentException("invalid mode = "+mode);
+			}
+			return;
+		}
 
 		// read only causes file not found
 		// rw creates an empty file

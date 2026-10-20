@@ -55,4 +55,22 @@ public interface IRandomAccessIoController extends AutoCloseable {
 	default void sync() throws IOException {
 	}
 	FileSource getFile();
+
+	/**
+	 * Whether this controller checked the file when it was opened, against the file system itself, as
+	 * RandomAccessFile does: it throws FileNotFoundException for a directory, for a file missing in "r"
+	 * mode, and for one it can't create in a write mode. Where the file system can say at open time
+	 * that this user may not read (or write) it, it throws then too; otherwise a read or write the file
+	 * system refuses fails when it is done (FTP can't tell before it tries).
+	 * <p>
+	 * true: {@link FileSourceRandomAccessStream} doesn't check the file again from what the FileSource
+	 * says (canRead(), canWrite()). Over a remote protocol those are a guess made from the listing's
+	 * owner and permission bits (FTP: the logged-in user is often not the owner the listing shows, and the
+	 * server's own access rules don't show there), so they can refuse a file the server lets this user
+	 * write. The default is false: the stream checks.
+	 * @since 1.1.0
+	 */
+	default boolean checksAccessOnOpen() {
+		return false;
+	}
 }

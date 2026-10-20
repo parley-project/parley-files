@@ -6,6 +6,11 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 
 ### Added
 
+- **A random access controller can check the file itself when it opens it**
+  (`IRandomAccessIoController.checksAccessOnOpen()`, default false). When it says so, `FileSourceRandomAccessStream`
+  checks only the mode, not `canRead()`/`canWrite()` again: over a remote protocol those are guessed from the
+  listing's owner and permission bits, and refused files the server lets the user write (an FTP login that isn't the
+  owner the listing shows). `AbstractRandomAccessStream` has a constructor that takes whether to check.
 - **Capabilities.** `FileSource.getCapabilities()` says what a file system can guarantee: its lock scope,
   whether `createNewFile()`, `mkdir()` and replace are atomic, whether `sync()` is durable, whether its
   operations are applied in one order (`FileSourceCapabilities`). A file system that declares nothing gets
