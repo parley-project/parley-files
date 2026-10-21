@@ -2,7 +2,8 @@
 
 ## parley-files 1.1.0 (unreleased)
 
-Locking, added without changing anything that exists: code written for 1.0.0 compiles and behaves the same.
+Locking, added without changing anything that exists: code written for 1.0.0 compiles and behaves the same,
+apart from where a new memory file system starts (see Changed).
 
 ### Added
 
@@ -62,6 +63,9 @@ Locking, added without changing anything that exists: code written for 1.0.0 com
 
 ### Changed (no code change needed)
 
+- **The memory file system starts at its root** (`/`), and its title is "Memory". It started at the JVM's working
+  directory, a local path it doesn't have, so a browser opened there showed an empty folder with a local-looking
+  path; and its title was "Local". A relative path is now under `/`.
 - The memory file system's output streams show what was written at each `flush()`, as a local
   file does at once; before, nothing showed until the stream was closed.
 
