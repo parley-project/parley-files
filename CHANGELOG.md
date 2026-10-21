@@ -1,5 +1,15 @@
 # Changelog
 
+## parley-files 2.0.0 (unreleased)
+
+### Changed (needs a configuration change)
+
+- **Property names** (Parley 2.0.0; the old names are no longer read): `FileSource.default` is
+  `parley.files.defaultFactory` (`FileSourceFactory.PROP_DEFAULT_FACTORY`), `parley.credentials.cmd.enabled` /
+  `.timeout` are `parley.files.credentials.command.enabled` / `.timeout`, `parley.credentials.keystore` is
+  `parley.files.credentials.keyStore`, and `GroupSid` / `OtherSid` are `parley.files.windows.groupSid` /
+  `parley.files.windows.otherSid`.
+
 ## parley-files 1.1.0 (unreleased)
 
 Locking, added without changing anything that exists: code written for 1.0.0 compiles and behaves the same,

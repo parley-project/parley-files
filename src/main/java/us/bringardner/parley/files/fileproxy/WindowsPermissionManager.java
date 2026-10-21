@@ -18,8 +18,8 @@ import us.bringardner.parley.files.fileproxy.FileProxy.PermissionManager;
 
 public class WindowsPermissionManager implements PermissionManager{
 
-	public static final String GROUP_SID_PROPERTY = "GroupSid";
-	public static final String OTHER_SID_PROPERTY = "OtherSid";
+	public static final String GROUP_SID_PROPERTY = "parley.files.windows.groupSid";
+	public static final String OTHER_SID_PROPERTY = "parley.files.windows.otherSid";
 	
 	private static volatile String groupSid;
 	private static volatile String otherSid;
@@ -42,7 +42,7 @@ public class WindowsPermissionManager implements PermissionManager{
 				if( otherSid == null ) {
 					//  "Other" is not a Windows group (the lookup threw UserPrincipalNotFoundException).
 					//  Everyone (S-1-1-0) is what "other" means on Windows. The name is localized
-					//  on some systems, so it can be set with the OtherSid property.
+					//  on some systems, so it can be set with the parley.files.windows.otherSid property.
 					otherSid= System.getProperty(OTHER_SID_PROPERTY, "Everyone");
 				}
 			}

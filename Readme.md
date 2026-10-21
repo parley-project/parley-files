@@ -91,7 +91,7 @@ String[] available = FileSourceFactory.getRegisterdFactories();   // e.g. [filep
 
 Remote factories take their connection settings (host, user, …) through `setConnectionProperties(...)` or `connect(Properties)`; `getConnectProperties()` lists what a factory needs.
 
-To change the default factory for the whole program, set the system property `-DFileSource.default=<type id>`, or call `FileSourceFactory.setDefaultFactory(...)`.
+To change the default factory for the whole program, set the system property `-Dparley.files.defaultFactory=<type id>`, or call `FileSourceFactory.setDefaultFactory(...)`.
 
 ## URLs
 
