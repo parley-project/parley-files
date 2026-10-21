@@ -13,20 +13,20 @@ import java.util.concurrent.TimeUnit;
  * line end is dropped.
  * <p>
  * Off until enabled, because it runs whatever a settings file names: call
- * {@link #setEnabled(boolean)} or start the JVM with {@code -Dparley.credentials.cmd.enabled=true}.
+ * {@link #setEnabled(boolean)} or start the JVM with {@code -Dparley.files.credentials.command.enabled=true}.
  * <p>
  * The command runs directly, not through a shell: arguments are split on spaces, and single
  * or double quotes keep spaces in one. Its standard error is discarded (it might echo what
  * it was given), standard input is empty, and it is stopped after
- * {@code parley.credentials.cmd.timeout} milliseconds (10 seconds by default). A failing
+ * {@code parley.files.credentials.command.timeout} milliseconds (10 seconds by default). A failing
  * exit status or empty output is an error.
  */
 public class CommandCredentialProvider implements CredentialProvider {
 
 	/** System property that enables the provider when it's "true". */
-	public static final String PROP_ENABLED = "parley.credentials.cmd.enabled";
+	public static final String PROP_ENABLED = "parley.files.credentials.command.enabled";
 	/** System property: how long a command may run, in milliseconds. */
-	public static final String PROP_TIMEOUT = "parley.credentials.cmd.timeout";
+	public static final String PROP_TIMEOUT = "parley.files.credentials.command.timeout";
 	public static final long DEFAULT_TIMEOUT = 10_000;
 	/** More output than this is not a password. */
 	private static final int MAX_OUTPUT = 64*1024;

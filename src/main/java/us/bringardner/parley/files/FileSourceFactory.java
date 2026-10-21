@@ -136,6 +136,8 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	public static final String QUERY_STRING_SESSION_ID = "sessionId";
 
 	public static final FileSourceFactory fileProxyFactory = new FileProxyFactory();
+	/** System property: the id of the default factory (fileproxy, the local file system, unless set). */
+	public static final String PROP_DEFAULT_FACTORY = "parley.files.defaultFactory";
 	public static final String PROP_JAVA_PROTOCOL_HANDLER_PKGS = "java.protocol.handler.pkgs";
 
 	private static int _sessionId = 0;
@@ -586,11 +588,11 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 			synchronized (FileSourceFactory.class) {
 				ret = defaultFactory;
 				if( ret == null ) {
-					String tmp = System.getProperty("FileSource.default");
+					String tmp = System.getProperty(PROP_DEFAULT_FACTORY);
 					if( tmp != null ){
 						ret = getFileSourceFactory(tmp);
 						if( ret == null) {
-							logger.logError("Invalid FileSource.default = "+tmp+"; using "+FileProxyFactory.FACTORY_ID);
+							logger.logError("Invalid "+PROP_DEFAULT_FACTORY+" = "+tmp+"; using "+FileProxyFactory.FACTORY_ID);
 						}
 					}
 					if( ret == null ) {

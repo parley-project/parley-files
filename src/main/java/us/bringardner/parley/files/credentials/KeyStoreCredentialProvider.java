@@ -19,7 +19,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * {@code @keystore:NAME}: a secret in an encrypted PKCS12 file, {@code ~/.parley/credentials.p12}
- * by default ({@code -Dparley.credentials.keystore=PATH} for another). Portable: it needs no
+ * by default ({@code -Dparley.files.credentials.keyStore=PATH} for another). Portable: it needs no
  * OS keychain. The file must be readable by its owner only.
  * <p>
  * The master password comes from {@code @keychain:parley/keystore} when a keychain provider
@@ -30,7 +30,7 @@ import javax.crypto.spec.SecretKeySpec;
 public class KeyStoreCredentialProvider implements CredentialProvider {
 
 	/** System property naming the keystore file. */
-	public static final String PROP_PATH = "parley.credentials.keystore";
+	public static final String PROP_PATH = "parley.files.credentials.keyStore";
 	/** Where the master password is looked for first. */
 	public static final CredentialRef MASTER_REF = new CredentialRef("keychain", "parley/keystore");
 
