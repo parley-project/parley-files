@@ -29,7 +29,6 @@
  */
 package us.bringardner.parley.files.memory;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -154,14 +153,9 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 		roots = new MemoryFileSource[1];
 		MemoryFileSource root = new MemoryFileSource(null, "/", this);
 		root.isRoot = true;		
+		// the current directory is the root: the JVM's working directory is a local path, which
+		// an empty memory file system doesn't have (a browser opened there showed nothing)
 		currentDirectory = roots[0] = root;
-		//  set the current dir to the java current dir
-		File file = new File(".");
-		try {
-			currentDirectory =  createFileSource(file.getCanonicalPath());
-		} catch (IOException e) {
-			// can't happen for the memory file system; stay at the root
-		}		
 	}
 
 	/** Sets the current directory, which relative paths are resolved against. It must be a MemoryFileSource.
@@ -289,7 +283,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 
 	@Override
 	public String getTitle() {
-		return "Local";
+		return "Memory";
 	}
 
 
