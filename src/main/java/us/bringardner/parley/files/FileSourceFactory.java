@@ -48,7 +48,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.LinkedHashMap;
@@ -203,9 +202,9 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	private static LogHelper logger = new LogHelper(FileSourceFactory.class);
 	private volatile int sessionId=-1;
 
-	private static ServiceLoader<FileSourceFactory> factoryLoader= ServiceLoader.load(FileSourceFactory.class);
-
 	static {
+		// (factories in plugin jars: look again once the plugins are loaded)
+		us.bringardner.parley.plugin.Plugins.onLoad(() -> registry = null);
 
 
 		//  Make sure this is set
@@ -526,7 +525,11 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 
 
 
-	/** type id (trimmed, lower case) -> factory class, in ServiceLoader order. Built once. */
+	/**
+	 * type id (trimmed, lower case) -> factory class, in ServiceLoader order: the application's and
+	 * its plugins' (us.bringardner.parley.plugin.Plugins). Built when first needed, and again
+	 * after plugins are loaded.
+	 */
 	private static volatile Map<String, Class<? extends FileSourceFactory>> registry;
 
 	private static Map<String, Class<? extends FileSourceFactory>> registry() {
@@ -536,7 +539,8 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 				ret = registry;
 				if( ret == null ) {
 					ret = new LinkedHashMap<>();
-					for (FileSourceFactory fsf : factoryLoader) {
+					for (FileSourceFactory fsf : us.bringardner.parley.plugin.Plugins.providers(FileSourceFactory.class,
+							e -> logger.logError("A file system plugin cannot be loaded", e))) {
 						ret.putIfAbsent(fsf.getTypeId().trim().toLowerCase(), fsf.getClass());
 					}
 					registry = ret = Collections.unmodifiableMap(ret);
