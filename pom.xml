@@ -12,7 +12,6 @@
 	</parent>
 
 	<artifactId>parley-files</artifactId>
-	<version>2.0.0-SNAPSHOT</version>
 	<description>An interface that looks very much like java.io.File but lets
 		multiple file system implementations coexist (local, in-memory, FTP,
 		SFTP, JDBC, ...), with a java.nio.file provider for all of them.
@@ -205,13 +204,13 @@
 			<groupId>us.bringardner.parley</groupId>
 			<artifactId>parley-core</artifactId>
 			<!-- same core as parley-net needs (BJL-51/55); was bjl_core -->
-			<version>2.0.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>us.bringardner.parley</groupId>
 			<artifactId>parley-io</artifactId>
 			<!-- line reader uses a lock, not synchronized (BJL-55); keeps a line interrupted by a timeout; was bjl_io -->
-			<version>2.0.0-SNAPSHOT</version>
+			<version>${project.version}</version>
 		</dependency>
 
 		<dependency>
