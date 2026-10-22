@@ -87,7 +87,9 @@ apart from where a new memory file system starts (see Changed).
 
 - `FileProxy.getInputStream()` opens the file through NIO (`Files.newInputStream`). On Windows the
   file can now be renamed or deleted while it is being read, as on other systems, so a reader can't
-  make a writer's commit fail. A missing file is still a `FileNotFoundException`.
+  make a writer's commit fail. A missing file is still a `FileNotFoundException`. A named pipe or
+  device (anything that isn't a regular file) is still read with a `FileInputStream`, in order only,
+  since NIO's stream fails on a pipe ("Illegal seek"); fsh's process substitution reads one.
 
 ## parley-files 1.0.0 (2026-10-16)
 
