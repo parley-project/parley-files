@@ -30,6 +30,7 @@
 package us.bringardner.parley.files.fileproxy;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -811,6 +812,15 @@ public class FileProxy implements FileSource {
 		if( target.isDirectory() ) {
 			throw new FileNotFoundException(target + " (Is a directory)");
 		}
+		if( !isRegular() ) {
+			// A pipe, device or anything else that isn't a regular file (fsh's process substitution
+			// reads a named pipe): NIO's stream asks the channel for its size and position, which a
+			// pipe hasn't got ("Illegal seek" from available()), and so do FileInputStream's
+			// readAllBytes() and skip(). The rename problem above is only about regular files, so
+			// these get a FileInputStream that is only ever read in order. A missing file lands
+			// here too and gets FileInputStream's FileNotFoundException.
+			return new SequentialInputStream(new FileInputStream(target));
+		}
 		try {
 			return Files.newInputStream(target.toPath());
 		} catch (java.nio.file.NoSuchFileException | java.nio.file.AccessDeniedException e) {
@@ -820,6 +830,35 @@ public class FileProxy implements FileSource {
 			fnf.initCause(e);
 			throw fnf;
 		}
+	}
+
+	/**
+	 * A stream that has no position (a pipe or device): reads in order only, so readAllBytes(),
+	 * readNBytes(), skip() and transferTo() never ask the stream underneath for a position.
+	 */
+	private static final class SequentialInputStream extends java.io.FilterInputStream {
+		SequentialInputStream(InputStream in) {
+			super(in);
+		}
+
+		@Override
+		public long skip(long n) throws IOException {
+			byte[] buf = new byte[(int) Math.min(8192, Math.max(n, 1))];
+			long left = n;
+			while( left > 0 ) {
+				int got = read(buf, 0, (int) Math.min(buf.length, left));
+				if( got < 0 ) {
+					break;
+				}
+				left -= got;
+			}
+			return n - Math.max(left, 0);
+		}
+	}
+
+	/** a regular file (not a pipe, device or socket), following links */
+	private boolean isRegular() {
+		return Files.isRegularFile(target.toPath());
 	}
 
 	/* (non-Javadoc)
@@ -1073,7 +1112,14 @@ public class FileProxy implements FileSource {
 			throw new IOException("Can't skipp to "+startingPos);
 		}
 		InputStream ret = getInputStream();
-		if( startingPos > 0 ) {
+		if( startingPos > 0 && !isRegular() ) {
+			// no position on a pipe or device: read up to it, as 1.0.0 did
+			long skipped = ret.skip(startingPos);
+			if( skipped != startingPos ) {
+				ret.close();
+				throw new IOException("Can't skipp to "+startingPos+" skipped="+skipped);
+			}
+		} else if( startingPos > 0 ) {
 			// NIO's stream won't skip past the end, as FileInputStream does; a position can
 			java.nio.channels.SeekableByteChannel ch = Files.newByteChannel(target.toPath());
 			ret.close();
