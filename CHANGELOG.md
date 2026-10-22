@@ -10,6 +10,13 @@
   `parley.files.credentials.keyStore`, and `GroupSid` / `OtherSid` are `parley.files.windows.groupSid` /
   `parley.files.windows.otherSid`.
 
+### Added
+
+- File systems and credential stores in **plugin jars** (parley-core's `Plugins`): `FileSourceFactory`
+  and `Credentials` look up their providers through the plugins' class loader, and look again
+  once an application has loaded its plugins, so a factory such as parley-files-sftp's works when
+  its jar is in a plugin folder.
+
 ## parley-files 1.1.0 (unreleased)
 
 Locking, added without changing anything that exists: code written for 1.0.0 compiles and behaves the same,

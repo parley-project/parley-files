@@ -1,13 +1,13 @@
 package us.bringardner.parley.files.credentials;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+
+import us.bringardner.parley.plugin.Plugins;
 
 /**
  * The credential providers this JVM knows, by scheme, and the one place a secret setting's
@@ -47,6 +47,14 @@ public final class Credentials {
 
 	static {
 		restoreDefaults();
+		// (providers in plugin jars loaded later: added then)
+		Plugins.onLoad(() -> {
+			for(CredentialProvider p : Plugins.providers(CredentialProvider.class, null)) {
+				if( p.getClass().getClassLoader() == Plugins.classLoader() ) {
+					register(p);
+				}
+			}
+		});
 	}
 
 	private Credentials() {
@@ -61,16 +69,9 @@ public final class Credentials {
 			register(new CommandCredentialProvider());
 			register(new PromptCredentialProvider());
 			register(new KeyStoreCredentialProvider());
-			Iterator<CredentialProvider> it = ServiceLoader.load(CredentialProvider.class).iterator();
-			while( true ) {
-				try {
-					if( !it.hasNext()) {
-						break;
-					}
-					register(it.next());
-				} catch (ServiceConfigurationError e) {
-					// a broken plug-in must not take the built-ins down with it
-				}
+			// (the application's and its plugins'; a broken plug-in must not take the built-ins down with it)
+			for(CredentialProvider p : Plugins.providers(CredentialProvider.class, null)) {
+				register(p);
 			}
 		}
 		prompter = ConsolePrompter.forThisJvm();
