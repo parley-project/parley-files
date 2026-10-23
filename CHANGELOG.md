@@ -12,6 +12,11 @@
 
 ### Added
 
+- **`us.bringardner.parley.files.tree`: a file tree with file systems connected in it at paths**
+  (`VirtualFileSourceFactory`, `TreeFile`, `LocalFiles`), moved here from fsh so the console
+  browser (pfv) has the same tree as fsh's shell. A connection is listed in the folder it's in,
+  its files' paths and parents are the tree's, and the tree's table of connections is replaced,
+  never changed, so readers never lock. `TreeTest`.
 - File systems and credential stores in **plugin jars** (parley-core's `Plugins`): `FileSourceFactory`
   and `Credentials` look up their providers through the plugins' class loader, and look again
   once an application has loaded its plugins, so a factory such as parley-files-sftp's works when
