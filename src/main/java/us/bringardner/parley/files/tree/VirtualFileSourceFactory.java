@@ -24,7 +24,7 @@ import us.bringardner.parley.files.FileSourceFactory;
  * longest that it is in or under; a path no connection has is local.
  *
  * The connections are a table from the path each is at to the folder connected there. The table
- * is never changed, only replaced (mount and disconnect make a new one), so a thread that reads
+ * is never changed, only replaced (connectAt and disconnectAt make a new one), so a thread that reads
  * it (listing a folder, completing a name) sees one table whole, and never takes a lock.
  *
  * The files of a connection, its folder, and the local folders a connection is under, are
@@ -66,7 +66,7 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 	 *
 	 * @return false if dir is not a folder, or path can't have a connection
 	 */
-	public synchronized boolean mount(String path, FileSource dir) throws IOException {
+	public synchronized boolean connectAt(String path, FileSource dir) throws IOException {
 		if( dir == null || !dir.exists() || !dir.isDirectory()) {
 			return false;
 		}
@@ -90,7 +90,7 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 	 *
 	 * @return the folder that was connected there, or null if none was
 	 */
-	public synchronized FileSource unmount(String path) {
+	public synchronized FileSource disconnectAt(String path) {
 		String at = connectionPath(path);
 		if( at == null || !connections.containsKey(at)) {
 			return null;
