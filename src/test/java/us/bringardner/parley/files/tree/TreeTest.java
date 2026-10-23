@@ -73,10 +73,10 @@ public class TreeTest {
 		String base = tmp.toFile().getCanonicalPath().replace('\\', '/');
 		assertTrue(new File(tmp.toFile(), "local").mkdir());
 		VirtualFileSourceFactory tree = new VirtualFileSourceFactory();
-		assertTrue(tree.mount(base+"/mem", memoryTop()));
+		assertTrue(tree.connectAt(base+"/mem", memoryTop()));
 		// it can't be connected twice, or at /
-		assertFalse(tree.mount(base+"/mem", memoryTop()));
-		assertFalse(tree.mount("/", memoryTop()));
+		assertFalse(tree.connectAt(base+"/mem", memoryTop()));
+		assertFalse(tree.connectAt("/", memoryTop()));
 
 		FileSource dir = tree.createFileSource(base);
 		assertTrue(dir instanceof TreeFile, dir.getClass().getName());
@@ -102,7 +102,7 @@ public class TreeTest {
 
 		assertEquals(1, tree.connections().size());
 		assertNotNull(tree.connectionAt(base+"/mem"));
-		assertNotNull(tree.unmount(base+"/mem"));
+		assertNotNull(tree.disconnectAt(base+"/mem"));
 		assertNull(tree.connectionAt(base+"/mem"));
 		assertFalse(names(tree.createFileSource(base)).contains("mem"));
 	}
@@ -112,7 +112,7 @@ public class TreeTest {
 	public void aTreeOnAnotherFileSystem() throws IOException {
 		FileSource root = memoryTop();
 		VirtualFileSourceFactory tree = new VirtualFileSourceFactory(root);
-		assertTrue(tree.mount("/sub", memoryTop()));
+		assertTrue(tree.connectAt("/sub", memoryTop()));
 		assertTrue(names(tree.createFileSource("/")).contains("sub"));
 		assertTrue(tree.createFileSource("/sub/inmem.txt").exists());
 		assertTrue(tree.uses(tree.connectionAt("/sub").getFileSourceFactory()));
