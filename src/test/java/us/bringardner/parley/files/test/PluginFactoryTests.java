@@ -26,6 +26,7 @@ import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.plugin.PluginFolders;
 import us.bringardner.parley.plugin.PluginReport;
 import us.bringardner.parley.plugin.Plugins;
+import java.net.URLClassLoader;
 
 /** A file system in a plugin jar: FileSourceFactory finds it once the plugins are loaded. */
 public class PluginFactoryTests {
@@ -74,6 +75,10 @@ public class PluginFactoryTests {
 			assertTrue(FileSourceFactory.isRegisteredFactory("memory"));
 		} finally {
 			Thread.currentThread().setContextClassLoader(before);
+			// (Windows can't delete plugintest.jar while the plugin loader holds it open)
+			if( Plugins.classLoader() instanceof URLClassLoader ) {
+				((URLClassLoader)Plugins.classLoader()).close();
+			}
 		}
 	}
 }
