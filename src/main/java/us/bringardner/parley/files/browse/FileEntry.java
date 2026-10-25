@@ -68,7 +68,8 @@ public final class FileEntry {
 		IOException error = null;
 		try {
 			directory = file.isDirectory();
-			hidden = file.isHidden();
+			// (a name that starts with . is hidden where the file system has no hidden attribute, Windows)
+			hidden = file.isHidden() || hidden;
 			if( !directory ) {
 				length = file.length();
 			}
