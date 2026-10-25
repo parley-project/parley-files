@@ -122,10 +122,32 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		return at == null ? null : connections.get(at);
 	}
 
-	/** path as a connection's: absolute, logical, without the / at the end; null for / */
+	/**
+	 * Whether path is on a Windows drive ("C:/a", "C:\a" or "C:"). Only on Windows: elsewhere
+	 * "a:/b" is a relative path.
+	 */
+	public static boolean isDrivePath(String path) {
+		return java.io.File.separatorChar == '\\' && path != null && path.length() > 1
+				&& Character.isLetter(path.charAt(0)) && path.charAt(1) == ':'
+				&& (path.length() == 2 || path.charAt(2) == '/' || path.charAt(2) == '\\');
+	}
+
+	/** a drive path as this tree has it: the drive letter in capitals and / between the names */
+	private static String driveForm(String path) {
+		return Character.toUpperCase(path.charAt(0))+path.substring(1).replace('\\', '/');
+	}
+
+	/**
+	 * path as a connection's: absolute, logical, without the / at the end; null for / (or a
+	 * drive's root, C:/). A path on a Windows drive keeps its drive, "C:/data".
+	 */
 	static String connectionPath(String path) {
 		if( path == null || path.trim().isEmpty()) {
 			return null;
+		}
+		if( isDrivePath(path)) {
+			String ret = logicalPath(driveForm(path));
+			return ret.length() <= 3 ? null : ret;
 		}
 		String ret = logicalPath(path.startsWith("/") ? path : "/"+path);
 		return ret.equals("/") ? null : ret;
@@ -152,10 +174,20 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		return false;
 	}
 
-	/** the parent of path ("/a" for "/a/b", "/" for "/a"), or null for / */
+	/**
+	 * the parent of path ("/a" for "/a/b", "/" for "/a"), or null for /. On a drive, "C:/a" for
+	 * "C:/a/b" and "C:/" for "C:/a"; a drive's root has none.
+	 */
 	public static String parentPath(String path) {
 		if( path.equals("/")) {
 			return null;
+		}
+		if( isDrivePath(path)) {
+			if( path.length() <= 3 ) {
+				return null;
+			}
+			int slash = path.lastIndexOf('/');
+			return slash <= 2 ? path.substring(0, 3) : path.substring(0, slash);
 		}
 		int slash = path.lastIndexOf('/');
 		return slash <= 0 ? "/" : path.substring(0, slash);
@@ -201,7 +233,8 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		// (the local ones first: [0] is /)
 		List<FileSource> ret = new ArrayList<>();
 		for(FileSource root : localRoots) {
-			ret.add(inTree(root.getAbsolutePath().replace('\\', '/'), root));
+			String rootPath = root.getAbsolutePath().replace('\\', '/');
+			ret.add(inTree(isDrivePath(rootPath) ? driveForm(rootPath) : rootPath, root));
 		}
 		for(Map.Entry<String, FileSource> e : connections.entrySet()) {
 			ret.add(new TreeFile(this, e.getKey(), e.getValue(), true));
@@ -280,9 +313,15 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		// "." and ".." are resolved by name, as a shell's cd does (logical paths), so ".." can't
 		// be mistaken for part of a name or run past the start of a connection
 		path = logicalPath(path);
+		// (a drive's path is the tree's as "C:/a", the way a connection's is kept)
+		boolean drive = isDrivePath(path);
+		if( drive ) {
+			path = driveForm(path);
+		}
+		boolean inTree = drive || path.startsWith("/");
 
 		Map<String, FileSource> table = connections;
-		String at = path.startsWith("/") ? connectionOf(path, table) : null;
+		String at = inTree ? connectionOf(path, table) : null;
 		if( at != null ) {
 			FileSource top = table.get(at);
 			String rest = path.substring(at.length());
@@ -295,8 +334,13 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 			return new TreeFile(this, path, top.getChild(rest), false);
 		}
 		FileSource ret = path.equals("/") ? firstRoot : local.createFileSource(path);
-		if( !table.isEmpty() && path.startsWith("/") && connectionsUnder(path, table)
-				&& ret.getAbsolutePath().replace('\\', '/').equals(path)) {
+		String retPath = ret.getAbsolutePath().replace('\\', '/');
+		if( drive && isDrivePath(retPath)) {
+			retPath = driveForm(retPath);
+		}
+		// (/ is the first root, whose own path on Windows is a drive's, C:/)
+		if( !table.isEmpty() && inTree && connectionsUnder(path, table)
+				&& (retPath.equals(path) || path.equals("/") && ret == firstRoot)) {
 			// (a local folder with a connection in it or under it)
 			return new TreeFile(this, path, ret, false);
 		}
