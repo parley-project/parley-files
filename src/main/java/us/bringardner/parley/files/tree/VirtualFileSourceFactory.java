@@ -338,9 +338,10 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		if( drive && isDrivePath(retPath)) {
 			retPath = driveForm(retPath);
 		}
-		// (/ is the first root, whose own path on Windows is a drive's, C:/)
+		// (/ is the first root, whose own path on Windows is a drive's root, C:/)
+		boolean driveRoot = path.equals("/") && ret == firstRoot && isDrivePath(retPath) && retPath.length() <= 3;
 		if( !table.isEmpty() && inTree && connectionsUnder(path, table)
-				&& (retPath.equals(path) || path.equals("/") && ret == firstRoot)) {
+				&& (retPath.equals(path) || driveRoot)) {
 			// (a local folder with a connection in it or under it)
 			return new TreeFile(this, path, ret, false);
 		}
