@@ -3,7 +3,7 @@ package us.bringardner.parley.files.credentials;
 /**
  * The credential providers' own settings, {@code parley.credentials.NAME}, which one caller can
  * override with its id: the factory's type id or the module's ({@link CredentialRequest#factoryId()}),
- * such as {@code sftp}, {@code jdbc}, {@code smtp} or {@code acl.jdbc}. The nearest one set wins: for
+ * in lower case, such as {@code sftp}, {@code jdbc}, {@code smtp} or {@code acl.jdbc}. The nearest one set wins: for
  * the id {@code acl.jdbc} and the name {@code keyStore}, the first of
  * {@code parley.credentials.acl.jdbc.keyStore}, {@code parley.credentials.acl.keyStore} and
  * {@code parley.credentials.keyStore} that is set. They are system properties.
@@ -24,7 +24,8 @@ public final class CredentialSettings {
 	 * @return the nearest value set, or null
 	 */
 	public static String get(String name, CredentialRequest request) {
-		String id = request == null ? "" : request.factoryId().trim();
+		//  lower case, as every segment of a setting is (the JDBC factory's type id is Jdbc)
+		String id = request == null ? "" : request.factoryId().trim().toLowerCase(java.util.Locale.ROOT);
 		while( !id.isEmpty() ) {
 			String v = System.getProperty(PREFIX + id + "." + name);
 			if( v != null && !v.trim().isEmpty() ) {
