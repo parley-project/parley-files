@@ -55,13 +55,41 @@ public interface CredentialProvider {
 		throw new CredentialException(ref, "the "+scheme()+" provider can't store secrets");
 	}
 
+	/**
+	 * Saves secret under ref for a caller (its id, as {@link #resolve} gets it), so it is kept where
+	 * that caller's secrets are read from; a null request is every caller's place. The caller zeroes
+	 * secret afterwards. A provider that keeps one place for every caller needs only
+	 * {@link #store(CredentialRef, char[])}, which this calls by default.
+	 * @since 2.0.0
+	 */
+	default void store(CredentialRef ref, char[] secret, CredentialRequest request) throws CredentialException {
+		store(ref, secret);
+	}
+
 	/** Removes the secret ref names. */
 	default void remove(CredentialRef ref) throws CredentialException {
 		throw new CredentialException(ref, "the "+scheme()+" provider can't remove secrets");
 	}
 
+	/**
+	 * Removes the secret ref names from where a caller's secrets are read (a null request: every caller's).
+	 * @since 2.0.0
+	 */
+	default void remove(CredentialRef ref, CredentialRequest request) throws CredentialException {
+		remove(ref);
+	}
+
 	/** The references this provider holds, if it can list them; never their values. */
 	default List<CredentialRef> list() throws CredentialException {
 		return List.of();
+	}
+
+	/**
+	 * The references a caller can read from this provider (a null request: every caller's), if it can
+	 * list them; never their values.
+	 * @since 2.0.0
+	 */
+	default List<CredentialRef> list(CredentialRequest request) throws CredentialException {
+		return list();
 	}
 }

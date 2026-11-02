@@ -151,22 +151,39 @@ public final class Credentials {
 		get(ref.scheme()).ifPresent(p -> p.rejected(ref, request));
 	}
 
-	/** Stores secret under ref with its provider. */
+	/** Stores secret under ref with its provider, where every caller's secrets are read. */
 	public static void store(CredentialRef ref, char[] secret) throws CredentialException {
+		store(ref, secret, null);
+	}
+
+	/**
+	 * Stores secret under ref with its provider, where request's caller reads it (the same
+	 * {@link CredentialSettings} a resolve with that request uses); null: every caller's place.
+	 * @since 2.0.0
+	 */
+	public static void store(CredentialRef ref, char[] secret, CredentialRequest request) throws CredentialException {
 		CredentialProvider p = provider(ref);
 		if( !p.canStore()) {
 			throw new CredentialException(ref, "the "+ref.scheme()+" provider can't store secrets");
 		}
-		p.store(ref, secret);
+		p.store(ref, secret, request);
 	}
 
-	/** Removes the secret ref names from its provider. */
+	/** Removes the secret ref names from its provider, where every caller's secrets are read. */
 	public static void remove(CredentialRef ref) throws CredentialException {
+		remove(ref, null);
+	}
+
+	/**
+	 * Removes the secret ref names from its provider, where request's caller reads it; null: every caller's place.
+	 * @since 2.0.0
+	 */
+	public static void remove(CredentialRef ref, CredentialRequest request) throws CredentialException {
 		CredentialProvider p = provider(ref);
 		if( !p.canStore()) {
 			throw new CredentialException(ref, "the "+ref.scheme()+" provider can't remove secrets");
 		}
-		p.remove(ref);
+		p.remove(ref, request);
 	}
 
 	private static CredentialProvider provider(CredentialRef ref) throws CredentialException {
