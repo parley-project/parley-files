@@ -20,8 +20,8 @@ import javax.crypto.spec.SecretKeySpec;
 /**
  * {@code @keystore:NAME}: a secret in an encrypted PKCS12 file, {@code ~/.parley/credentials.p12}
  * by default ({@code -Dparley.credentials.keyStore=PATH} for another, {@code -Dparley.credentials.ID.keyStore=PATH}
- * for one caller when it is read, see {@link CredentialSettings}; secrets are stored, removed and listed in the
- * one every caller gets). Portable: it needs no
+ * for one caller, see {@link CredentialSettings}: a caller's secrets are read, stored, removed and listed in its
+ * keystore). Portable: it needs no
  * OS keychain. The file must be readable by its owner only.
  * <p>
  * The master password comes from {@code @keychain:parley/keystore} when a keychain provider
@@ -131,53 +131,71 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 	}
 
 	@Override
-	public synchronized void store(CredentialRef ref, char[] secret) throws CredentialException {
+	public void store(CredentialRef ref, char[] secret) throws CredentialException {
+		store(ref, secret, null);
+	}
+
+	@Override
+	public void remove(CredentialRef ref) throws CredentialException {
+		remove(ref, null);
+	}
+
+	@Override
+	public List<CredentialRef> list() throws CredentialException {
+		return list(null);
+	}
+
+	@Override
+	public synchronized void store(CredentialRef ref, char[] secret, CredentialRequest request) throws CredentialException {
 		if( secret == null || secret.length == 0 ) {
 			throw new CredentialException(ref, "can't store an empty secret");
 		}
-		KeyStore ks = load(ref, true);
+		Path p = path(request);
+		KeyStore ks = load(ref, true, p);
 		byte[] bytes = SecretFiles.encode(secret);
 		try {
 			ks.setEntry(alias(ref), new KeyStore.SecretKeyEntry(new SecretKeySpec(bytes, "AES")),
 					new KeyStore.PasswordProtection(master));
 		} catch (GeneralSecurityException e) {
-			throw new CredentialException(ref, "can't add it to "+path(), e);
+			throw new CredentialException(ref, "can't add it to "+p, e);
 		} finally {
 			Arrays.fill(bytes, (byte) 0);
 		}
-		save(ref, ks);
+		save(ref, ks, p);
 	}
 
 	@Override
-	public synchronized void remove(CredentialRef ref) throws CredentialException {
-		if( !Files.exists(path())) {
-			throw new CredentialException(ref, "there is no keystore at "+path());
+	public synchronized void remove(CredentialRef ref, CredentialRequest request) throws CredentialException {
+		Path p = path(request);
+		if( !Files.exists(p)) {
+			throw new CredentialException(ref, "there is no keystore at "+p);
 		}
-		KeyStore ks = load(ref, false);
+		KeyStore ks = load(ref, false, p);
 		try {
 			if( !ks.containsAlias(alias(ref))) {
-				throw new CredentialException(ref, "not found in "+path());
+				throw new CredentialException(ref, "not found in "+p);
 			}
 			ks.deleteEntry(alias(ref));
 		} catch (GeneralSecurityException e) {
-			throw new CredentialException(ref, "can't remove it from "+path(), e);
+			throw new CredentialException(ref, "can't remove it from "+p, e);
 		}
-		save(ref, ks);
+		save(ref, ks, p);
 	}
 
 	@Override
-	public synchronized List<CredentialRef> list() throws CredentialException {
-		if( !Files.exists(path())) {
+	public synchronized List<CredentialRef> list(CredentialRequest request) throws CredentialException {
+		Path p = path(request);
+		if( !Files.exists(p)) {
 			return List.of();
 		}
-		KeyStore ks = load(null, false);
+		KeyStore ks = load(null, false, p);
 		List<CredentialRef> ret = new ArrayList<>();
 		try {
 			for(String a : Collections.list(ks.aliases())) {
 				ret.add(new CredentialRef(scheme(), a));
 			}
 		} catch (GeneralSecurityException e) {
-			throw new CredentialException(null, "can't list "+path(), e);
+			throw new CredentialException(null, "can't list "+p, e);
 		}
 		return ret;
 	}
@@ -222,13 +240,13 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 		}
 	}
 
-	private void save(CredentialRef ref, KeyStore ks) throws CredentialException {
+	private void save(CredentialRef ref, KeyStore ks, Path p) throws CredentialException {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		try {
 			ks.store(out, master);
-			SecretFiles.writeOwnerOnly(path(), out.toByteArray());
+			SecretFiles.writeOwnerOnly(p, out.toByteArray());
 		} catch (IOException | GeneralSecurityException e) {
-			throw new CredentialException(ref, "can't write "+path(), e);
+			throw new CredentialException(ref, "can't write "+p, e);
 		}
 	}
 

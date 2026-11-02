@@ -289,6 +289,39 @@ public class CredentialsTests {
 	}
 
 	@Test
+	public void aCallersKeystoreIsWhereItsSecretsAreStoredAndRead() throws IOException {
+		Path all = dir.resolve("all.p12");
+		Path sftp = dir.resolve("sftp.p12");
+		try {
+			System.setProperty(KeyStoreCredentialProvider.PROP_PATH, all.toString());
+			System.setProperty("parley.credentials.sftp.keyStore", sftp.toString());
+			KeyStoreCredentialProvider ks = new KeyStoreCredentialProvider();
+			Credentials.register(ks);
+			Credentials.setPrompter((label, req) -> "master".toCharArray());
+			CredentialRef ref = new CredentialRef("keystore", "prod");
+
+			Credentials.store(ref, "for sftp".toCharArray(), REQ);
+			assertTrue(Files.exists(sftp), "stored where sftp reads");
+			assertFalse(Files.exists(all), "not in every caller's keystore");
+			assertEquals("for sftp", str(Credentials.secret("@keystore:prod", REQ)));
+			assertEquals(List.of(ref), ks.list(REQ));
+			assertTrue(ks.list().isEmpty(), "every caller's keystore has nothing");
+
+			CredentialRequest jdbc = new CredentialRequest("jdbc", "password", "db", "u");
+			Credentials.store(ref, "for all".toCharArray());
+			assertEquals("for all", str(Credentials.secret("@keystore:prod", jdbc)), "jdbc has no keystore of its own");
+			assertEquals("for sftp", str(Credentials.secret("@keystore:prod", REQ)));
+
+			Credentials.remove(ref, REQ);
+			assertTrue(ks.list(REQ).isEmpty());
+			assertEquals(List.of(ref), ks.list(), "removed from sftp's only");
+		} finally {
+			System.clearProperty(KeyStoreCredentialProvider.PROP_PATH);
+			System.clearProperty("parley.credentials.sftp.keyStore");
+		}
+	}
+
+	@Test
 	public void prepareAsksForTheMasterPasswordBeforeAnySecret() throws IOException {
 		KeyStoreCredentialProvider ks = new KeyStoreCredentialProvider(dir.resolve("creds.p12"));
 		Credentials.register(ks);
