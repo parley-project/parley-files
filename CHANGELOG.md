@@ -4,6 +4,8 @@
 
 ### Changed (needs a configuration change)
 
+- **A connection setting can be a duration** (To-Do 2.19): `ConnectionSetting.duration(key, label)`, `Kind.DURATION`,
+  checked as parley-core's durations (`30s`, `500ms`); forms show it as text.
 - **The credential providers' settings can differ per caller** (To-Do 2.19): `parley.credentials.cmd.enabled`,
   `parley.credentials.cmd.timeout` (now a duration, `10s`) and `parley.credentials.keyStore` take the caller's id
   after `parley.credentials.` to set one caller's value, the nearest one set winning: `parley.credentials.sftp.keyStore`,
