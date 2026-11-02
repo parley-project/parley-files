@@ -174,6 +174,9 @@ public class CredentialsTests {
 			assertEquals("/all.p12", CredentialSettings.get("keyStore", REQ));
 			assertEquals("/all.p12", CredentialSettings.get("keyStore", null));
 			assertNull(CredentialSettings.get("cmd.timeout", REQ));
+			System.setProperty("parley.credentials.jdbc.keyStore", "/jdbc.p12");
+			assertEquals("/jdbc.p12", CredentialSettings.get("keyStore", new CredentialRequest("Jdbc", "", "", "")), "the id in lower case");
+			System.clearProperty("parley.credentials.jdbc.keyStore");
 		} finally {
 			for(String k : keys) {
 				System.clearProperty(k);
