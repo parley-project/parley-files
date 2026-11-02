@@ -4,10 +4,15 @@
 
 ### Changed (needs a configuration change)
 
+- **The credential providers' settings can differ per caller** (To-Do 2.19): `parley.credentials.cmd.enabled`,
+  `parley.credentials.cmd.timeout` (now a duration, `10s`) and `parley.credentials.keyStore` take the caller's id
+  after `parley.credentials.` to set one caller's value, the nearest one set winning: `parley.credentials.sftp.keyStore`,
+  `parley.credentials.smtp.cmd.enabled`. The id is the `CredentialRequest`'s factory id (`sftp`, `jdbc`) or module id
+  (`smtp`, `acl.jdbc`); see `CredentialSettings`. A keystore set for one caller is the one its secrets are read from;
+  `@keystore:` secrets are stored, removed and listed in the one every caller gets.
 - **Property names** (Parley 2.0.0; the old names are no longer read): `FileSource.default` is
-  `parley.files.defaultFactory` (`FileSourceFactory.PROP_DEFAULT_FACTORY`), `parley.credentials.cmd.enabled` /
-  `.timeout` are `parley.files.credentials.command.enabled` / `.timeout`, `parley.credentials.keystore` is
-  `parley.files.credentials.keyStore`, and `GroupSid` / `OtherSid` are `parley.files.windows.groupSid` /
+  `parley.files.defaultFactory` (`FileSourceFactory.PROP_DEFAULT_FACTORY`), `parley.credentials.keystore` is
+  `parley.credentials.keyStore` (`parley.credentials.cmd.enabled` and `cmd.timeout` keep their names), and `GroupSid` / `OtherSid` are `parley.files.windows.groupSid` /
   `parley.files.windows.otherSid`.
 - **Connection settings come only from the connection, never from the JVM's system properties.**
   The old colon form of a `filesource:` URL (`filesource:TYPE:FILE:KEY=VALUE`, used when a URL had no

@@ -2,6 +2,7 @@ package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -28,6 +29,7 @@ import us.bringardner.parley.files.credentials.CommandCredentialProvider;
 import us.bringardner.parley.files.credentials.CredentialException;
 import us.bringardner.parley.files.credentials.CredentialRef;
 import us.bringardner.parley.files.credentials.CredentialRequest;
+import us.bringardner.parley.files.credentials.CredentialSettings;
 import us.bringardner.parley.files.credentials.Credentials;
 import us.bringardner.parley.files.credentials.EnvCredentialProvider;
 import us.bringardner.parley.files.credentials.FileCredentialProvider;
@@ -141,6 +143,42 @@ public class CredentialsTests {
 	public void theCommandProviderIsOffUntilEnabled() {
 		CredentialException e = assertThrows(CredentialException.class, () -> Credentials.secret("@cmd:echo hi", REQ));
 		assertTrue(e.getMessage().contains(CommandCredentialProvider.PROP_ENABLED), e.getMessage());
+	}
+
+	@Test
+	public void theCommandProviderCanBeOnForOneCaller() throws IOException {
+		assumeTrue(!WINDOWS);
+		try {
+			System.setProperty("parley.credentials.sftp.cmd.enabled", "true");
+			assertEquals("hi", str(Credentials.secret("@cmd:echo hi", REQ)), "on for sftp");
+			CredentialRequest jdbc = new CredentialRequest("jdbc", "password", "db", "u");
+			assertThrows(CredentialException.class, () -> Credentials.secret("@cmd:echo hi", jdbc), "still off for jdbc");
+			System.setProperty(CommandCredentialProvider.PROP_ENABLED, "true");
+			System.setProperty("parley.credentials.jdbc.cmd.enabled", "false");
+			assertThrows(CredentialException.class, () -> Credentials.secret("@cmd:echo hi", jdbc), "jdbc's own wins over the JVM's");
+		} finally {
+			System.clearProperty("parley.credentials.sftp.cmd.enabled");
+			System.clearProperty("parley.credentials.jdbc.cmd.enabled");
+		}
+	}
+
+	@Test
+	public void settingsTakeTheNearestCaller() {
+		String[] keys = { "parley.credentials.keyStore", "parley.credentials.acl.keyStore", "parley.credentials.acl.jdbc.keyStore" };
+		try {
+			System.setProperty(keys[0], "/all.p12");
+			System.setProperty(keys[1], "/acl.p12");
+			assertEquals("/acl.p12", CredentialSettings.get("keyStore", new CredentialRequest("acl.jdbc", "", "", "")));
+			System.setProperty(keys[2], "/acl-jdbc.p12");
+			assertEquals("/acl-jdbc.p12", CredentialSettings.get("keyStore", new CredentialRequest("acl.jdbc", "", "", "")));
+			assertEquals("/all.p12", CredentialSettings.get("keyStore", REQ));
+			assertEquals("/all.p12", CredentialSettings.get("keyStore", null));
+			assertNull(CredentialSettings.get("cmd.timeout", REQ));
+		} finally {
+			for(String k : keys) {
+				System.clearProperty(k);
+			}
+		}
 	}
 
 	@Test

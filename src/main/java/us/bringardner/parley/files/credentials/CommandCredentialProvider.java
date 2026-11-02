@@ -13,20 +13,22 @@ import java.util.concurrent.TimeUnit;
  * line end is dropped.
  * <p>
  * Off until enabled, because it runs whatever a settings file names: call
- * {@link #setEnabled(boolean)} or start the JVM with {@code -Dparley.files.credentials.command.enabled=true}.
+ * {@link #setEnabled(boolean)} or start the JVM with {@code -Dparley.credentials.cmd.enabled=true} (one
+ * caller only: {@code -Dparley.credentials.sftp.cmd.enabled=true}, see {@link CredentialSettings}).
  * <p>
  * The command runs directly, not through a shell: arguments are split on spaces, and single
  * or double quotes keep spaces in one. Its standard error is discarded (it might echo what
  * it was given), standard input is empty, and it is stopped after
- * {@code parley.files.credentials.command.timeout} milliseconds (10 seconds by default). A failing
+ * {@code parley.credentials.cmd.timeout}, a duration ({@code 10s} by default; {@code parley.credentials.ID.cmd.timeout}
+ * for one caller). A failing
  * exit status or empty output is an error.
  */
 public class CommandCredentialProvider implements CredentialProvider {
 
-	/** System property that enables the provider when it's "true". */
-	public static final String PROP_ENABLED = "parley.files.credentials.command.enabled";
-	/** System property: how long a command may run, in milliseconds. */
-	public static final String PROP_TIMEOUT = "parley.files.credentials.command.timeout";
+	/** System property that enables the provider when it's "true" (see {@link CredentialSettings} for one caller's). */
+	public static final String PROP_ENABLED = CredentialSettings.PREFIX + "cmd.enabled";
+	/** System property: how long a command may run, a duration (see {@link CredentialSettings} for one caller's). */
+	public static final String PROP_TIMEOUT = CredentialSettings.PREFIX + "cmd.timeout";
 	public static final long DEFAULT_TIMEOUT = 10_000;
 	/** More output than this is not a password. */
 	private static final int MAX_OUTPUT = 64*1024;
@@ -40,8 +42,27 @@ public class CommandCredentialProvider implements CredentialProvider {
 
 	/** Whether the provider is on. */
 	public static boolean isEnabled() {
+		return isEnabled(null);
+	}
+
+	/** Whether the provider is on for this request's caller ({@code parley.credentials.ID.cmd.enabled}, else the JVM's). */
+	public static boolean isEnabled(CredentialRequest request) {
 		Boolean e = enabled;
-		return e != null ? e : Boolean.getBoolean(PROP_ENABLED);
+		return e != null ? e : Boolean.parseBoolean(CredentialSettings.get("cmd.enabled", request));
+	}
+
+	/** How long a command may run for this request's caller, in ms */
+	static long timeout(CredentialRequest request) {
+		String v = CredentialSettings.get("cmd.timeout", request);
+		if( v == null ) {
+			return DEFAULT_TIMEOUT;
+		}
+		try {
+			return us.bringardner.parley.core.util.Durations.parse(v);
+		} catch (IllegalArgumentException e) {
+			System.err.println("Invalid "+PROP_TIMEOUT+": "+e.getMessage()+". Using "+us.bringardner.parley.core.util.Durations.format(DEFAULT_TIMEOUT));
+			return DEFAULT_TIMEOUT;
+		}
 	}
 
 	@Override
@@ -54,18 +75,35 @@ public class CommandCredentialProvider implements CredentialProvider {
 		return "the output of a command, such as a password manager's CLI (read only)";
 	}
 
+	/** On for the JVM, or for at least one caller (parley.credentials.ID.cmd.enabled=true): resolve checks the caller */
 	@Override
 	public boolean isAvailable() {
-		return isEnabled();
+		if( isEnabled() ) {
+			return true;
+		}
+		if( enabled != null ) {
+			return false;
+		}
+		for(String name : System.getProperties().stringPropertyNames()) {
+			if( name.startsWith(CredentialSettings.PREFIX) && name.endsWith(".cmd.enabled")
+					&& Boolean.parseBoolean(System.getProperty(name, "").trim()) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
 	public String unavailableReason() {
-		return isEnabled() ? "" : "it is off; enable it with -D"+PROP_ENABLED+"=true";
+		return isAvailable() ? "" : "it is off; enable it with -D"+PROP_ENABLED+"=true";
 	}
 
 	@Override
 	public char[] resolve(CredentialRef ref, CredentialRequest request) throws CredentialException {
+		if( !isEnabled(request) ) {
+			throw new CredentialException(ref, "the cmd provider is off for "+(request == null || request.factoryId().isEmpty() ? "this program" : request.factoryId())
+					+"; enable it with -D"+PROP_ENABLED+"=true");
+		}
 		List<String> args = split(ref);
 		Process p;
 		try {
@@ -82,7 +120,7 @@ public class CommandCredentialProvider implements CredentialProvider {
 		t.setDaemon(true);
 		t.start();
 		try {
-			long timeout = Long.getLong(PROP_TIMEOUT, DEFAULT_TIMEOUT);
+			long timeout = timeout(request);
 			if( !p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
 				p.destroyForcibly();
 				reader.clear();

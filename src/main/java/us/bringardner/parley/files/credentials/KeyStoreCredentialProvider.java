@@ -19,7 +19,9 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * {@code @keystore:NAME}: a secret in an encrypted PKCS12 file, {@code ~/.parley/credentials.p12}
- * by default ({@code -Dparley.files.credentials.keyStore=PATH} for another). Portable: it needs no
+ * by default ({@code -Dparley.credentials.keyStore=PATH} for another, {@code -Dparley.credentials.ID.keyStore=PATH}
+ * for one caller when it is read, see {@link CredentialSettings}; secrets are stored, removed and listed in the
+ * one every caller gets). Portable: it needs no
  * OS keychain. The file must be readable by its owner only.
  * <p>
  * The master password comes from {@code @keychain:parley/keystore} when a keychain provider
@@ -29,8 +31,8 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class KeyStoreCredentialProvider implements CredentialProvider {
 
-	/** System property naming the keystore file. */
-	public static final String PROP_PATH = "parley.files.credentials.keyStore";
+	/** System property naming the keystore file (see {@link CredentialSettings} for one caller's). */
+	public static final String PROP_PATH = CredentialSettings.PREFIX + "keyStore";
 	/** Where the master password is looked for first. */
 	public static final CredentialRef MASTER_REF = new CredentialRef("keychain", "parley/keystore");
 
@@ -50,10 +52,16 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 
 	/** The keystore file this provider uses. */
 	public Path path() {
+		return path(null);
+	}
+
+	/** The keystore file this provider reads for a request's caller. */
+	public Path path(CredentialRequest request) {
 		if( fixedPath != null ) {
 			return fixedPath;
 		}
-		return SecretFiles.expand(System.getProperty(PROP_PATH, "~/.parley/credentials.p12"));
+		String p = CredentialSettings.get("keyStore", request);
+		return SecretFiles.expand(p == null ? "~/.parley/credentials.p12" : p);
 	}
 
 	@Override
@@ -96,11 +104,11 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 
 	@Override
 	public synchronized char[] resolve(CredentialRef ref, CredentialRequest request) throws CredentialException {
-		Path p = path();
+		Path p = path(request);
 		if( !Files.exists(p)) {
 			throw new CredentialException(ref, "there is no keystore at "+p);
 		}
-		KeyStore ks = load(ref, false);
+		KeyStore ks = load(ref, false, p);
 		try {
 			Key key = ks.getKey(alias(ref), master);
 			if( key == null ) {
@@ -183,7 +191,10 @@ public class KeyStoreCredentialProvider implements CredentialProvider {
 
 	/** The keystore, unlocked; a new empty one if create and there's no file yet. */
 	private KeyStore load(CredentialRef ref, boolean create) throws CredentialException {
-		Path p = path();
+		return load(ref, create, path());
+	}
+
+	private KeyStore load(CredentialRef ref, boolean create, Path p) throws CredentialException {
 		boolean exists = Files.exists(p);
 		if( exists ) {
 			SecretFiles.checkOwnerOnly(ref, p);
