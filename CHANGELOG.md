@@ -9,6 +9,14 @@
   `.timeout` are `parley.files.credentials.command.enabled` / `.timeout`, `parley.credentials.keystore` is
   `parley.files.credentials.keyStore`, and `GroupSid` / `OtherSid` are `parley.files.windows.groupSid` /
   `parley.files.windows.otherSid`.
+- **Connection settings come only from the connection, never from the JVM's system properties.**
+  The old colon form of a `filesource:` URL (`filesource:TYPE:FILE:KEY=VALUE`, used when a URL had no
+  query string) is gone, with `FileSourceURLConnection.connect1()`: it filled every connection key
+  the URL left out from the system properties, so a bare `-Dhost=...` or `-Dpassword=...` reached
+  every connection in the JVM. The one form is `filesource:PATH?sourcetype=TYPE&KEY=VALUE...`; a
+  `filesource:` URL without a query string fails with `MalformedURLException`. And
+  `CommandLinePropertyEditor.editProperties` no longer starts a value from the system property
+  `<name>.<key>`, only from `<name>.<key>` in the properties it is given.
 
 ### Added
 
