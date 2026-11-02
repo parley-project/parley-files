@@ -20,6 +20,9 @@
 
 ### Added
 
+- **The settings this module reads are listed** in `META-INF/parley/settings.list`, so a Parley server's
+  start-up check (parley-net's `KnownSettings`, To-Do 2.16) knows them and warns only about a setting
+  nothing reads. parley-net's KnownSettingsTest checks the list has every name the code here spells out.
 - **`us.bringardner.parley.files.tree`: a file tree with file systems connected in it at paths**
   (`VirtualFileSourceFactory`, `TreeFile`, `LocalFiles`), moved here from fsh so the console
   browser (pfv) has the same tree as fsh's shell. A connection is listed in the folder it's in,

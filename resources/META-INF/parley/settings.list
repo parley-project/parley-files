@@ -1,0 +1,10 @@
+# The settings parley-files reads, for the start-up check of parley-net's servers
+# (format: parley-net's KnownSettings). Add a name here when code here starts reading it.
+
+parley.files.defaultFactory
+parley.files.lockDirectory
+parley.files.credentials.command.enabled
+parley.files.credentials.command.timeout
+parley.files.credentials.keyStore
+parley.files.windows.groupSid
+parley.files.windows.otherSid
