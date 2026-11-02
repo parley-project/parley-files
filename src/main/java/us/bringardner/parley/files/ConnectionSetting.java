@@ -173,6 +173,16 @@ public final class ConnectionSetting {
 		return of(key, label, Kind.DURATION).withDescription("A duration: 30s, 500ms, 5m");
 	}
 
+	/**
+	 * A duration that may also be -1, for a setting where -1 means "no limit" (such as a cache kept
+	 * until it's refreshed); the description should say what it means.
+	 * @since 2.0.0
+	 */
+	public static ConnectionSetting durationOrMinusOne(String key, String label) {
+		return new ConnectionSetting(key, label, Kind.DURATION, "", "A duration: 30s, 500ms, 5m; or -1", false, false,
+				List.of(), -1L, null, null, null);
+	}
+
 	public static ConnectionSetting bool(String key, String label) {
 		return of(key, label, Kind.BOOLEAN).withDefault("false");
 	}
@@ -241,6 +251,9 @@ public final class ConnectionSetting {
 			}
 			return null;
 		case DURATION:
+			if( v.equals("-1") && min != null && min < 0 ) {
+				return null;
+			}
 			try {
 				us.bringardner.parley.core.util.Durations.parse(v);
 				return null;
