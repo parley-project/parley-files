@@ -121,4 +121,26 @@ public class ErrorHandlingTests {
 		assertEquals(0, unresolved.getLastModified(), "unknown date");
 	}
 
+	/**
+	 * The old colon form (filesource:TYPE:FILE:KEY=VALUE) filled missing connection keys from the
+	 * system properties; it is gone, so a URL without a query string is refused, whatever is set.
+	 */
+	@Test
+	public void urlWithoutAQueryIsRefused() throws Exception {
+		String before = System.getProperty("name");
+		System.setProperty("name", "from-the-jvm");
+		try {
+			URL colonForm = new URL(FileSourceFactory.FILE_SOURCE_PROTOCOL+":memory:/x:sessionId=0");
+			assertThrows(java.net.MalformedURLException.class, () -> colonForm.openConnection().getInputStream());
+			URL noQuery = new URL(FileSourceFactory.FILE_SOURCE_PROTOCOL+":/x");
+			assertThrows(java.net.MalformedURLException.class, () -> noQuery.openConnection().getInputStream());
+		} finally {
+			if( before == null ) {
+				System.clearProperty("name");
+			} else {
+				System.setProperty("name", before);
+			}
+		}
+	}
+
 }

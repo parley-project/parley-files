@@ -76,8 +76,8 @@ public class CommandLinePropertyEditor {
 	 * Asks for each setting that applies, in turn, until the user enters 'ok' or 'done'
 	 * (accepted if the values are valid) or 'cancel' or 'exit'. Secrets are never shown.
 	 *
-	 * @param name1 a connection name: an empty value falls back to name1.key in props1, then
-	 *        in the system properties
+	 * @param name1 a connection name: an empty value falls back to name1.key in props1
+	 *        (never to the system properties)
 	 * @param props1 the values to start from; on acceptance, the values entered
 	 * @param settings what to ask for (from {@link FileSourceFactory#getConnectionSettings()})
 	 * @return true if accepted
@@ -90,9 +90,6 @@ public class CommandLinePropertyEditor {
 			String val = values.getProperty(s.key());
 			if( val == null || val.isEmpty()) {
 				val = props1.getProperty(name1+"."+s.key());
-				if( val == null || val.isEmpty()) {
-					val = System.getProperty(name1+"."+s.key());
-				}
 			}
 			values.setProperty(s.key(), val == null || val.isEmpty() ? s.defaultValue() : val);
 		}

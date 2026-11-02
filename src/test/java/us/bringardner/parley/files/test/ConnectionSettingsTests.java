@@ -198,4 +198,27 @@ public class ConnectionSettingsTests {
 		run("other\ncancel\n", values, false);
 		assertEquals("h", values.getProperty("host"));
 	}
+
+	/** A value can start from NAME.KEY in the given properties, never from a system property. */
+	@Test
+	public void editorStartsFromTheGivenPropertiesOnly() throws IOException {
+		Properties named = props("test.host", "h1");
+		run("ok\n", named, true);
+		assertEquals("h1", named.getProperty("host"));
+
+		String before = System.getProperty("test.host");
+		System.setProperty("test.host", "from-the-jvm");
+		try {
+			Properties values = new Properties();
+			String shown = run("ok\nexample.com\nok\n", values, true);
+			assertTrue(shown.contains("Host is required"), shown);
+			assertEquals("example.com", values.getProperty("host"));
+		} finally {
+			if( before == null ) {
+				System.clearProperty("test.host");
+			} else {
+				System.setProperty("test.host", before);
+			}
+		}
+	}
 }

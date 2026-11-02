@@ -29,15 +29,12 @@
  */
 package us.bringardner.parley.files;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Properties;
 
 import us.bringardner.parley.core.util.LogHelper;
-import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 
 /**
  * 
@@ -76,59 +73,6 @@ public class FileSourceURLConnection extends URLConnection {
 		return target;
 	}
 	
-	/* (non-Javadoc)
-	 * @see java.net.URLConnection#connect()
-	 */
-	public void connect1() throws IOException {
-		if( target == null ) {
-			//  Find the target FileSOurce
-			URL url = getURL();
-			logger.logDebug("url="+url);
-						
-			String tmp = url.toString();
-			String parts[] = tmp.split(":");
-			
-			logger.logDebug("parts.len = "+parts.length);
-			
-			if( parts.length < 3 ) {
-				throw new MalformedURLException("URL does not look like a fileSource URL len="+parts.length);
-			}
-			
-			String type = parts[1];
-			logger.logDebug("type="+type);
-			
-			String file = parts[2];
-			if(type.equals(FileProxyFactory.FACTORY_ID) ) {
-				file = parts[2]+":"+parts[3];
-			}
-			
-			//  Create a Property from the remaining parts
-			Properties prop = new Properties(System.getProperties());
-			
-			for (int idx = 3; idx < parts.length; idx++) {
-				String [] kv = parts[idx].split("=");
-				if( kv.length > 1) {
-					prop.setProperty(kv[0], kv[1]);
-				}
-			}
-			
-			FileSourceFactory factory = null;
-			
-			
-			factory = FileSourceFactory.getFileSourceFactory(type);
-			if( factory == null ){
-				throw new FileNotFoundException("No factory for "+type);
-			}
-		
-			factory.connect(prop);
-			
-			target = factory.createFileSource(file);
-
-		}
-	}
-	
-
-
 	public java.io.InputStream getInputStream()
 		throws java.io.IOException
 	{
@@ -186,11 +130,13 @@ public class FileSourceURLConnection extends URLConnection {
 			}
 			logger.logDebug("url="+url);
 						
+			// One form only: filesource:PATH?sourcetype=TYPE&KEY=VALUE... The old colon form
+			// (filesource:TYPE:FILE:KEY=VALUE) was dropped in 2.0.0: it filled missing connection
+			// keys from the JVM's system properties, so a bare -Dhost=... reached every connection.
 			String tmp = url.getQuery();
 			if( tmp == null ) {
-				connect1();
-				return;
-			} 
+				throw new MalformedURLException(FileSourceFactory.QUERY_STRING_SOURCE_TYPE+" is not defined in the query string. ("+url+")");
+			}
 			
 			String parts[] = tmp.split("[&,]");
 			
