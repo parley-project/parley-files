@@ -48,6 +48,12 @@ public final class ConnectionSetting {
 		MULTILINE_SECRET,
 		/** A whole number, between min and max if they're set. */
 		INTEGER,
+		/**
+		 * A length of time: a whole number with ms, s, m, h or d ({@code 30s}), a bare number being
+		 * milliseconds (parley-core's Durations). A UI shows it as text.
+		 * @since 2.0.0
+		 */
+		DURATION,
 		/** "true" or "false". */
 		BOOLEAN,
 		/** One of the choices. */
@@ -159,6 +165,14 @@ public final class ConnectionSetting {
 		return new ConnectionSetting(key, label, Kind.INTEGER, "", "", false, false, List.of(), min, max, null, null);
 	}
 
+	/**
+	 * A length of time ({@link Kind#DURATION}): {@code 30s}, {@code 500ms}; a bare number is milliseconds.
+	 * @since 2.0.0
+	 */
+	public static ConnectionSetting duration(String key, String label) {
+		return of(key, label, Kind.DURATION).withDescription("A duration: 30s, 500ms, 5m");
+	}
+
 	public static ConnectionSetting bool(String key, String label) {
 		return of(key, label, Kind.BOOLEAN).withDefault("false");
 	}
@@ -226,6 +240,13 @@ public final class ConnectionSetting {
 						: min != null ? "at least "+min : "at most "+max);
 			}
 			return null;
+		case DURATION:
+			try {
+				us.bringardner.parley.core.util.Durations.parse(v);
+				return null;
+			} catch (IllegalArgumentException e) {
+				return label+" must be a duration (30s, 500ms, 5m)";
+			}
 		case BOOLEAN:
 			return v.equalsIgnoreCase("true") || v.equalsIgnoreCase("false") ? null : label+" must be true or false";
 		case CHOICE:

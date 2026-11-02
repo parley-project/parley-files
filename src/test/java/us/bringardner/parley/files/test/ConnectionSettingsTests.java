@@ -45,6 +45,17 @@ public class ConnectionSettingsTests {
 	}
 
 	@Test
+	public void aDurationIsChecked() {
+		ConnectionSetting d = ConnectionSetting.duration("timeout", "Timeout");
+		assertEquals(ConnectionSetting.Kind.DURATION, d.kind());
+		org.junit.jupiter.api.Assertions.assertNull(d.check("30s"));
+		org.junit.jupiter.api.Assertions.assertNull(d.check("500"), "a bare number is ms");
+		org.junit.jupiter.api.Assertions.assertNull(d.check(""), "not required");
+		assertEquals("Timeout must be a duration (30s, 500ms, 5m)", d.check("soon"));
+		assertEquals("Timeout must be a duration (30s, 500ms, 5m)", d.check("-5"));
+	}
+
+	@Test
 	public void checksCredentialReferences() {
 		try {
 			List<ConnectionSetting> settings = List.of(ConnectionSetting.text("user", "User"), ConnectionSetting.secret("password", "Password"));
