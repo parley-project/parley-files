@@ -53,6 +53,11 @@ public class ConnectionSettingsTests {
 		org.junit.jupiter.api.Assertions.assertNull(d.check(""), "not required");
 		assertEquals("Timeout must be a duration (30s, 500ms, 5m)", d.check("soon"));
 		assertEquals("Timeout must be a duration (30s, 500ms, 5m)", d.check("-5"));
+		assertEquals("Timeout must be a duration (30s, 500ms, 5m)", d.check("-1"), "-1 only where it is allowed");
+		ConnectionSetting m = ConnectionSetting.durationOrMinusOne("ttl", "Cache");
+		org.junit.jupiter.api.Assertions.assertNull(m.check("-1"));
+		org.junit.jupiter.api.Assertions.assertNull(m.check("2s"));
+		assertEquals("Cache must be a duration (30s, 500ms, 5m)", m.check("-2"));
 	}
 
 	@Test
