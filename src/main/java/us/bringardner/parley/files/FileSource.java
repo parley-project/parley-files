@@ -647,6 +647,92 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	// where the storage can do better.
 	//
 
+	//
+	// Converting from java.io.File: static methods named after java.nio.file.Path.of. Each
+	// throws IOException where File's constructors don't, since naming a file on a file system
+	// may connect to it.
+	//
+
+	/**
+	 * The file a value names, as {@code new File(path)}: a {@code filesource:} URL (its own file
+	 * system) or a path on the default factory. Same as
+	 * {@code FileSourceFactory.getDefaultFactory().resolve(path)}; a component with its own
+	 * factory uses its {@link FileSourceFactory#resolve(String) resolve} instead.
+	 *
+	 * @param path a {@code filesource:} URL or a path
+	 * @return the file (which may not exist)
+	 * @throws IOException if the file system can't be found or connected
+	 * @throws NullPointerException if path is null
+	 */
+	static FileSource of(String path) throws IOException {
+		return FileSourceFactory.getDefaultFactory().resolve(path);
+	}
+
+	/**
+	 * As {@code new File(parent, child)}: CHILD under the file PARENT names ({@link #of(String)}),
+	 * or CHILD alone if PARENT is null.
+	 *
+	 * @throws NullPointerException if child is null
+	 */
+	static FileSource of(String parent, String child) throws IOException {
+		java.util.Objects.requireNonNull(child, "child");
+		return parent == null ? of(child) : of(parent).getChild(child);
+	}
+
+	/**
+	 * As {@code new File(parent, child)}: {@code parent.getChild(child)}, or CHILD alone
+	 * ({@link #of(String)}) if PARENT is null.
+	 *
+	 * @throws NullPointerException if child is null
+	 */
+	static FileSource of(FileSource parent, String child) throws IOException {
+		java.util.Objects.requireNonNull(child, "child");
+		return parent == null ? of(child) : parent.getChild(child);
+	}
+
+	/**
+	 * As {@code new File(uri)}: the file a {@code filesource:} URI (its own file system) or a
+	 * {@code file:} URI (a local file, {@link #of(java.io.File)}) names.
+	 *
+	 * @throws IllegalArgumentException if the URI has another scheme or none, or is a
+	 *         {@code file:} URI java.io.File can't take
+	 * @throws IOException if the file system can't be found or connected
+	 * @throws NullPointerException if uri is null
+	 */
+	static FileSource of(java.net.URI uri) throws IOException {
+		String scheme = java.util.Objects.requireNonNull(uri, "uri").getScheme();
+		if( FileSourceFactory.FILE_SOURCE_PROTOCOL.equalsIgnoreCase(scheme) ) {
+			return FileSourceFactory.getDefaultFactory().resolve(uri.toString());
+		}
+		if( "file".equalsIgnoreCase(scheme) ) {
+			return of(new java.io.File(uri));
+		}
+		throw new IllegalArgumentException("Not a filesource: or file: URI: " + FileSourceFactory.safe(uri.toString()));
+	}
+
+	/**
+	 * A local file as a FileSource: a FileProxy on the shared local factory
+	 * ({@link FileSourceFactory#fileProxyFactory}), whatever the default factory is. For code
+	 * that really needs the local file system (To-Do 18.2); {@link #toFile()} goes back.
+	 *
+	 * @throws NullPointerException if file is null
+	 */
+	static FileSource of(java.io.File file) {
+		java.util.Objects.requireNonNull(file, "file");
+		return new us.bringardner.parley.files.fileproxy.FileProxy(file.getAbsoluteFile(), FileSourceFactory.fileProxyFactory);
+	}
+
+	/**
+	 * The local file this is, as {@link java.nio.file.Path#toFile()}: only a local file
+	 * (FileProxy) has one.
+	 *
+	 * @return the java.io.File
+	 * @throws UnsupportedOperationException if this file isn't on the local file system
+	 */
+	default java.io.File toFile() {
+		throw new UnsupportedOperationException(getClass().getSimpleName() + " is not a local file: " + getAbsolutePath());
+	}
+
 	/**
 	 * Always true: a FileSource is always created from an absolute path
 	 * (relative paths are resolved by the factory). As java.io.File.isAbsolute().
