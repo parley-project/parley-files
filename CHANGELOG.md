@@ -28,6 +28,15 @@
 
 ### Added
 
+- **`FileSource.of(...)` and `toFile()`, for converting code from java.io.File** (To-Do 18.1, 18.9), named after
+  `Path.of`: `of(String)` (a `filesource:` URL or a path on the default factory), `of(String parent, String child)`,
+  `of(FileSource parent, String child)` (a null parent means the child alone, as `File`), `of(URI)` (`filesource:` or
+  `file:`) and `of(java.io.File)` (a FileProxy on the shared local factory). `toFile()` goes back: the file for a
+  FileProxy, `UnsupportedOperationException` elsewhere (as `Path.toFile()`). Unlike `File`'s constructors, these
+  throw `IOException`, since naming a file may connect to its file system.
+- **`FileSourceFactory.resolve(String)`** (To-Do 18.4): a setting's value as a file, either a `filesource:` URL (in
+  any case) or a path on this factory, connected first if needed. A URL's query is kept out of its exceptions'
+  messages; `FileSourceFactory.isUrl` and `safe` are public for callers that report a value.
 - **The settings this module reads are listed** in `META-INF/parley/settings.list`, so a Parley server's
   start-up check (parley-net's `KnownSettings`, To-Do 2.16) knows them and warns only about a setting
   nothing reads. parley-net's KnownSettingsTest checks the list has every name the code here spells out.
