@@ -5,9 +5,8 @@ import java.nio.channels.FileLockInterruptionException;
 import java.nio.channels.OverlappingFileLockException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import us.bringardner.parley.core.BaseObject;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 
@@ -21,9 +20,8 @@ import us.bringardner.parley.files.FileSourceFactory;
  * passes a {@link LockBackend} that also asks everyone outside this JVM.
  * @since 1.1.0
  */
-public final class LockManager {
+public final class LockManager extends BaseObject {
 
-	private static final Logger LOG = Logger.getLogger(LockManager.class.getName());
 	private static final LockManager INSTANCE = new LockManager();
 
 	/** {@link #await} polls this often at most (ms), starting at 1 ms. */
@@ -201,7 +199,7 @@ public final class LockManager {
 			try {
 				e.backend.close();
 			} catch (RuntimeException ex) {
-				LOG.log(Level.WARNING, "Lock backend " + e.backend + " failed to close for " + e.key, ex);
+				logWarn("Lock backend " + e.backend + " failed to close for " + e.key, ex);
 			} finally {
 				held.remove(e.key, e);
 			}
@@ -344,7 +342,7 @@ public final class LockManager {
 			try {
 				e.backend.release(g.position, g.size);
 			} catch (RuntimeException ex) {
-				LOG.log(Level.WARNING, "Lock backend " + e.backend + " failed to release " + e.key, ex);
+				logWarn("Lock backend " + e.backend + " failed to release " + e.key, ex);
 			}
 			// after the backend let go, so the next holder in this JVM finds it free outside too
 			closeIfEmpty(e);

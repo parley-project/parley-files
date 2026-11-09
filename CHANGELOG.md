@@ -2,6 +2,12 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Changed (2026-11-08: logging through ILogger, To-Do 19.1 and 19.2)
+
+- **Logging goes through parley-core's ILogger**: `LockManager` is a `BaseObject` now, and `LocalLocks`
+  logs through `BaseObject.findLogger`; neither uses java.util.logging directly any more, so their
+  messages go to whichever ILogger `parley.core.logger` picks, like the rest of Parley.
+
 ### Changed (needs a configuration change)
 
 - **A connection setting can be a duration** (To-Do 2.19): `ConnectionSetting.duration(key, label)`, `Kind.DURATION`,
