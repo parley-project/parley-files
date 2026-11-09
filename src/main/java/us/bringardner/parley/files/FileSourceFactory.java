@@ -633,6 +633,66 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 
 	public abstract FileSource createFileSource(String fullPath) throws IOException;
 
+	/** The scheme that makes a value given to {@link #resolve(String)} a URL rather than a path */
+	public static final String URL_PREFIX = FILE_SOURCE_PROTOCOL + ":";
+
+	/**
+	 * The file a setting's value names: a {@code filesource:} URL
+	 * ({@code filesource:/etc/parley?sourcetype=sftp&host=...}), which names its own file system,
+	 * or a path on this file system, which is connected first if it isn't yet. Unlike
+	 * {@link #createFileSource(String)}, which takes only a path, this is for a value that may be
+	 * either. Only a value starting with {@code filesource:} (in any case) is a URL, so
+	 * {@code C:\parley} is a path. The value is trimmed.
+	 * <p>
+	 * A URL's query holds connection settings and secrets, so it is never in the message of an
+	 * exception thrown here (see {@link #safe(String)}).
+	 *
+	 * @param value a {@code filesource:} URL or a path on this file system
+	 * @return the file (which may not exist)
+	 * @throws IOException if the URL's file system can't be found or connected, or this one can't
+	 *         be connected
+	 * @throws NullPointerException if value is null
+	 */
+	public FileSource resolve(String value) throws IOException {
+		String v = java.util.Objects.requireNonNull(value, "value").trim();
+		try {
+			if( isUrl(v) ) {
+				return getFileSource(v);
+			}
+			// (some file systems connect when first used, others don't: connect it here)
+			if( !isConnected() && !connect() ) {
+				throw new IOException("Can't connect to " + getTypeId());
+			}
+			return createFileSource(v);
+		} catch (IOException | RuntimeException e) {
+			if( !isUrl(v) || safe(v).equals(v) ) {
+				throw e;
+			}
+			// a file system's message may repeat the URL, and its query holds the settings
+			String why = e.getMessage() == null ? e.getClass().getName() : e.getMessage();
+			IOException clean = new IOException(why.replace(v, safe(v)));
+			clean.setStackTrace(e.getStackTrace());
+			throw clean;
+		}
+	}
+
+	/** @return true if VALUE is a {@code filesource:} URL (in any case, after leading spaces) */
+	public static boolean isUrl(String value) {
+		return value != null && value.trim().regionMatches(true, 0, URL_PREFIX, 0, URL_PREFIX.length());
+	}
+
+	/**
+	 * VALUE for a message: a URL without its query (where connection settings and secrets would
+	 * be), anything else as it is.
+	 */
+	public static String safe(String value) {
+		if( value == null || !isUrl(value) ) {
+			return value;
+		}
+		int q = value.indexOf('?');
+		return q < 0 ? value : value.substring(0, q) + "?...";
+	}
+
 	public FileSource createFileSource1(String fullPath) throws IOException {
 		FileSource ret = null;
 		FileSource cwd = getCurrentDirectory();

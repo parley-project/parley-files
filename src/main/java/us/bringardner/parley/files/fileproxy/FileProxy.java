@@ -1167,6 +1167,12 @@ public class FileProxy implements FileSource {
 		return target;
 	}
 
+	/** The local file this is: {@link #getTarget()} */
+	@Override
+	public File toFile() {
+		return target;
+	}
+
 
 	@Override
 	public String getTitle() {

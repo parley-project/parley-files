@@ -3,8 +3,13 @@
 
 parley.files.defaultFactory
 parley.files.lockDirectory
-parley.files.credentials.command.enabled
-parley.files.credentials.command.timeout
-parley.files.credentials.keyStore
+parley.credentials.cmd.enabled
+parley.credentials.cmd.timeout
+parley.credentials.keyStore
+# one caller's own value: parley.credentials.ID.NAME, the id one or two segments (sftp, acl.jdbc)
+parley.credentials.*.cmd.{enabled,timeout}
+parley.credentials.*.*.cmd.{enabled,timeout}
+parley.credentials.*.keyStore
+parley.credentials.*.*.keyStore
 parley.files.windows.groupSid
 parley.files.windows.otherSid

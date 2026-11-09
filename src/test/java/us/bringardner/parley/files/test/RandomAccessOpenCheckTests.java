@@ -84,7 +84,9 @@ public class RandomAccessOpenCheckTests {
 	@Test
 	void theStreamChecksByDefault() throws Exception {
 		FileSource file = readOnlyFile();
-		assertFalse(new Controller(file, false).checksAccessOnOpen());
+		try (Controller c = new Controller(file, false)) {
+			assertFalse(c.checksAccessOnOpen());
+		}
 		assertThrows(FileNotFoundException.class, () -> new FileSourceRandomAccessStream(new Controller(file, false), "rw"));
 		new FileSourceRandomAccessStream(new Controller(file, false), "r").close();
 	}
