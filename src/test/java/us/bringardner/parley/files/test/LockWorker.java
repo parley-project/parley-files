@@ -27,6 +27,7 @@ public final class LockWorker {
 	private LockWorker() {
 	}
 
+	@SuppressWarnings("resource") // the locks taken are held on purpose; see "lock"
 	public static void main(String[] args) throws Exception {
 		AbstractLockTests test = (AbstractLockTests) Class.forName(args[0]).getDeclaredConstructor().newInstance();
 		FileSourceLock last = null;
@@ -44,15 +45,16 @@ public final class LockWorker {
 						last = null;
 					}
 					boolean shared = "S".equals(w[2]);
-					try (FileSourceLock l = w.length >= 5
+					// Not try-with-resources: the lock must stay held after GOT, until "release",
+					// the next "lock" or "exit"; closing it here would free it before the test looks.
+					FileSourceLock l = w.length >= 5
 							? f.tryLock(Long.parseLong(w[3]), Long.parseLong(w[4]), shared)
-							: f.tryLock(shared)) {
-						if( l == null ) {
-							reply("BUSY");
-						} else {
-							last = l;
-							reply("GOT");
-						}
+							: f.tryLock(shared);
+					if( l == null ) {
+						reply("BUSY");
+					} else {
+						last = l;
+						reply("GOT");
 					}
 					break;
 				}
