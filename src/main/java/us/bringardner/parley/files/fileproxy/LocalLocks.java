@@ -15,9 +15,9 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.nio.file.attribute.UserPrincipal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import us.bringardner.parley.core.BaseObject;
+import us.bringardner.parley.core.ILogger;
 import us.bringardner.parley.files.lock.LockBackend;
 
 /**
@@ -63,7 +63,11 @@ import us.bringardner.parley.files.lock.LockBackend;
  */
 final class LocalLocks {
 
-	private static final Logger LOG = Logger.getLogger(LocalLocks.class.getName());
+	/** The logger, looked up each time: parley-core picks the logger type at the first lookup,
+	 *  and clearLoggerCache() would leave a kept one behind */
+	private static ILogger log() {
+		return BaseObject.findLogger(LocalLocks.class.getName());
+	}
 
 	private LocalLocks() {
 	}
@@ -92,7 +96,7 @@ final class LocalLocks {
 		}
 		File fallback = privateFallback().toFile();
 		if( WARNED_FALLBACK.compareAndSet(false, true) ) {
-			LOG.warning("No " + FileProxyFactory.LOCK_DIRECTORY_NAME + " directory in or above " + canonical + " and "
+			log().warn("No " + FileProxyFactory.LOCK_DIRECTORY_NAME + " directory in or above " + canonical + " and "
 					+ FileProxyFactory.LOCK_DIRECTORY_PROPERTY + " isn't set, so local file locks use " + fallback
 					+ ", which is private to the user " + System.getProperty("user.name")
 					+ ": processes run as other users don't see these locks. To share them, create a "
@@ -245,7 +249,7 @@ final class LocalLocks {
 				try {
 					l.release();
 				} catch (IOException e) {
-					LOG.log(Level.FINE, "Releasing an OS lock on " + lockFile, e);
+					log().debug("Releasing an OS lock on " + lockFile, e);
 				}
 			}
 		}
@@ -257,7 +261,7 @@ final class LocalLocks {
 					try {
 						l.release();
 					} catch (IOException e) {
-						LOG.log(Level.FINE, "Releasing an OS lock on " + lockFile, e);
+						log().debug("Releasing an OS lock on " + lockFile, e);
 					}
 				}
 			}
@@ -271,7 +275,7 @@ final class LocalLocks {
 					channel.close();
 				}
 			} catch (IOException e) {
-				LOG.log(Level.FINE, "Closing " + lockFile, e);
+				log().debug("Closing " + lockFile, e);
 			}
 			channel = null;
 		}
