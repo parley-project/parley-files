@@ -44,14 +44,15 @@ public final class LockWorker {
 						last = null;
 					}
 					boolean shared = "S".equals(w[2]);
-					FileSourceLock l = w.length >= 5
+					try (FileSourceLock l = w.length >= 5
 							? f.tryLock(Long.parseLong(w[3]), Long.parseLong(w[4]), shared)
-							: f.tryLock(shared);
-					if( l == null ) {
-						reply("BUSY");
-					} else {
-						last = l;
-						reply("GOT");
+							: f.tryLock(shared)) {
+						if( l == null ) {
+							reply("BUSY");
+						} else {
+							last = l;
+							reply("GOT");
+						}
 					}
 					break;
 				}
