@@ -2,6 +2,11 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Changed (2026-11-10: logging through System.Logger, To-Do 19.5)
+
+- **Logging through `System.Logger`** (parley-core): `fileproxy.LocalLocks` logs through a
+  `LogHelper`; `FileSourceFactory` logs with `logWarn` instead of its helper's ILogger.
+
 ### Changed (2026-11-08: logging through ILogger, To-Do 19.1 and 19.2)
 
 - **Logging goes through parley-core's ILogger**: `LockManager` is a `BaseObject` now, and `LocalLocks`

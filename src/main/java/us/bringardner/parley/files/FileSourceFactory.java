@@ -1063,7 +1063,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 				// Local file access has no real connection, so only warn for others
 				for(FactorySession other : sessions.values()) {
 					if( other.key.equals(s.key)) {
-						logger.getLogger().warn("Factory session already exists for "+s.key);
+						logger.logWarn("Factory session already exists for "+s.key);
 						break;
 					}
 				}
