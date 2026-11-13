@@ -135,16 +135,16 @@ public class CommandCredentialProvider implements CredentialProvider {
 				reader.clear();
 				throw new CredentialException(ref, "the command failed with exit status "+p.exitValue());
 			}
-			if( reader.failure != null ) {
+			IOException failure = reader.failure();
+			if( failure != null ) {
 				reader.clear();
-				throw new CredentialException(ref, "can't read the command's output", reader.failure);
+				throw new CredentialException(ref, "can't read the command's output", failure);
 			}
-			if( reader.tooLong ) {
+			if( reader.tooLong()) {
 				reader.clear();
 				throw new CredentialException(ref, "the command printed more than "+MAX_OUTPUT+" bytes");
 			}
-			char[] ret = SecretFiles.chomp(SecretFiles.decode(reader.buf, reader.len));
-			reader.clear();
+			char[] ret = reader.takeOutput();
 			if( ret.length == 0 ) {
 				throw new CredentialException(ref, "the command printed nothing");
 			}
@@ -198,13 +198,19 @@ public class CommandCredentialProvider implements CredentialProvider {
 		return ret;
 	}
 
-	/** Reads the command's output into a buffer it can zero. */
+	/**
+	 * Reads the command's output into a buffer it can zero. The reading thread and the caller share
+	 * the buffer, so both go through this object's lock: a clear() after a timeout, while the
+	 * command may still be printing, zeroes everything read so far and stops any more being kept.
+	 */
 	private static class Reader implements Runnable {
 		final InputStream in;
-		byte[] buf = new byte[256];
-		int len;
-		boolean tooLong;
-		IOException failure;
+		// guarded by this
+		private byte[] buf = new byte[256];
+		private int len;
+		private boolean tooLong;
+		private IOException failure;
+		private boolean cleared;
 
 		Reader(InputStream in) {
 			this.in = in;
@@ -212,23 +218,22 @@ public class CommandCredentialProvider implements CredentialProvider {
 
 		@Override
 		public void run() {
+			byte[] chunk = new byte[256];
 			try {
 				int n;
-				while( (n = in.read(buf, len, buf.length-len)) >= 0 ) {
-					len += n;
-					if( len == buf.length ) {
-						if( buf.length >= MAX_OUTPUT ) {
-							tooLong = true;
-							break;
-						}
-						byte[] bigger = Arrays.copyOf(buf, buf.length*2);
-						Arrays.fill(buf, (byte) 0);
-						buf = bigger;
+				while( (n = in.read(chunk)) >= 0 ) {
+					boolean more = append(chunk, n);
+					Arrays.fill(chunk, 0, n, (byte) 0);
+					if( !more ) {
+						break;
 					}
 				}
 			} catch (IOException e) {
-				failure = e;
+				synchronized (this) {
+					failure = e;
+				}
 			} finally {
+				Arrays.fill(chunk, (byte) 0);
 				try {
 					in.close();
 				} catch (IOException e) {
@@ -237,9 +242,44 @@ public class CommandCredentialProvider implements CredentialProvider {
 			}
 		}
 
-		void clear() {
+		/** Keeps n bytes of chunk; false once nothing more should be read (cleared, or too long). */
+		private synchronized boolean append(byte[] chunk, int n) {
+			if( cleared ) {
+				return false;
+			}
+			if( len+n >= MAX_OUTPUT ) {
+				tooLong = true;
+				return false;
+			}
+			if( len+n > buf.length ) {
+				byte[] bigger = Arrays.copyOf(buf, Math.max(buf.length*2, len+n));
+				Arrays.fill(buf, (byte) 0);
+				buf = bigger;
+			}
+			System.arraycopy(chunk, 0, buf, len, n);
+			len += n;
+			return true;
+		}
+
+		synchronized IOException failure() {
+			return failure;
+		}
+
+		synchronized boolean tooLong() {
+			return tooLong;
+		}
+
+		/** The output as characters, without its last line break; the bytes are zeroed. */
+		synchronized char[] takeOutput() {
+			char[] ret = SecretFiles.chomp(SecretFiles.decode(buf, len));
+			clear();
+			return ret;
+		}
+
+		synchronized void clear() {
 			Arrays.fill(buf, (byte) 0);
 			len = 0;
+			cleared = true;
 		}
 	}
 }

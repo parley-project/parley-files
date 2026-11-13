@@ -102,21 +102,22 @@ public class MemoryFileSource implements FileSource {
 	 */
 	private transient Map<String,WeakReference<MemoryFileSource>> placeholders;   // WeakReference isn't serializable
 	private int placeholderPurgeAt = 64;
-	private boolean canOwnerRead=true;
-	private boolean canOwnerWrite=true;
+	// (the fields a file's state is kept in are volatile: one thread may change a file another reads)
+	private volatile boolean canOwnerRead=true;
+	private volatile boolean canOwnerWrite=true;
 	/** as a file created with the usual umask: only directories start executable */
-	private boolean canExecute=false;
-	private boolean canGroupRead=true;
-	private boolean canGroupWrite=true;
-	private boolean canGroupExecute=true;
-	private boolean canOtherRead=true;
-	private boolean canOtherWrite=true;
-	private boolean canOtherExecute=true;
+	private volatile boolean canExecute=false;
+	private volatile boolean canGroupRead=true;
+	private volatile boolean canGroupWrite=true;
+	private volatile boolean canGroupExecute=true;
+	private volatile boolean canOtherRead=true;
+	private volatile boolean canOtherWrite=true;
+	private volatile boolean canOtherExecute=true;
 	private volatile byte[] data;
 	private String cananicalPath;
-	private long lastAccessed=System.currentTimeMillis();
-	private long lastModified=System.currentTimeMillis();
-	private long createDate=System.currentTimeMillis();
+	private volatile long lastAccessed=System.currentTimeMillis();
+	private volatile long lastModified=System.currentTimeMillis();
+	private volatile long createDate=System.currentTimeMillis();
 
 	public MemoryFileSource(MemoryFileSource parent,String name,MemoryFileSourceFactory creator) {
 		this.name = name;
