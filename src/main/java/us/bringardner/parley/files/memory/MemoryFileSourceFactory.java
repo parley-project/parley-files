@@ -76,7 +76,7 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 	private volatile  MemoryFileSource [] roots;
 	private volatile FileSource currentDirectory;
 	private String name = "MemoryFileSet";
-	private boolean connected = false;
+	private volatile boolean connected = false;
 
 	public String getName() {
 		return name;
