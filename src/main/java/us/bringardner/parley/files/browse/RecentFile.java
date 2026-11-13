@@ -51,8 +51,8 @@ import us.bringardner.parley.files.fileproxy.FileProxyFactory;
 
 /**
  * An entry in a recent files list: a file and the file system it's on, with what's needed to
- * connect to it again. It uses no UI toolkit; parley-files-swing's and parley-files-fx's
- * RecentFileMenu show a list of them, so both menus behave the same and read each other's lists.
+ * connect to it again. It uses no UI toolkit; parley-files-swing's RecentFileMenu shows a list
+ * of them.
  * <p>
  * An entry keeps its factory's connection properties, but secret values (the factory decides
  * which, see {@link FileSourceFactory#isSecretProperty(String)}) are never saved. A secret that

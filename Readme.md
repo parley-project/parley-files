@@ -540,8 +540,7 @@ assertEquals(100, totalLogSize(dir));
 file chooser, a file browser, a "recent files" menu. It holds the part of those that doesn't depend
 on a UI toolkit (a file's details read once, a directory listing with progress and sorting,
 back/forward history, recent files entries, copying a dropped file), so the Swing
-([parley-files-swing](https://github.com/parley-project/parley-files-swing)), JavaFX
-([parley-files-fx](https://github.com/parley-project/parley-files-fx)) and text UIs all share one
+([parley-files-swing](https://github.com/parley-project/parley-files-swing)) and text UIs share one
 implementation. It has no Swing, AWT or JavaFX code, nothing else in parley-files uses it, and a
 program that only reads and writes files can ignore it. It's here rather than in one of the UI
 libraries because any one of those would make the others depend on its toolkit.

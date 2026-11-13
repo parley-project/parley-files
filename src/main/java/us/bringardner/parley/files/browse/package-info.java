@@ -29,10 +29,10 @@
  * this package</b>, and programs that only read and write files can ignore it.
  *
  * <h2>Why it is here</h2>
- * The Swing UI (parley-files-swing), the JavaFX UI (parley-files-fx) and text UIs such as
- * parley-files-console all need the same logic, and each is built on a different toolkit. Putting
- * this code in any one of them would make the others depend on that toolkit (Swing apps pulling
- * in JavaFX, say), and a module of its own wasn't worth its upkeep. So it lives below all of them,
+ * The Swing UI (parley-files-swing) and text UIs such as parley-files-console all need the same
+ * logic, and each is built on a different toolkit. Putting this code in any one of them would make
+ * the others depend on that toolkit (a text UI pulling in Swing, say), and a module of its own
+ * wasn't worth its upkeep. So it lives below all of them,
  * in parley-files, with no UI dependencies: no Swing, AWT or JavaFX.
  *
  * <h2>What's in it</h2>
