@@ -22,6 +22,7 @@ package us.bringardner.parley.files.tree;
 
 import java.io.File;
 
+import us.bringardner.parley.files.DelegatingFileSource;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.fileproxy.FileProxy;
 
