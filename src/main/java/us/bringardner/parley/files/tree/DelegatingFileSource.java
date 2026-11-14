@@ -38,9 +38,9 @@ import us.bringardner.parley.files.FileSourceProgress;
  * connections under it are listed, and cd .. leaves a connection for the folder it's in. Everything else is the file's own (real()).
  *
  * The local files no connection is in or under are the local file system's own: only these are
- * TreeFiles. {@link LocalFiles#of(FileSource)} is the local file a FileSource is, for both.
+ * DelegatingFileSources. {@link LocalFiles#of(FileSource)} is the local file a FileSource is, for both.
  */
-public final class TreeFile implements FileSource {
+public final class DelegatingFileSource implements FileSource {
 
 	private static final long serialVersionUID = 1L;
 
@@ -49,7 +49,7 @@ public final class TreeFile implements FileSource {
 	private final FileSource real;
 	private final boolean connectionPoint;
 
-	TreeFile(VirtualFileSourceFactory tree, String path, FileSource real, boolean connectionPoint) {
+	DelegatingFileSource(VirtualFileSourceFactory tree, String path, FileSource real, boolean connectionPoint) {
 		this.tree = tree;
 		this.path = path;
 		this.real = real;
@@ -61,9 +61,9 @@ public final class TreeFile implements FileSource {
 		return real;
 	}
 
-	/** f's own file: real() of a TreeFile, else f */
+	/** f's own file: real() of a DelegatingFileSource, else f */
 	public static FileSource unwrap(FileSource f) {
-		return f instanceof TreeFile ? ((TreeFile) f).real : f;
+		return f instanceof DelegatingFileSource ? ((DelegatingFileSource) f).real : f;
 	}
 
 	/** a file system is connected at this file's path */
@@ -78,7 +78,7 @@ public final class TreeFile implements FileSource {
 
 	@Override
 	public boolean equals(Object obj) {
-		return obj instanceof TreeFile && ((TreeFile) obj).path.equals(path) && ((TreeFile) obj).real.equals(real);
+		return obj instanceof DelegatingFileSource && ((DelegatingFileSource) obj).path.equals(path) && ((DelegatingFileSource) obj).real.equals(real);
 	}
 
 	@Override
@@ -150,7 +150,7 @@ public final class TreeFile implements FileSource {
 
 	/**
 	 * The files in this folder, as the tree has them: a connection here is listed (in
-	 * place of a file of the same name), a folder with connections under it is a TreeFile.
+	 * place of a file of the same name), a folder with connections under it is a DelegatingFileSource.
 	 */
 	@Override
 	public FileSource[] listFiles() throws IOException {
