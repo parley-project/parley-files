@@ -14,8 +14,10 @@ import java.util.TreeMap;
 import java.util.Set;
 import java.util.TreeSet;
 
+import us.bringardner.parley.files.DelegatingFileSource;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
+import us.bringardner.parley.files.FileSourceTree;
 
 /**
  * A file tree: the local file system, and file systems connected into it at paths (fsh's
@@ -28,12 +30,48 @@ import us.bringardner.parley.files.FileSourceFactory;
  * it (listing a folder, completing a name) sees one table whole, and never takes a lock.
  *
  * The files of a connection, its folder, and the local folders a connection is under, are
- * TreeFiles (their path and their parent, children and files under them are this tree's); the
+ * DelegatingFileSources (their path and their parent, children and files under them are this tree's); the
  * other local files are the local file system's own.
  */
 public class VirtualFileSourceFactory extends FileSourceFactory {
 
 	private static final long serialVersionUID = 1L;
+
+	/**
+	 * This tree as its DelegatingFileSources see it (their paths, parents and children are this
+	 * tree's), without making these methods part of the factory's public API.
+	 */
+	private final FileSourceTree view = new TreeView();
+
+	private class TreeView implements FileSourceTree {
+
+		private static final long serialVersionUID = 1L;
+
+		@Override
+		public FileSource createFileSource(String path) throws IOException {
+			return VirtualFileSourceFactory.this.createFileSource(path);
+		}
+
+		@Override
+		public FileSource inTree(String path, FileSource file) throws IOException {
+			return VirtualFileSourceFactory.this.inTree(path, file);
+		}
+
+		@Override
+		public Set<String> connectionsIn(String folder) {
+			return VirtualFileSourceFactory.this.connectionsIn(folder);
+		}
+
+		@Override
+		public String parentPath(String path) {
+			return VirtualFileSourceFactory.parentPath(path);
+		}
+
+		@Override
+		public String join(String folder, String name) {
+			return VirtualFileSourceFactory.join(folder, name);
+		}
+	}
 	private static final String TYPE_ID = "virtual";
 
 	/** the local file system's roots (/, or C:\ D:\ ...) */
@@ -206,13 +244,13 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		Map<String, FileSource> table = connections;
 		FileSource top = table.get(path);
 		if( top != null ) {
-			return new TreeFile(this, path, top, true);
+			return new DelegatingFileSource(view, path, top, true);
 		}
-		if( file instanceof TreeFile ) {
+		if( file instanceof DelegatingFileSource ) {
 			return file;
 		}
 		if( connectionOf(path, table) != null || connectionsUnder(path, table)) {
-			return new TreeFile(this, path, file, false);
+			return new DelegatingFileSource(view, path, file, false);
 		}
 		return file;
 	}
@@ -237,7 +275,7 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 			ret.add(inTree(isDrivePath(rootPath) ? driveForm(rootPath) : rootPath, root));
 		}
 		for(Map.Entry<String, FileSource> e : connections.entrySet()) {
-			ret.add(new TreeFile(this, e.getKey(), e.getValue(), true));
+			ret.add(new DelegatingFileSource(view, e.getKey(), e.getValue(), true));
 		}
 		return ret.toArray(new FileSource[ret.size()]);
 	}
@@ -307,7 +345,7 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		FileSource cwd = currentDirectory;
 		if( !abs && cwd != null ) {
 			String dir = cwd.getAbsolutePath();
-			char sep = cwd instanceof TreeFile ? '/' : cwd.getFileSourceFactory().getSeparatorChar();
+			char sep = cwd instanceof DelegatingFileSource ? '/' : cwd.getFileSourceFactory().getSeparatorChar();
 			path = dir.endsWith(""+sep) ? dir+fullPath : dir+sep+fullPath;
 		}
 		// "." and ".." are resolved by name, as a shell's cd does (logical paths), so ".." can't
@@ -329,9 +367,9 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 				rest = rest.substring(1);
 			}
 			if( rest.isEmpty()) {
-				return new TreeFile(this, at, top, true);
+				return new DelegatingFileSource(view, at, top, true);
 			}
-			return new TreeFile(this, path, top.getChild(rest), false);
+			return new DelegatingFileSource(view, path, top.getChild(rest), false);
 		}
 		FileSource ret = path.equals("/") ? firstRoot : local.createFileSource(path);
 		String retPath = ret.getAbsolutePath().replace('\\', '/');
@@ -343,7 +381,7 @@ public class VirtualFileSourceFactory extends FileSourceFactory {
 		if( !table.isEmpty() && inTree && connectionsUnder(path, table)
 				&& (retPath.equals(path) || driveRoot)) {
 			// (a local folder with a connection in it or under it)
-			return new TreeFile(this, path, ret, false);
+			return new DelegatingFileSource(view, path, ret, false);
 		}
 		return ret;
 	}

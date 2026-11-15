@@ -2,6 +2,23 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Changed (2026-11-14: DelegatingFileSource passes through with no tree)
+
+- **`DelegatingFileSource` moves to `us.bringardner.parley.files`** (from `tree`), next to
+  `FileSource`, and is no longer final: subclasses override only what they change.
+- **With no tree it passes everything through**: `new DelegatingFileSource(file)` answers its
+  path, name, parent and children from `file`, as it does everything else. In a tree it is what it
+  was (the tree's path, parent and children).
+- **`FileSourceTree`** (new) is what a `DelegatingFileSource` asks its tree. `VirtualFileSourceFactory`
+  gives its own privately, so none of its methods became public.
+
+### Changed (2026-11-14: TreeFile is DelegatingFileSource)
+
+- **`tree.TreeFile` is renamed `tree.DelegatingFileSource`**, with no change in behavior: it is the
+  FileSource that sits between a caller and another FileSource. Code that names `TreeFile`
+  (`TreeFile.unwrap`, `instanceof TreeFile`) uses `DelegatingFileSource` instead. It is to move to
+  `us.bringardner.parley.files` once its path handling no longer depends on the tree.
+
 ### Changed (2026-11-10: logging through System.Logger, To-Do 19.5)
 
 - **Logging through `System.Logger`** (parley-core): `fileproxy.LocalLocks` logs through a
