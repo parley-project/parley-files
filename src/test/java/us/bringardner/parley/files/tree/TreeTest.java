@@ -37,6 +37,7 @@ import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import us.bringardner.parley.files.DelegatingFileSource;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.memory.MemoryFileSourceFactory;
@@ -79,7 +80,7 @@ public class TreeTest {
 		assertFalse(tree.connectAt("/", memoryTop()));
 
 		FileSource dir = tree.createFileSource(base);
-		assertTrue(dir instanceof TreeFile, dir.getClass().getName());
+		assertTrue(dir instanceof DelegatingFileSource, dir.getClass().getName());
 		List<String> names = names(dir);
 		assertTrue(names.contains("mem") && names.contains("local"), names.toString());
 
@@ -95,7 +96,7 @@ public class TreeTest {
 
 		// a local folder with no connection under it is the local disk's own, and LocalFiles says so
 		FileSource local = tree.createFileSource(base+"/local");
-		assertFalse(local instanceof TreeFile);
+		assertFalse(local instanceof DelegatingFileSource);
 		assertTrue(LocalFiles.isLocal(local));
 		assertTrue(LocalFiles.isLocal(dir));
 		assertFalse(LocalFiles.isLocal(mem));

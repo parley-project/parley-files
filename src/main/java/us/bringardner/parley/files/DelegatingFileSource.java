@@ -18,42 +18,62 @@
  *
  *	@author Tony Bringardner
  */
-package us.bringardner.parley.files.tree;
+package us.bringardner.parley.files;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import us.bringardner.parley.files.FileSource;
-import us.bringardner.parley.files.FileSourceFilter;
-import us.bringardner.parley.files.FileSourceProgress;
+import java.util.Objects;
 
 /**
- * A file in a tree (VirtualFileSourceFactory, such as fsh's) as the tree names it: a file of a
- * connected file system (connect ... /mem), the folder a connection is at, or a local folder a
- * connection is inside of. Its path is the tree's (/mem/notes, not the connected system's
- * /notes), and its parent, its children and the files under it are the tree's, so the
- * connections under it are listed, and cd .. leaves a connection for the folder it's in. Everything else is the file's own (real()).
+ * A FileSource that sits between a caller and another FileSource (real()): every method is
+ * real()'s unless a subclass or the tree changes it. Subclasses override only what they change.
  *
- * The local files no connection is in or under are the local file system's own: only these are
- * TreeFiles. {@link LocalFiles#of(FileSource)} is the local file a FileSource is, for both.
+ * With no tree ({@link #DelegatingFileSource(FileSource)}), its path, name, parent, children and
+ * the files under it are real()'s too: it passes everything through.
+ *
+ * In a tree ({@link FileSourceTree}, such as fsh's VirtualFileSourceFactory) it is a file as the
+ * tree names it: a file of a connected file system (connect ... /mem), the folder a connection is
+ * at, or a local folder a connection is inside of. Its path is the tree's (/mem/notes, not the
+ * connected system's /notes), and its parent, its children and the files under it are the
+ * tree's, so the connections under it are listed, and cd .. leaves a connection for the folder
+ * it's in. Everything else is the file's own (real()). The local files no connection is in or
+ * under are the local file system's own: only these are DelegatingFileSources.
+ * {@link us.bringardner.parley.files.tree.LocalFiles#of(FileSource)} is the local file a
+ * FileSource is, for both.
  */
-public final class TreeFile implements FileSource {
+public class DelegatingFileSource implements FileSource {
 
 	private static final long serialVersionUID = 1L;
 
-	private final VirtualFileSourceFactory tree;
+	/** (null: no tree, the path is real()'s) */
+	private final FileSourceTree tree;
+	/** (the tree's path; "" with no tree) */
 	private final String path;
 	private final FileSource real;
 	private final boolean connectionPoint;
 
-	TreeFile(VirtualFileSourceFactory tree, String path, FileSource real, boolean connectionPoint) {
+	/** real, with everything passed through to it */
+	public DelegatingFileSource(FileSource real) {
+		this(null, "", real, false);
+	}
+
+	/**
+	 * real as tree names it: at path, a path of tree. connectionPoint: a file system is
+	 * connected at path (real is its top).
+	 */
+	public DelegatingFileSource(FileSourceTree tree, String path, FileSource real, boolean connectionPoint) {
+		this.real = Objects.requireNonNull(real, "real");
 		this.tree = tree;
-		this.path = path;
-		this.real = real;
-		this.connectionPoint = connectionPoint;
+		this.path = tree == null ? "" : Objects.requireNonNull(path, "path");
+		this.connectionPoint = tree != null && connectionPoint;
+	}
+
+	/** it has no tree: its path, parent and children are real()'s */
+	private boolean passThrough() {
+		return tree == null;
 	}
 
 	/** the file this is: the connected file system's, or the local file */
@@ -61,9 +81,9 @@ public final class TreeFile implements FileSource {
 		return real;
 	}
 
-	/** f's own file: real() of a TreeFile, else f */
+	/** f's own file: real() of a DelegatingFileSource, else f */
 	public static FileSource unwrap(FileSource f) {
-		return f instanceof TreeFile ? ((TreeFile) f).real : f;
+		return f instanceof DelegatingFileSource ? ((DelegatingFileSource) f).real : f;
 	}
 
 	/** a file system is connected at this file's path */
@@ -73,42 +93,42 @@ public final class TreeFile implements FileSource {
 
 	@Override
 	public String toString() {
-		return path;
+		return passThrough() ? real.toString() : path;
 	}
 
 	@Override
 	public boolean equals(Object obj) {
-		return obj instanceof TreeFile && ((TreeFile) obj).path.equals(path) && ((TreeFile) obj).real.equals(real);
+		return obj instanceof DelegatingFileSource && ((DelegatingFileSource) obj).path.equals(path) && ((DelegatingFileSource) obj).real.equals(real);
 	}
 
 	@Override
 	public int hashCode() {
-		return path.hashCode();
+		return passThrough() ? real.hashCode() : path.hashCode();
 	}
 
 	@Override
 	public int compareTo(Object o) {
-		return path.compareTo(o instanceof FileSource ? ((FileSource) o).getAbsolutePath() : String.valueOf(o));
+		return getAbsolutePath().compareTo(o instanceof FileSource ? ((FileSource) o).getAbsolutePath() : String.valueOf(o));
 	}
 
 	@Override
 	public String getAbsolutePath() {
-		return path;
+		return passThrough() ? real.getAbsolutePath() : path;
 	}
 
 	@Override
 	public String getPath() {
-		return path;
+		return passThrough() ? real.getPath() : path;
 	}
 
 	@Override
 	public boolean isAbsolute() {
-		return true;
+		return passThrough() ? real.isAbsolute() : true;
 	}
 
 	@Override
 	public FileSource getAbsoluteFile() {
-		return this;
+		return passThrough() ? real.getAbsoluteFile() : this;
 	}
 
 	@Override
@@ -118,6 +138,9 @@ public final class TreeFile implements FileSource {
 
 	@Override
 	public String getName() {
+		if( passThrough()) {
+			return real.getName();
+		}
 		if( path.equals("/")) {
 			return path;
 		}
@@ -131,26 +154,32 @@ public final class TreeFile implements FileSource {
 
 	@Override
 	public String getParent() {
-		return VirtualFileSourceFactory.parentPath(path);
+		return passThrough() ? real.getParent() : tree.parentPath(path);
 	}
 
 	@Override
 	public FileSource getParentFile() throws IOException {
+		if( passThrough()) {
+			return real.getParentFile();
+		}
 		String parent = getParent();
 		return parent == null ? null : tree.createFileSource(parent);
 	}
 
 	@Override
 	public FileSource getChild(String name) throws IOException {
+		if( passThrough()) {
+			return real.getChild(name);
+		}
 		if( name.startsWith("/")) {
 			return tree.createFileSource(name);
 		}
-		return tree.createFileSource(VirtualFileSourceFactory.join(path, name));
+		return tree.createFileSource(tree.join(path, name));
 	}
 
 	/**
 	 * The files in this folder, as the tree has them: a connection here is listed (in
-	 * place of a file of the same name), a folder with connections under it is a TreeFile.
+	 * place of a file of the same name), a folder with connections under it is a DelegatingFileSource.
 	 */
 	@Override
 	public FileSource[] listFiles() throws IOException {
@@ -192,17 +221,17 @@ public final class TreeFile implements FileSource {
 	}
 
 	private FileSource [] tree(FileSource [] kids) throws IOException {
-		if( kids == null ) {
-			return null;
+		if( kids == null || passThrough()) {
+			return kids;
 		}
 		Map<String, FileSource> ret = new LinkedHashMap<>();
 		for(FileSource kid : kids) {
-			String kidPath = VirtualFileSourceFactory.join(path, kid.getName());
+			String kidPath = tree.join(path, kid.getName());
 			ret.put(kid.getName(), tree.inTree(kidPath, kid));
 		}
 		for(String name : tree.connectionsIn(path)) {
 			if( !ret.containsKey(name)) {
-				ret.put(name, tree.createFileSource(VirtualFileSourceFactory.join(path, name)));
+				ret.put(name, tree.createFileSource(tree.join(path, name)));
 			}
 		}
 		return ret.values().toArray(new FileSource[ret.size()]);

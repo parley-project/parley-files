@@ -22,13 +22,14 @@ package us.bringardner.parley.files.tree;
 
 import java.io.File;
 
+import us.bringardner.parley.files.DelegatingFileSource;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.fileproxy.FileProxy;
 
 /**
  * The local file a file of a tree (VirtualFileSourceFactory) is, for what only a local file has:
  * a program's working directory, links, permission bits, a named pipe. A tree's files are the
- * local file system's (FileProxy), or TreeFiles (a local folder with a connection under it, or a file of a
+ * local file system's (FileProxy), or DelegatingFileSources (a local folder with a connection under it, or a file of a
  * connected file system).
  */
 public final class LocalFiles {
@@ -38,7 +39,7 @@ public final class LocalFiles {
 
 	/** the local file f is, or null (f is a connected file system's) */
 	public static File of(FileSource f) {
-		FileSource real = TreeFile.unwrap(f);
+		FileSource real = DelegatingFileSource.unwrap(f);
 		return real instanceof FileProxy ? ((FileProxy) real).getTarget() : null;
 	}
 
