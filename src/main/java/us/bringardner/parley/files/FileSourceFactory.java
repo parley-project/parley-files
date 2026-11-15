@@ -791,6 +791,30 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	}
 
 	/**
+	 * A builder for programs that run on the system this factory's files are on, the way
+	 * {@link ProcessBuilder} starts them on this machine; see {@link FileSourceProcessBuilder}.
+	 * The default is null: this file system can't run programs. One that can overrides this, and
+	 * says so in {@link FileSourceCapabilities#runsCommands()} for its files.
+	 * @param command the program and its arguments
+	 * @return the builder, or null if this file system can't run programs (or, for a remote one,
+	 *         isn't allowed to by its connection settings)
+	 * @since 2.0.0
+	 */
+	public FileSourceProcessBuilder processBuilder(java.util.List<String> command) {
+		return null;
+	}
+
+	/**
+	 * {@link #processBuilder(java.util.List)} with the program and its arguments given one by one.
+	 * @param command the program and its arguments
+	 * @return the builder, or null if this file system can't run programs
+	 * @since 2.0.0
+	 */
+	public final FileSourceProcessBuilder processBuilder(String... command) {
+		return processBuilder(java.util.Arrays.asList(command));
+	}
+
+	/**
 	 * @param other another factory
 	 * @return true if files from other are in the same file system (the same tree of
 	 * paths) as files from this factory, so their paths can be compared.

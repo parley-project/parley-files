@@ -111,6 +111,12 @@ public class FileProxyFactory extends FileSourceFactory {
 		return other instanceof FileProxyFactory;
 	}
 
+	/** Starts programs on this machine, through the JDK's ProcessBuilder (see FileProxyProcessBuilder). */
+	@Override
+	public us.bringardner.parley.files.FileSourceProcessBuilder processBuilder(List<String> command) {
+		return new FileProxyProcessBuilder(this, command);
+	}
+
 	@Override
 	public String getTypeId() {
 

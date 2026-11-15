@@ -2,6 +2,14 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-15: running programs)
+
+- **`FileSourceProcessBuilder`**: a factory whose file system can run programs gives one from
+  `FileSourceFactory.processBuilder(command)`; it is to `ProcessBuilder` what `FileSource` is to `File`,
+  and `start()` returns a `java.lang.Process`. The default is null (the file system can't run programs).
+- **`FileSourceCapabilities.runsCommands()`** says the same for a factory's files.
+- **The local file system runs programs** (`FileProxyFactory`, through the JDK's `ProcessBuilder`).
+
 ### Changed (2026-11-14: DelegatingFileSource passes through with no tree)
 
 - **`DelegatingFileSource` moves to `us.bringardner.parley.files`** (from `tree`), next to
