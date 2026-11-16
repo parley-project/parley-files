@@ -364,7 +364,6 @@ c.atomicMkdir();          // mkdir() is test-and-create
 c.atomicReplace();        // renameTo(dest, true) replaces in one step: nobody finds dest missing
 c.durableSync();          // Syncable.sync() makes writes durable
 c.orderedOperations();    // every operation, from every client, is applied in one order
-c.runsCommands();         // its factory can start programs (processBuilder isn't null)
 ```
 
 `renameTo(dest)` never replaces an existing file; `renameTo(dest, true)` does (never a directory). Where replace
@@ -373,37 +372,15 @@ isn't atomic it moves `dest` aside to a hidden name, renames, then deletes the o
 A file system that declares nothing gets `FileSourceCapabilities.defaults(lockScope)`: the atomic `createNewFile()`
 and `mkdir()` the FileSource contract requires, and nothing more. What Parley's factories declare:
 
-| Parley factory | Lock scope | Atomic create | Atomic mkdir | Atomic replace | Durable sync | Ordered | Runs programs |
-|---|---|---|---|---|---|---|---|
-| `FileProxyFactory` (local files) | `HOST` | yes | yes | yes | yes (`fsync`) | yes | yes |
-| `MemoryFileSourceFactory` | `PROCESS` | yes | yes | yes | no (nothing is durable) | yes | no |
-| `JdbcFileSourceFactory` (parley-files-jdbc) | `CLUSTER` on PostgreSQL, MySQL 8, MariaDB 10.3+; else `PROCESS` | yes | yes | no | yes (each write is committed) | yes | no |
-| `SftpFileSourceFactory` (parley-files-sftp) | `PROCESS` | yes | yes | no | no (depends on the server) | yes | when its connection sets `runCommands=true` |
-| `FtpFileSourceFactory`, `FtpsFileSourceFactory` (parley-files-ftp) | `PROCESS` | **no** | yes | no | no | yes | no |
+| Parley factory | Lock scope | Atomic create | Atomic mkdir | Atomic replace | Durable sync | Ordered |
+|---|---|---|---|---|---|---|
+| `FileProxyFactory` (local files) | `HOST` | yes | yes | yes | yes (`fsync`) | yes |
+| `MemoryFileSourceFactory` | `PROCESS` | yes | yes | yes | no (nothing is durable) | yes |
+| `JdbcFileSourceFactory` (parley-files-jdbc) | `CLUSTER` on PostgreSQL, MySQL 8, MariaDB 10.3+; else `PROCESS` | yes | yes | no | yes (each write is committed) | yes |
+| `SftpFileSourceFactory` (parley-files-sftp) | `PROCESS` | yes | yes | no | no (depends on the server) | yes |
+| `FtpFileSourceFactory`, `FtpsFileSourceFactory` (parley-files-ftp) | `PROCESS` | **no** | yes | no | no | yes |
 
 As with locks, other factories found at run time declare and document their own.
-
-## Running programs
-
-A factory whose file system can run programs gives a `FileSourceProcessBuilder`: it is to
-`java.lang.ProcessBuilder` what `FileSource` is to `java.io.File`, and `start()` returns an ordinary
-`java.lang.Process`. A factory that can't returns null.
-
-```java
-FileSourceProcessBuilder b = factory.processBuilder("python3", "report.py");
-if( b == null ) {
-    // this file system can't run programs
-} else {
-    b.directory(dir);                    // a FileSource of the same file system
-    b.environment().put("MODE", "full");
-    Process p = b.start();               // read its streams, then p.waitFor()
-}
-```
-
-The local file system (`FileProxyFactory`) runs programs through the JDK's `ProcessBuilder`. SFTP runs
-them on the server when the connection allows it (see parley-files-sftp). What differs on a remote file
-system: `environment()` starts empty and adds to the server's environment (a local one starts as a copy
-of this JVM's), and a null directory is the user's home directory on the server.
 
 ## Writing your own implementation
 

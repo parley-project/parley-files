@@ -1402,7 +1402,7 @@ public class FileProxy implements FileSource {
 	@Override
 	public us.bringardner.parley.files.FileSourceCapabilities getCapabilities() {
 		return us.bringardner.parley.files.FileSourceCapabilities.defaults(LockScope.HOST).withAtomicReplace(true)
-				.withDurableSync(true).withOrderedOperations(true).withRunsCommands(true);
+				.withDurableSync(true).withOrderedOperations(true);
 	}
 
 	/**
