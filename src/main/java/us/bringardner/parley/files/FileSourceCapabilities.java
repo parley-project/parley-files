@@ -22,28 +22,26 @@ public final class FileSourceCapabilities {
 	private final boolean atomicReplace;
 	private final boolean durableSync;
 	private final boolean orderedOperations;
-	private final boolean runsCommands;
 
 	private FileSourceCapabilities(LockScope lockScope, boolean atomicCreateNewFile, boolean atomicMkdir,
-			boolean atomicReplace, boolean durableSync, boolean orderedOperations, boolean runsCommands) {
+			boolean atomicReplace, boolean durableSync, boolean orderedOperations) {
 		this.lockScope = Objects.requireNonNull(lockScope, "lockScope");
 		this.atomicCreateNewFile = atomicCreateNewFile;
 		this.atomicMkdir = atomicMkdir;
 		this.atomicReplace = atomicReplace;
 		this.durableSync = durableSync;
 		this.orderedOperations = orderedOperations;
-		this.runsCommands = runsCommands;
 	}
 
 	/**
 	 * What a file system that declares nothing is taken to have: the lock scope it reports, and
 	 * the atomic {@link FileSource#createNewFile()} and {@link FileSource#mkdir()} the FileSource
-	 * contract requires; no atomic replace, no durable sync, no promise of ordered operations, and no programs run.
+	 * contract requires; no atomic replace, no durable sync, no promise of ordered operations.
 	 * @param lockScope how far its locks reach
 	 * @return the capabilities
 	 */
 	public static FileSourceCapabilities defaults(LockScope lockScope) {
-		return new FileSourceCapabilities(lockScope, true, true, false, false, false, false);
+		return new FileSourceCapabilities(lockScope, true, true, false, false, false);
 	}
 
 	/**
@@ -92,49 +90,34 @@ public final class FileSourceCapabilities {
 		return orderedOperations;
 	}
 
-	/**
-	 * @return whether its file system runs programs: its factory's
-	 *         {@link FileSourceFactory#processBuilder(java.util.List)} gives a
-	 *         {@link FileSourceProcessBuilder}, not null
-	 * @since 2.0.0
-	 */
-	public boolean runsCommands() {
-		return runsCommands;
-	}
-
 	/** @param scope how far its locks reach */
 	public FileSourceCapabilities withLockScope(LockScope scope) {
-		return new FileSourceCapabilities(scope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, orderedOperations, runsCommands);
+		return new FileSourceCapabilities(scope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, orderedOperations);
 	}
 
 	/** @param b whether createNewFile is atomic */
 	public FileSourceCapabilities withAtomicCreateNewFile(boolean b) {
-		return new FileSourceCapabilities(lockScope, b, atomicMkdir, atomicReplace, durableSync, orderedOperations, runsCommands);
+		return new FileSourceCapabilities(lockScope, b, atomicMkdir, atomicReplace, durableSync, orderedOperations);
 	}
 
 	/** @param b whether mkdir is atomic */
 	public FileSourceCapabilities withAtomicMkdir(boolean b) {
-		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, b, atomicReplace, durableSync, orderedOperations, runsCommands);
+		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, b, atomicReplace, durableSync, orderedOperations);
 	}
 
 	/** @param b whether renameTo(dest, true) replaces atomically */
 	public FileSourceCapabilities withAtomicReplace(boolean b) {
-		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, b, durableSync, orderedOperations, runsCommands);
+		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, b, durableSync, orderedOperations);
 	}
 
 	/** @param b whether sync makes writes durable */
 	public FileSourceCapabilities withDurableSync(boolean b) {
-		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, b, orderedOperations, runsCommands);
+		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, b, orderedOperations);
 	}
 
 	/** @param b whether every operation is applied in one order */
 	public FileSourceCapabilities withOrderedOperations(boolean b) {
-		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, b, runsCommands);
-	}
-
-	/** @param b whether its file system runs programs @return a changed copy @since 2.0.0 */
-	public FileSourceCapabilities withRunsCommands(boolean b) {
-		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, orderedOperations, b);
+		return new FileSourceCapabilities(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, b);
 	}
 
 	@Override
@@ -144,19 +127,18 @@ public final class FileSourceCapabilities {
 		}
 		FileSourceCapabilities c = (FileSourceCapabilities) o;
 		return lockScope == c.lockScope && atomicCreateNewFile == c.atomicCreateNewFile && atomicMkdir == c.atomicMkdir
-				&& atomicReplace == c.atomicReplace && durableSync == c.durableSync && orderedOperations == c.orderedOperations
-				&& runsCommands == c.runsCommands;
+				&& atomicReplace == c.atomicReplace && durableSync == c.durableSync && orderedOperations == c.orderedOperations;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, orderedOperations, runsCommands);
+		return Objects.hash(lockScope, atomicCreateNewFile, atomicMkdir, atomicReplace, durableSync, orderedOperations);
 	}
 
 	@Override
 	public String toString() {
 		return "FileSourceCapabilities[lockScope=" + lockScope + ", atomicCreateNewFile=" + atomicCreateNewFile + ", atomicMkdir="
 				+ atomicMkdir + ", atomicReplace=" + atomicReplace + ", durableSync=" + durableSync + ", orderedOperations="
-				+ orderedOperations + ", runsCommands=" + runsCommands + "]";
+				+ orderedOperations + "]";
 	}
 }
