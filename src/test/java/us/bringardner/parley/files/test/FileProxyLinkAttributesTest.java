@@ -2,6 +2,8 @@ package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -10,6 +12,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermissions;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -91,5 +94,29 @@ public class FileProxyLinkAttributesTest {
 		assertEquals(other, f.lastModified());
 		assertEquals(TARGET_TIME, Files.getLastModifiedTime(target).toMillis());
 		assertEquals(TARGET_TIME, new FileProxyFactory().createFileSource(target.toString()).lastModified());
+	}
+
+	@Test
+	void linkHasItsOwnModeBitsAndLengthButReadingFollowsIt(@TempDir Path tmp) throws Exception {
+		assumeTrue(Files.getFileStore(tmp).supportsFileAttributeView("posix"));
+		Path link = link(tmp);
+		Path target = tmp.resolve("target.txt");
+		Files.write(target, new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+		Files.setPosixFilePermissions(target, PosixFilePermissions.fromString("rw-------"));
+		FileSource f = new FileProxyFactory().createFileSource(link.toString());
+
+		// the link's own mode, as ls -l shows it
+		assertEquals(Files.getPosixFilePermissions(link, LinkOption.NOFOLLOW_LINKS).contains(java.nio.file.attribute.PosixFilePermission.GROUP_READ), f.canGroupRead());
+		assertEquals(Files.getPosixFilePermissions(link, LinkOption.NOFOLLOW_LINKS).contains(java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE), f.canOtherWrite());
+		// the length of the link text, as lstat has it
+		assertEquals(Files.readAttributes(link, java.nio.file.attribute.BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).size(), f.length());
+		assertNotEquals(10, f.length());
+		// reading follows the link
+		assertEquals(10, f.contentLength());
+		assertArrayEquals(new byte[] {9, 10}, f.tail(2));
+
+		// setting a bit through the link changes the file's bit, not the file's other bits to the link's
+		assertTrue(f.setOwnerWritable(false));
+		assertEquals("r--------", PosixFilePermissions.toString(Files.getPosixFilePermissions(target)));
 	}
 }
