@@ -367,12 +367,27 @@ public class FileProxy implements FileSource {
 		return ret;
 	}
 
+	/**
+	 * The permission bits this path answers with: a symbolic link's own (rwxrwxrwx on Linux),
+	 * as lstat and ls -l show them (D78); the access checks (canRead and so on) still follow
+	 * the link.
+	 */
 	private synchronized	Set<PosixFilePermission> getPosixPermissions() throws IOException {
+		if( Files.isSymbolicLink(target.toPath()) ) {
+			PosixFileAttributeView own = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+			PosixFileAttributes at = own == null ? null : own.readAttributes();
+			return at == null ? new HashSet<PosixFilePermission>() : new HashSet<PosixFilePermission>(at.permissions());
+		}
+		return followedPermissions();
+	}
+
+	/**
+	 * The bits chmod changes: as java.io.File, stat and chmod do, a symbolic link here is
+	 * the file it leads to. (Setting one bit from the link's own bits wrote them onto the
+	 * file.) Only a link that points at nothing has nothing to follow, and has its own.
+	 */
+	private synchronized	Set<PosixFilePermission> followedPermissions() throws IOException {
 		Set<PosixFilePermission> ret = new HashSet<PosixFilePermission>() ;
-		// As java.io.File, stat and chmod do: a symbolic link has the permissions of what it
-		// leads to. (They were the link's own, which is rwxr-xr-x or rwxrwxrwx whatever the file
-		// is, and setting one bit wrote the link's bits onto the file.) Only a link that
-		// points at nothing has nothing to follow, and has its own.
 		PosixFileAttributeView view2 = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class);
 		if (view2 != null) {
 			PosixFileAttributes at;
@@ -398,7 +413,7 @@ public class FileProxy implements FileSource {
 	 * still race; the OS offers no atomic single-bit update.)
 	 */
 	private synchronized boolean setPosixPermision(boolean b, PosixFilePermission p) throws IOException {
-		Set<PosixFilePermission> perms = getPosixPermissions();
+		Set<PosixFilePermission> perms = followedPermissions();
 		
 		if(b) {
 			if( !perms.contains(p)) {
@@ -624,7 +639,16 @@ public class FileProxy implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#length()
 	 */
 	public long length() {
-
+		Path path = target.toPath();
+		if( Files.isSymbolicLink(path) ) {
+			// a link's own length, the length of its text, as lstat has it (D78); reading
+			// follows the link, see contentLength()
+			try {
+				return Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).size();
+			} catch (IOException e) {
+				return 0L;
+			}
+		}
 		return target.length();
 	}
 
