@@ -371,6 +371,11 @@ public class DelegatingFileSource implements FileSource {
 	}
 
 	@Override
+	public long contentLength() throws java.io.IOException {
+		return real.contentLength();
+	}
+
+	@Override
 	public long length() throws java.io.IOException {
 		return real.length();
 	}

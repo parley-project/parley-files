@@ -120,7 +120,7 @@ public abstract class AbstractRandomAccessIoController implements IRandomAccessI
 	public long length() throws IOException {
 		if( fileLength < 0 ) {
 			file.refresh();
-			fileLength = file.length();
+			fileLength = file.contentLength();
 		}
 		long ret = fileLength;		
 		if(currentChunk !=null && currentChunk.isNew) {

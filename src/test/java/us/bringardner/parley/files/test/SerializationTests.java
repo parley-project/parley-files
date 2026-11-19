@@ -82,6 +82,7 @@ public class SerializationTests {
 		assertEquals(f.getOwner().getName(), copy.getOwner().getName());
 
 		FileSource linkCopy = roundTrip(link);
-		assertEquals(6, linkCopy.length());
+		assertEquals(6, linkCopy.contentLength());
+		assertEquals("/dir/a.txt".length(), linkCopy.length(), "the length of the link's text");
 	}
 }

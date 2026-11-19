@@ -93,7 +93,7 @@ public class FileSourceURLConnection extends URLConnection {
 	{
 		try {
 			connect();
-			return  target.length();
+			return  target.contentLength();
 		} catch (IOException e) {
 			return -1;
 		}

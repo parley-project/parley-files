@@ -953,8 +953,20 @@ public abstract class FileLikeBehaviorTests {
 		requireSymbolicLinks();
 		oracleSymlink("ln.txt", "five.txt");
 		symlink("ln.txt", "five.txt");
-		for(String m : new String[] {"exists", "isFile", "isDirectory", "length", "getName"}) {
+		for(String m : new String[] {"exists", "isFile", "isDirectory", "getName"}) {
 			same("ln.txt", m);
+		}
+		// length() is the link's own, the length of its text, as lstat has it; what reading gives is the file's
+		streamsAgree("content length of the link", () -> "" + oracle("ln.txt").length(), () -> "" + sourceFor("ln.txt").contentLength());
+		// (the system's text for a local file; another file system has its own text for the same link)
+		if( sourceFor("ln.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory ) {
+			// (that link, not the oracle's, which sits in another folder and has other text)
+			streamsAgree("length of the link", () -> "" + Files.readAttributes(java.nio.file.Paths.get(sourceFor("ln.txt").getAbsolutePath()),
+					java.nio.file.attribute.BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS).size(),
+					() -> "" + sourceFor("ln.txt").length());
+		} else {
+			streamsAgree("length of the link", () -> "" + sourceFor("ln.txt").getLinkText().getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+					() -> "" + sourceFor("ln.txt").length());
 		}
 		// what is read through the link is what is in the target
 		try (OutputStream out = sourceFor("five.txt").getOutputStream()) {
@@ -966,7 +978,7 @@ public abstract class FileLikeBehaviorTests {
 				return hex(in.readAllBytes());
 			}
 		});
-		same("ln.txt", "length");
+		streamsAgree("content length of the link", () -> "" + oracle("ln.txt").length(), () -> "" + sourceFor("ln.txt").contentLength());
 		// writing through it changes the target
 		streamsAgree("write through the link", () -> {
 			try (OutputStream out = new java.io.FileOutputStream(oracle("ln.txt"))) {
@@ -1023,7 +1035,7 @@ public abstract class FileLikeBehaviorTests {
 	}
 
 	@Test
-	void aSymbolicLinkHasThePermissionsOfWhatItLeadsTo() throws Exception {
+	void aSymbolicLinkHasItsOwnPermissionBitsButAccessFollowsTheFile() throws Exception {
 		//  Windows has ACLs: it has no POSIX owner, group and other bits to set, and the library does not edit an ACL
 		org.junit.jupiter.api.Assumptions.assumeFalse(onWindows() && sourceFor("five.txt").getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory);
 		requireSymbolicLinks();
@@ -1041,17 +1053,37 @@ public abstract class FileLikeBehaviorTests {
 		assertTrue(target.setOtherExecutable(false));
 		FileSource link = symlink("ln.txt", "five.txt");
 		FileSource viaPath = sourceFor("ln.txt");
+		// the link's own bits, as ls -l shows them (D78): the system's for a local file, rwxrwxrwx (as on Linux) for the others
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> own = null;
+		if( link.getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory ) {
+			own = Files.getPosixFilePermissions(java.nio.file.Paths.get(link.getAbsolutePath()), java.nio.file.LinkOption.NOFOLLOW_LINKS);
+		}
+		String[] methods = {"canOwnerRead", "canOwnerWrite", "canOwnerExecute", "canGroupRead", "canGroupWrite",
+				"canGroupExecute", "canOtherRead", "canOtherWrite", "canOtherExecute"};
+		java.util.List<java.nio.file.attribute.PosixFilePermission> bits = java.util.List.of(
+				java.nio.file.attribute.PosixFilePermission.OWNER_READ, java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+				java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE, java.nio.file.attribute.PosixFilePermission.GROUP_READ,
+				java.nio.file.attribute.PosixFilePermission.GROUP_WRITE, java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE,
+				java.nio.file.attribute.PosixFilePermission.OTHERS_READ, java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE,
+				java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE);
 		for(FileSource l : new FileSource[] {link, viaPath}) {
 			StringBuilder expected = new StringBuilder();
 			StringBuilder got = new StringBuilder();
-			for(String m : new String[] {"canOwnerRead", "canOwnerWrite", "canOwnerExecute", "canGroupRead", "canGroupWrite",
-					"canGroupExecute", "canOtherRead", "canOtherWrite", "canOtherExecute"}) {
-				expected.append(m).append('=').append(answer(target, m)).append(' ');
-				got.append(m).append('=').append(answer(l, m)).append(' ');
+			for(int i = 0; i < methods.length; i++) {
+				expected.append(methods[i]).append('=').append(own == null ? "true" : String.valueOf(own.contains(bits.get(i)))).append(' ');
+				got.append(methods[i]).append('=').append(answer(l, methods[i])).append(' ');
 			}
 			if( !expected.toString().equals(got.toString()) ) {
-				differences.add("a symbolic link's permissions: the file it leads to [" + expected.toString().trim()
+				differences.add("a symbolic link's own permission bits: expected [" + expected.toString().trim()
 						+ "], the link [" + got.toString().trim() + "]");
+			}
+		}
+		// but whether this user can read, write or run it follows the file
+		for(String m : new String[] {"canRead", "canWrite", "canExecute"}) {
+			String expected = answer(target, m);
+			String got = answer(link, m);
+			if( !expected.equals(got) ) {
+				differences.add("a symbolic link's " + m + "(): the file it leads to " + expected + ", the link " + got);
 			}
 		}
 	}
@@ -1102,9 +1134,11 @@ public abstract class FileLikeBehaviorTests {
 		requireSymbolicLinks();
 		oracleSymlink("dangling", "nope.txt");
 		symlink("dangling", "nope.txt");
-		for(String m : new String[] {"exists", "isFile", "isDirectory", "length"}) {
+		for(String m : new String[] {"exists", "isFile", "isDirectory"}) {
 			same("dangling", m);
 		}
+		// the link has a length of its own (its text), but there is nothing to read
+		streamsAgree("content length of the dangling link", () -> "" + oracle("dangling").length(), () -> "" + sourceFor("dangling").contentLength());
 		same("dangling", "delete");
 		same("dangling", "exists");
 	}
