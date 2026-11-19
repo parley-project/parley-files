@@ -2,6 +2,7 @@ package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
@@ -76,5 +77,19 @@ public class FileProxyLinkAttributesTest {
 		Files.setLastModifiedTime(p, FileTime.fromMillis(TARGET_TIME));
 		FileSource f = new FileProxyFactory().createFileSource(p.toString());
 		assertEquals(TARGET_TIME, f.lastModified());
+	}
+
+	@Test
+	void settersOnALinkChangeTheLinkNotTheTarget(@TempDir Path tmp) throws Exception {
+		Path link = link(tmp);
+		Path target = tmp.resolve("target.txt");
+		FileSource f = new FileProxyFactory().createFileSource(link.toString());
+		long other = 1_700_000_000_000L;
+		assertTrue(f.setLastModifiedTime(other));
+		assertTrue(f.setLastAccessTime(other));
+		assertEquals(other, Files.getLastModifiedTime(link, LinkOption.NOFOLLOW_LINKS).toMillis());
+		assertEquals(other, f.lastModified());
+		assertEquals(TARGET_TIME, Files.getLastModifiedTime(target).toMillis());
+		assertEquals(TARGET_TIME, new FileProxyFactory().createFileSource(target.toString()).lastModified());
 	}
 }

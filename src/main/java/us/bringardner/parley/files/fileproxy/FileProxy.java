@@ -303,7 +303,8 @@ public class FileProxy implements FileSource {
 		public boolean setLastAccessTime(long time) throws IOException {
 
 			try {
-				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class);
+				// a link's own time (D78)
+				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 				v.setTimes(null,FileTime.from(Instant.ofEpochMilli(time)), null);
 
 			} catch(Throwable e) {
@@ -316,7 +317,7 @@ public class FileProxy implements FileSource {
 		@Override
 		public boolean setCreateTime(long time) throws IOException {
 			try {
-				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class);
+				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 				v.setTimes(null,null,FileTime.from(Instant.ofEpochMilli(time)));			
 			} catch(Throwable e) {
 				return false;
@@ -328,7 +329,8 @@ public class FileProxy implements FileSource {
 		@Override
 		public boolean setGroup(GroupPrincipal group) throws IOException {
 			try {
-				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class);
+				// a link's own group (D78)
+				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 				v.setGroup(group);
 			} catch (Exception e) {
 				return false;
@@ -802,6 +804,17 @@ public class FileProxy implements FileSource {
 	 */
 	@Override
 	public boolean setLastModifiedTime(long time) {
+		Path path = target.toPath();
+		if( Files.isSymbolicLink(path) ) {
+			// a link's own time (D78); java.io.File would set the target's
+			try {
+				BasicFileAttributeView v = Files.getFileAttributeView(path, BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+				v.setTimes(FileTime.fromMillis(time), null, null);
+				return true;
+			} catch (IOException | RuntimeException e) {
+				return false;
+			}
+		}
 		return target.setLastModified(time);		
 	}
 
@@ -1383,7 +1396,8 @@ public class FileProxy implements FileSource {
 				// e.g. the owner getOwner() returned: the OS only accepts its own principals
 				owner = target.toPath().getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName(owner.getName());
 			}
-			FileOwnerAttributeView v = Files.getFileAttributeView(target.toPath(), FileOwnerAttributeView.class);
+			// a link's own owner (D78)
+			FileOwnerAttributeView v = Files.getFileAttributeView(target.toPath(), FileOwnerAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 			v.setOwner(owner);
 		} catch (Exception e) {
 			return false;
