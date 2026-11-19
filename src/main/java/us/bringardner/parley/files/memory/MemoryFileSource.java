@@ -232,6 +232,15 @@ public class MemoryFileSource implements FileSource {
 		}
 	}
 
+	/**
+	 * The node whose owner, group and times answer for this one (D78). A symbolic link answers
+	 * for itself, as lstat does; everything else is as {@link #resolve()} (a hard link shares
+	 * its file's attributes, and a path below a linked directory has its own node's).
+	 */
+	private MemoryFileSource attributeNode() {
+		return symlinkTarget != null ? this : resolve();
+	}
+
 	/** Makes this a link to existing (see {@link MemoryFileSourceFactory#createLink}). */
 	void makeLinkTo(MemoryFileSource existing, boolean hard) throws IOException {
 		synchronized (treeLock()) {
@@ -256,6 +265,8 @@ public class MemoryFileSource implements FileSource {
 				owner.hardLinks.add(this);
 			} else {
 				symlinkTarget = existing;
+				// a link has its own times, from when it was made (D78)
+				lastModified = lastAccessed = createDate = System.currentTimeMillis();
 			}
 			updateRetention();
 			touchParent();
@@ -657,8 +668,9 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public long lastModified() {
 		// as java.io.File: 0 for a path that doesn't exist (the field is only a start value then)
-		MemoryFileSource r = resolve();
-		return r.fileType != FileType.Undefined ? r.lastModified : 0L;
+		MemoryFileSource r = attributeNode();
+		// a symbolic link has a time of its own, even one that points at nothing (D78)
+		return r.fileType != FileType.Undefined || r.symlinkTarget != null ? r.lastModified : 0L;
 	}
 
 	/**
@@ -1314,7 +1326,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public FileSourceUser getOwner() throws IOException {
-		MemoryFileSource r = resolve();
+		MemoryFileSource r = attributeNode();
 		if(r.owner == null ) {
 			r.owner = theCreator.whoAmI();
 		}
@@ -1324,7 +1336,7 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public FileSourceGroup getGroup() throws IOException {
-		MemoryFileSource r = resolve();
+		MemoryFileSource r = attributeNode();
 		if( r.group == null ) {
 			r.group = r.getOwner().getGroup(); 
 			}
@@ -1713,12 +1725,12 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public long lastAccessTime() throws IOException {		
-		return resolve().lastAccessed;
+		return attributeNode().lastAccessed;
 	}
 
 	@Override
 	public long creationTime() throws IOException {
-		return resolve().createDate;
+		return attributeNode().createDate;
 	}
 
 
