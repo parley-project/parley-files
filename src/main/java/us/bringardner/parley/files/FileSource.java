@@ -631,6 +631,17 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public abstract FileSource getLinkedTo() throws IOException;
 
+	/**
+	 * The text of a symbolic link exactly as it was stored: a relative link stays relative (../x/y), an absolute one
+	 * absolute, and it may name something that doesn't exist. getLinkedTo() answers the file the link points to,
+	 * which loses the text. Pair of {@link FileSourceFactory#createSymbolicLink(FileSource, String)}.
+	 * 
+	 * @return the text, or null when this isn't a symbolic link or the file system can't tell
+	 */
+	public default String getLinkText() throws IOException {
+		return null;
+	}
+
 	public abstract ISeekableInputStream getSeekableInputStream() throws IOException;
 
 	public abstract GroupPrincipal getGroup() throws IOException;

@@ -338,6 +338,29 @@ public class MemoryFileSourceFactory extends FileSourceFactory {
 
 
 	@Override
+	public FileSource createSymbolicLink(FileSource newLink, String linkText) throws IOException {
+		if( !(newLink instanceof MemoryFileSource) ) {
+			throw new IOException("A link in the memory file system has to be made on a memory file");
+		}
+		if( linkText == null || linkText.isEmpty() ) {
+			throw new IOException("A symbolic link needs text");
+		}
+		MemoryFileSource link = (MemoryFileSource) newLink;
+		// the node the text names now (relative text is relative to the link's folder); it need not exist
+		String sep = String.valueOf(getSeparatorChar());
+		java.nio.file.Path base = java.nio.file.Paths.get(sep);
+		java.nio.file.Path where = linkText.startsWith(sep) ? base.resolve(linkText)
+				: base.resolve(link.getParentFile() == null ? sep : link.getParentFile().getAbsolutePath()).resolve(linkText);
+		FileSource target = createFileSource(where.normalize().toString());
+		if( !(target instanceof MemoryFileSource) ) {
+			throw new IOException("Can't link to " + linkText);
+		}
+		link.makeLinkTo((MemoryFileSource) target, false);
+		link.linkText = linkText;
+		return link;
+	}
+
+	@Override
 	public FileSource createLink(FileSource newLink, FileSource existing) throws IOException {
 		FileSource ret = createLink(newLink, existing, true);
 		return ret;

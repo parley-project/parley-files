@@ -87,6 +87,8 @@ public class MemoryFileSource implements FileSource {
 	 * null). Nodes are per path, so a link to a path that is deleted and made again follows it.
 	 */
 	volatile MemoryFileSource symlinkTarget;
+	/** What a symbolic link says, exactly as given when it was made with text (null for one made to a file). */
+	volatile String linkText;
 	/**
 	 * For a hard link: the node that holds the content this is one more name for. The names
 	 * that point at a node that holds content are listed in {@link #hardLinks}.
@@ -267,6 +269,7 @@ public class MemoryFileSource implements FileSource {
 			hardTarget = null;
 		}
 		symlinkTarget = null;
+		linkText = null;
 		updateRetention();
 	}
 
@@ -1429,6 +1432,16 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public FileSource getLinkedTo() {
 		return symlinkTarget;
+	}
+
+	@Override
+	public String getLinkText() {
+		MemoryFileSource t = symlinkTarget;
+		if( t == null ) {
+			return null;
+		}
+		String text = linkText;
+		return text != null ? text : t.getAbsolutePath();
 	}
 
 	@Override

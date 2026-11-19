@@ -606,6 +606,11 @@ public class DelegatingFileSource implements FileSource {
 	}
 
 	@Override
+	public String getLinkText() throws java.io.IOException {
+		return real.getLinkText();
+	}
+
+	@Override
 	public us.bringardner.parley.files.ISeekableInputStream getSeekableInputStream() throws java.io.IOException {
 		return real.getSeekableInputStream();
 	}
