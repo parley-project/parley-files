@@ -1001,9 +1001,13 @@ public class MemoryFileSource implements FileSource {
 	 */
 	public boolean setLastModifiedTime(long time) {
 		// as java.io.File.setLastModified: false for a path that doesn't exist
-		MemoryFileSource r = resolve();
+		MemoryFileSource r = attributeNode();   // a symbolic link's own time (D78)
 		if( r != this ) {
 			return r.setLastModifiedTime(time);
+		}
+		if( symlinkTarget != null ) {
+			lastModified = time;   // even a link that points at nothing
+			return true;
 		}
 		if( !exists() ) {
 			return false;
@@ -1736,13 +1740,13 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean setLastAccessTime(long time) throws IOException {
-		resolve().lastAccessed = time;
+		attributeNode().lastAccessed = time;
 		return true;
 	}
 
 	@Override
 	public boolean setCreateTime(long time) throws IOException {
-		resolve().createDate = time;
+		attributeNode().createDate = time;
 		return true;
 	}
 
@@ -1752,7 +1756,7 @@ public class MemoryFileSource implements FileSource {
 		if (group1 instanceof FileSourceGroup) {
 			// was also getOwner().setGroup(group), which changed the owner's
 			// primary group, and so the group of every file it owns
-			resolve().group = (FileSourceGroup) group1;
+			attributeNode().group = (FileSourceGroup) group1;
 			ret = true;
 		}
 		
@@ -1763,7 +1767,7 @@ public class MemoryFileSource implements FileSource {
 	public boolean setOwner(UserPrincipal owner1) throws IOException {
 		boolean ret = false;
 		if (owner1 instanceof FileSourceUser) {
-			resolve().owner = (FileSourceUser) owner1;
+			attributeNode().owner = (FileSourceUser) owner1;
 			ret = true;
 		}
 		
