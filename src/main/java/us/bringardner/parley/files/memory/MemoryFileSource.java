@@ -267,6 +267,10 @@ public class MemoryFileSource implements FileSource {
 				symlinkTarget = existing;
 				// a link has its own times, from when it was made (D78)
 				lastModified = lastAccessed = createDate = System.currentTimeMillis();
+				// and its own mode, rwxrwxrwx as on Linux; reading and writing still follow the link
+				canOwnerRead = canOwnerWrite = canExecute = true;
+				canGroupRead = canGroupWrite = canGroupExecute = true;
+				canOtherRead = canOtherWrite = canOtherExecute = true;
 			}
 			updateRetention();
 			touchParent();
@@ -421,46 +425,46 @@ public class MemoryFileSource implements FileSource {
 
 	@Override
 	public boolean canOwnerRead() throws IOException {
-		return resolve().canOwnerRead;
+		return attributeNode().canOwnerRead;
 	}
 
 	@Override
 	public boolean canOwnerWrite() throws IOException {
-		return resolve().canOwnerWrite;
+		return attributeNode().canOwnerWrite;
 	}
 
 	@Override
 	public boolean canOwnerExecute() throws IOException {
-		return resolve().canExecute;
+		return attributeNode().canExecute;
 	}
 
 	@Override
 	public boolean canGroupRead() throws IOException {
-		return resolve().canGroupRead;
+		return attributeNode().canGroupRead;
 	}
 
 	@Override
 	public boolean canGroupWrite() throws IOException {
-		return resolve().canGroupWrite;
+		return attributeNode().canGroupWrite;
 	}
 	@Override
 	public boolean canGroupExecute() throws IOException {
-		return resolve().canGroupExecute;
+		return attributeNode().canGroupExecute;
 	}
 
 
 	@Override
 	public boolean canOtherRead() throws IOException {
-		return resolve().canOtherRead;
+		return attributeNode().canOtherRead;
 	}
 
 	@Override
 	public boolean canOtherWrite() throws IOException {
-		return resolve().canOtherWrite;
+		return attributeNode().canOtherWrite;
 	}
 	@Override
 	public boolean canOtherExecute() throws IOException {
-		return resolve().canOtherExecute;
+		return attributeNode().canOtherExecute;
 	}
 
 
@@ -659,6 +663,11 @@ public class MemoryFileSource implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#length()
 	 */
 	public long length() {
+		if( symlinkTarget != null ) {
+			// a link's own length, the length of its text, as lstat has it (D78); reading
+			// follows the link, see contentLength()
+			return getLinkText().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+		}
 		byte[] bytes = resolve().data;
 		return bytes == null ? 0 : bytes.length;
 	}
