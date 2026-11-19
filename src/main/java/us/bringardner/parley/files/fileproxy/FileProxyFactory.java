@@ -331,6 +331,21 @@ public class FileProxyFactory extends FileSourceFactory {
 
 
 	@Override
+	public FileSource createSymbolicLink(FileSource newLink, String linkText) throws IOException {
+		if (!(newLink instanceof FileProxy)) {
+			throw new IOException("A symbolic link has to be made on a local file: " + newLink);
+		}
+		Path link = ((FileProxy) newLink).target.toPath();
+		Path text = link.getFileSystem().getPath(linkText);
+		try {
+			Files.createSymbolicLink(link, text);
+		} catch (IOException e) {
+			throw SymbolicLinkSupport.explain(e, link, text);
+		}
+		return new FileProxy(link.toFile(), this);
+	}
+
+	@Override
 	public FileSource createLink(FileSource newLink, FileSource existing) throws IOException {
 		FileSource ret = newLink;
 		if (existing instanceof FileProxy) {

@@ -1188,6 +1188,12 @@ public class FileProxy implements FileSource {
 	}
 
 	@Override
+	public String getLinkText() throws IOException {
+		Path path = target.toPath();
+		return Files.isSymbolicLink(path) ? Files.readSymbolicLink(path).toString() : null;
+	}
+
+	@Override
 	public FileSource getLinkedTo() {
 		FileSource ret = null;
 		try {

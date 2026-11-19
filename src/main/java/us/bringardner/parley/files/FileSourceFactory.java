@@ -1197,6 +1197,21 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	public abstract FileSource createSymbolicLink(FileSource newFileLink, FileSource existingFile) throws IOException ;
 
 	/**
+	 * Creates a symbolic link that holds the given text exactly (optional operation). The text may be relative
+	 * (relative to the link's folder, as the operating system reads it), absolute, or name something that doesn't
+	 * exist. Read it back with {@link FileSource#getLinkText()}. A factory that can't keep the text as given refuses
+	 * (it doesn't make a different link).
+	 * 
+	 * @param newFileLink the link to create; it must not exist
+	 * @param linkText what the link says
+	 * @return the new link
+	 * @throws IOException when the link can't be made, or the factory doesn't support this
+	 */
+	public FileSource createSymbolicLink(FileSource newFileLink, String linkText) throws IOException {
+		throw new IOException("createSymbolicLink with exact link text is not supported by " + getClass().getSimpleName());
+	}
+
+	/**
 	 * Creates a new link (directory entry) for an existing file.
 	 * 		The link parameter locates the directory entry to create. 
 	 * 		The existing parameter is the path to an existing file. 
