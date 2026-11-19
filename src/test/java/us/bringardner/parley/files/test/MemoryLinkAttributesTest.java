@@ -2,6 +2,8 @@ package us.bringardner.parley.files.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.OutputStream;
@@ -113,5 +115,54 @@ public class MemoryLinkAttributesTest {
 		FileSource hard = f.createLink(f.createFileSource("/d/hard"), target);
 		assertTrue(hard.setLastModifiedTime(OLD + 1000));
 		assertEquals(OLD + 1000, target.lastModified());
+	}
+
+	@Test
+	void linkHasItsOwnModeBitsButAccessFollowsTheFile() throws Exception {
+		FileSource target = oldFile("/d/target");
+		assertTrue(target.setOwnerReadable(false));
+		assertTrue(target.setGroupReadable(false));
+		assertTrue(target.setOtherReadable(false));
+		FileSource link = f.createSymbolicLink(f.createFileSource("/d/ln"), target);
+		// rwxrwxrwx whatever the file is, as lstat shows a link
+		assertTrue(link.canOwnerRead() && link.canOwnerWrite() && link.canOwnerExecute());
+		assertTrue(link.canGroupRead() && link.canGroupWrite() && link.canGroupExecute());
+		assertTrue(link.canOtherRead() && link.canOtherWrite() && link.canOtherExecute());
+		assertFalse(target.canOwnerRead());
+		// but opening follows the link, so can this user read it: no, as the file says
+		assertFalse(link.canRead());
+		assertTrue(target.setOwnerReadable(true));
+		assertTrue(link.canRead());
+		// chmod through a link changes the file, not the link
+		assertTrue(link.setOwnerReadable(false));
+		assertFalse(target.canOwnerRead());
+		assertTrue(link.canOwnerRead());
+	}
+
+	@Test
+	void linkHasItsOwnLengthButReadingFollowsIt() throws Exception {
+		FileSource target = f.createFileSource("/d/target");
+		try (OutputStream out = target.getOutputStream()) {
+			out.write(new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30});
+		}
+		FileSource link = f.createSymbolicLink(f.createFileSource("/d/ln"), "target");
+		assertEquals("target".length(), link.length(), "the length of the link text");
+		assertEquals(30, target.length());
+		assertEquals(30, link.contentLength(), "what reading gives");
+		assertEquals(30, target.contentLength());
+		byte[] first = link.head(1000);
+		assertEquals(30, first.length, "head reads through the link");
+		assertArrayEquals(new byte[] {29, 30}, link.tail(2));
+		try (java.io.InputStream in = link.getInputStream()) {
+			assertEquals(30, in.readAllBytes().length);
+		}
+	}
+
+	@Test
+	void linkToNothingHasALengthButNoContent() throws Exception {
+		FileSource link = f.createSymbolicLink(f.createFileSource("/d/dangling"), "nothing");
+		assertEquals("nothing".length(), link.length());
+		assertEquals(0, link.contentLength());
+		assertFalse(link.canRead());
 	}
 }
