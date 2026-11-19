@@ -382,7 +382,8 @@ public abstract class FileSourceTestSupport {
 			}
 
 		} else {
-			assertEquals(source.length(), target.length(), name+" lens are not eq");
+			// what reading gives: a symbolic link's own length() is the length of its text
+			assertEquals(source.contentLength(), target.contentLength(), name+" lens are not eq");
 			try(InputStream sourceIn = source.getInputStream()) {
 				try(InputStream targetIn  = target.getInputStream()) {
 					compare(name,sourceIn,targetIn);

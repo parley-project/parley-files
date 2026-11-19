@@ -108,7 +108,15 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * I/O errors; they now propagate IOException and treat a missing owner or
 	 * group as "doesn't match".)
 	 */
-	default public boolean canRead() throws IOException  {
+	default public boolean canRead() throws IOException {
+		// access follows a symbolic link, as access(2) does; the link's own mode bits are no guide (D78)
+		FileSource followed = followLinks();
+		if( followed == null ) {
+			return false;
+		}
+		if( followed != this ) {
+			return followed.canRead();
+		}
 		switch (accessClass()) {
 		case 0: return canOwnerRead();
 		case 1: return canGroupRead();
@@ -117,6 +125,14 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	default public boolean canWrite() throws IOException {
+		// access follows a symbolic link, as access(2) does; the link's own mode bits are no guide (D78)
+		FileSource followed = followLinks();
+		if( followed == null ) {
+			return false;
+		}
+		if( followed != this ) {
+			return followed.canWrite();
+		}
 		switch (accessClass()) {
 		case 0: return canOwnerWrite();
 		case 1: return canGroupWrite();
@@ -125,6 +141,14 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	default public boolean canExecute() throws IOException {
+		// access follows a symbolic link, as access(2) does; the link's own mode bits are no guide (D78)
+		FileSource followed = followLinks();
+		if( followed == null ) {
+			return false;
+		}
+		if( followed != this ) {
+			return followed.canExecute();
+		}
 		switch (accessClass()) {
 		case 0: return canOwnerExecute();
 		case 1: return canGroupExecute();
@@ -241,7 +265,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @throws IOException 
 	 */
 	default byte[] head(int size) throws IOException {
-		int want = (int) Math.max(0, Math.min((long) size, length()));
+		int want = (int) Math.max(0, Math.min((long) size, contentLength()));
 		byte [] ret = new byte[want];
 		int got = 0;
 		if( want > 0 ) {
@@ -263,7 +287,7 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * @throws IOException 
 	 */
 	default byte[] tail(int size) throws IOException {
-		long len = length();
+		long len = contentLength();
 		int want = (int) Math.max(0, Math.min((long) size, len));
 		byte [] ret = new byte[want];
 		int got = 0;
@@ -356,7 +380,37 @@ public interface FileSource extends Serializable, Comparable<Object> {
 
 	public boolean isHidden()  throws IOException ;
 
+	/**
+	 * The length of this file as the file system reports it for the path itself: a symbolic link
+	 * answers with its own length, the length of its text, as lstat does. Use {@link #contentLength()}
+	 * for how much reading it gives.
+	 */
 	public long length() throws IOException ;
+
+	/**
+	 * How many bytes reading this file gives: {@link #length()}, except that a symbolic link
+	 * is followed (as open does) to the file it leads to; a link that leads nowhere has none.
+	 */
+	public default long contentLength() throws IOException {
+		FileSource f = followLinks();
+		return f == null ? 0 : f.length();   // a loop of links leads nowhere
+	}
+
+	/**
+	 * What open follows a symbolic link to: this file when it isn't a link, else the first file on
+	 * the way that isn't. Null for a loop of links.
+	 */
+	private FileSource followLinks() throws IOException {
+		FileSource f = this;
+		for(int hops = 0; hops < 40; hops++) {
+			FileSource next = f.getLinkedTo();
+			if( next == null ) {
+				return f;
+			}
+			f = next;
+		}
+		return null;
+	}
 
 	public long lastAccessTime () throws IOException;
 

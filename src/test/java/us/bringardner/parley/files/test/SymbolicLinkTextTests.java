@@ -33,13 +33,15 @@ public class SymbolicLinkTextTests {
 		// relative text stays relative, and the link follows it
 		FileSource rel = f.createSymbolicLink(dir.getChild("rel"), "real.txt");
 		assertEquals("real.txt", rel.getLinkText());
-		assertEquals(4, dir.getChild("rel").length());
+		assertEquals(4, dir.getChild("rel").contentLength());
+		assertEquals("real.txt".length(), dir.getChild("rel").length());
 
 		// text that goes up and comes back down
 		assertTrue(dir.getChild("sub").mkdirs());
 		FileSource up = f.createSymbolicLink(dir.getChild("sub").getChild("up"), "../real.txt");
 		assertEquals("../real.txt", up.getLinkText());
-		assertEquals(4, dir.getChild("sub").getChild("up").length());
+		assertEquals(4, dir.getChild("sub").getChild("up").contentLength());
+		assertEquals("../real.txt".length(), dir.getChild("sub").getChild("up").length());
 
 		// text that names nothing
 		FileSource dangling = f.createSymbolicLink(dir.getChild("dangling"), "no/such/place");

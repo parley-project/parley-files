@@ -201,7 +201,7 @@ final class FileSourceChannels {
 		@Override
 		public long size() throws IOException {
 			ensureOpen();
-			return file.length();
+			return file.contentLength();
 		}
 
 		@Override
