@@ -630,8 +630,16 @@ public class FileProxy implements FileSource {
 	 * @see us.bringardner.parley.files.FileSource#lastModified()
 	 */
 	public long lastModified() {
-		long ret = target.lastModified();
-		return ret;
+		Path path = target.toPath();
+		if( Files.isSymbolicLink(path) ) {
+			// a link has its own time (D78); java.io.File would answer the target's
+			try {
+				return Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS).toMillis();
+			} catch (IOException e) {
+				return 0L;
+			}
+		}
+		return target.lastModified();
 	}
 
 	/* (non-Javadoc)
@@ -1327,14 +1335,16 @@ public class FileProxy implements FileSource {
 
 	@Override
 	public long lastAccessTime() throws IOException {
-		BasicFileAttributes attrs = Files.readAttributes(target.toPath(), BasicFileAttributes.class);
+		// a link has its own times (D78)
+		BasicFileAttributes attrs = Files.readAttributes(target.toPath(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
 		FileTime time = attrs.lastAccessTime();
 		return time.toMillis();
 	}
 
 	@Override
 	public long creationTime() throws IOException {
-		BasicFileAttributes attrs = Files.readAttributes(target.toPath(), BasicFileAttributes.class);
+		// a link has its own times (D78)
+		BasicFileAttributes attrs = Files.readAttributes(target.toPath(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
 		FileTime time = attrs.creationTime();
 		return time.toMillis();		
 	}
