@@ -68,16 +68,16 @@ final class PrincipalCache {
 	}
 
 	/**
-	 * @return the owner of path (links followed, like Files.getOwner)
+	 * @return the owner of path (links not followed: a link has its own owner, D78)
 	 */
 	static UserPrincipal owner(Path path) throws IOException {
-		Integer uid = id(path, "unix:uid");
+		Integer uid = id(path, "unix:uid", LinkOption.NOFOLLOW_LINKS);
 		if( uid == null ) {
-			return Files.getOwner(path);
+			return Files.getOwner(path, LinkOption.NOFOLLOW_LINKS);
 		}
 		return lookup(USERS, uid, () -> {
 			try {
-				return Files.getOwner(path);
+				return Files.getOwner(path, LinkOption.NOFOLLOW_LINKS);
 			} catch (IOException e) {
 				throw new java.io.UncheckedIOException(e);
 			}
