@@ -142,12 +142,15 @@ public class FileProxy implements FileSource {
 		}
 
 		@Override
-		public boolean canOwnerRead() throws IOException {		 
-			return canRead();
+		public boolean canOwnerRead() throws IOException {
+			// the owner's bit, like the group's and other's; canRead() asks about the user this process runs as
+			Set<PosixFilePermission> p = getPosixPermissions();
+			return p != null ? p.contains(PosixFilePermission.OWNER_READ) : canRead();
 		}
 		@Override
-		public boolean canOwnerWrite() throws IOException {		
-			return canWrite();
+		public boolean canOwnerWrite() throws IOException {
+			Set<PosixFilePermission> p = getPosixPermissions();
+			return p != null ? p.contains(PosixFilePermission.OWNER_WRITE) : canWrite();
 		}
 		@Override
 		public boolean canGroupRead() throws IOException {
