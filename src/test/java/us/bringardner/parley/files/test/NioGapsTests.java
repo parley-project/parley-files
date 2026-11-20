@@ -225,7 +225,7 @@ public class NioGapsTests {
 	/** Setting one file's group used to change the owner's primary group, and so other files' group. */
 	@Test
 	public void memorySetGroupIsPerFile() throws IOException {
-		MemoryFileSourceFactory factory = new MemoryFileSourceFactory();
+		MemoryFileSourceFactory factory = MemoryUsers.root();   // giving a file to a group is the superuser's (D79)
 		factory.connect();
 		FileSource a = factory.createFileSource("/a.txt");
 		FileSource b = factory.createFileSource("/b.txt");

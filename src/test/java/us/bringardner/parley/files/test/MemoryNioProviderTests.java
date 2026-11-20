@@ -15,7 +15,7 @@ public class MemoryNioProviderTests extends AbstractNioProviderTests {
 		localTestFileDirPath = testFilesDir(MemoryNioProviderTests.class);
 		remoteTestFileDirPath = "/NioProviderTests";
 		localCacheDirPath = scratchDir("MemoryNioProviderTestsCache");
-		factory = new MemoryFileSourceFactory();
+		factory = MemoryUsers.nonRoot();
 
 		if(!factory.connect(new Properties())) {
 			throw new IOException("Can't connect");

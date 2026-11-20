@@ -27,7 +27,7 @@ public class MemoryLinkAttributesTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		f = new MemoryFileSourceFactory();
+		f = MemoryUsers.nonRoot();
 		f.connect();
 		assertTrue(f.createFileSource("/d").mkdirs());
 	}
@@ -96,6 +96,16 @@ public class MemoryLinkAttributesTest {
 		assertEquals(OLD, target.lastAccessTime());
 		assertEquals(OLD, target.creationTime());
 
+	}
+
+	/** Giving a link to someone is the superuser's (D79). */
+	@Test
+	void ownerAndGroupOfALinkAreSetOnTheLinkNotTheTarget() throws Exception {
+		f = MemoryUsers.root();
+		f.connect();
+		assertTrue(f.createFileSource("/d").mkdirs());
+		FileSource target = oldFile("/d/target");
+		FileSource link = f.createSymbolicLink(f.createFileSource("/d/ln"), target);
 		FileSourceUser who = new FileSourceUser(1234, "someoneElse", 4321, "theirGroup");
 		assertTrue(link.setOwner(who));
 		assertTrue(link.setGroup(who.getGroup()));
