@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -1008,6 +1009,131 @@ public abstract class FileLikeBehaviorTests {
 				return hex(in.readAllBytes());
 			}
 		});
+	}
+
+	/**
+	 * Every stream through a symbolic link is a stream of the file it leads to, never of the link (D78): reading,
+	 * appending, writing at a position, through a link to a link and through a linked folder, and writing through
+	 * a link to nothing makes what it points at. Afterwards the link is still a link, with the same text.
+	 */
+	@Test
+	void everyStreamThroughASymbolicLinkIsTheFilesNotTheLinks() throws Exception {
+		requireSymbolicLinks();
+		oracleSymlink("ln.txt", "five.txt");
+		FileSource link = symlink("ln.txt", "five.txt");
+		oracleSymlink("ln2.txt", "ln.txt");   // a link to a link
+		symlink("ln2.txt", "ln.txt");
+		oracleSymlink("lndir", "dir");        // a linked folder
+		symlink("lndir", "dir");
+		oracleSymlink("dangling.txt", "made.txt");
+		symlink("dangling.txt", "made.txt");
+		String text = link.getLinkText();
+
+		// appending to the file through the link
+		streamsAgree("append through the link", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("ln.txt"), true)) {
+				out.write(new byte[] {7, 8});
+			}
+			return hex(Files.readAllBytes(oracle("five.txt").toPath()));
+		}, () -> {
+			try (OutputStream out = sourceFor("ln.txt").getOutputStream(true)) {
+				out.write(new byte[] {7, 8});
+			}
+			try (java.io.InputStream in = sourceFor("five.txt").getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+		// reading from a position through a link to a link
+		streamsAgree("read from a position through two links", () -> {
+			try (java.io.InputStream in = Files.newInputStream(oracle("ln2.txt").toPath())) {
+				in.skip(2);
+				return hex(in.readAllBytes());
+			}
+		}, () -> {
+			try (java.io.InputStream in = sourceFor("ln2.txt").getInputStream(2)) {
+				return hex(in.readAllBytes());
+			}
+		});
+		// a seekable stream
+		streamsAgree("seekable stream through the link", () -> hex(Files.readAllBytes(oracle("five.txt").toPath())), () -> {
+			us.bringardner.parley.files.ISeekableInputStream in = sourceFor("ln.txt").getSeekableInputStream();
+			try {
+				byte[] b = new byte[(int) in.length()];
+				int got = 0;
+				while( got < b.length ) {
+					int n = in.read(b, got, b.length - got);
+					if( n < 0 ) {
+						break;
+					}
+					got += n;
+				}
+				return hex(Arrays.copyOf(b, got));
+			} finally {
+				in.close();
+			}
+		});
+		if( supportsRandomAccess() ) {
+			streamsAgree("write at a position through the link", () -> {
+				try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(oracle("ln.txt"), "rw")) {
+					raf.seek(1);
+					raf.write(new byte[] {0x55});
+				}
+				return hex(Files.readAllBytes(oracle("five.txt").toPath()));
+			}, () -> {
+				try (us.bringardner.parley.files.IRandomAccessStream raf = sourceFor("ln.txt").getRandomAccessStream("rw")) {
+					raf.seek(1);
+					raf.write(new byte[] {0x55});
+				}
+				try (java.io.InputStream in = sourceFor("five.txt").getInputStream()) {
+					return hex(in.readAllBytes());
+				}
+			});
+			streamsAgree("random access read through the link", () -> {
+				try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(oracle("ln.txt"), "r")) {
+					return "" + raf.length() + ":" + raf.read();
+				}
+			}, () -> {
+				try (us.bringardner.parley.files.IRandomAccessStream raf = sourceFor("ln.txt").getRandomAccessStream("r")) {
+					return "" + raf.length() + ":" + raf.read();
+				}
+			});
+		}
+		// through a linked folder
+		streamsAgree("write through a linked folder", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("lndir/in.txt"))) {
+				out.write(new byte[] {3});
+			}
+			return hex(Files.readAllBytes(oracle("dir/in.txt").toPath()));
+		}, () -> {
+			try (OutputStream out = sourceFor("lndir/in.txt").getOutputStream()) {
+				out.write(new byte[] {3});
+			}
+			try (java.io.InputStream in = sourceFor("dir/in.txt").getInputStream()) {
+				return hex(in.readAllBytes());
+			}
+		});
+		// a link to nothing: writing makes what it points at, and the link stays a link
+		streamsAgree("write through a link to nothing", () -> {
+			try (OutputStream out = new java.io.FileOutputStream(oracle("dangling.txt"))) {
+				out.write(new byte[] {4});
+			}
+			return hex(Files.readAllBytes(oracle("made.txt").toPath())) + " " + Files.isSymbolicLink(oracle("dangling.txt").toPath());
+		}, () -> {
+			try (OutputStream out = sourceFor("dangling.txt").getOutputStream()) {
+				out.write(new byte[] {4});
+			}
+			try (java.io.InputStream in = sourceFor("made.txt").getInputStream()) {
+				return hex(in.readAllBytes()) + " " + (sourceFor("dangling.txt").getLinkedTo() != null);
+			}
+		});
+		// still links, with the text they had
+		streamsAgree("the link is still a link", () -> "a.txt", () -> {
+			FileSource l = sourceFor("ln.txt");
+			return l.getLinkedTo() == null ? "not a link" : "a.txt";
+		});
+		if( text != null ) {
+			streamsAgree("the link's text is unchanged", () -> text, () -> sourceFor("ln.txt").getLinkText());
+		}
 	}
 
 	/** The canonical path of oracle(relative), or of the backend's, relative to its test tree. */
