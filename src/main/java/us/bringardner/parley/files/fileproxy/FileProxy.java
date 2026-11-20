@@ -305,7 +305,9 @@ public class FileProxy implements FileSource {
 			try {
 				// a link's own time (D78)
 				PosixFileAttributeView v = Files.getFileAttributeView(target.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-				v.setTimes(null,FileTime.from(Instant.ofEpochMilli(time)), null);
+				// both times given, the modified time as it is (see setLastModifiedTime)
+				FileTime modified = Files.readAttributes(target.toPath(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).lastModifiedTime();
+				v.setTimes(modified, FileTime.from(Instant.ofEpochMilli(time)), null);
 
 			} catch(Throwable e) {
 				return false;
@@ -833,7 +835,10 @@ public class FileProxy implements FileSource {
 			// a link's own time (D78); java.io.File would set the target's
 			try {
 				BasicFileAttributeView v = Files.getFileAttributeView(path, BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-				v.setTimes(FileTime.fromMillis(time), null, null);
+				// both times given, the access time as it is: setting one and passing null for the other
+				// fails on some systems for a link itself
+				FileTime access = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).lastAccessTime();
+				v.setTimes(FileTime.fromMillis(time), access, null);
 				return true;
 			} catch (IOException | RuntimeException e) {
 				return false;
