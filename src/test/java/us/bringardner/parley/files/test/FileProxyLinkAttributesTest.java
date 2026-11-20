@@ -56,6 +56,7 @@ public class FileProxyLinkAttributesTest {
 		assertEquals(LINK_TIME, f.lastModified(), "lastModified");
 		assertEquals(LINK_TIME, f.lastAccessTime(), "lastAccessTime");
 		assertNotEquals(TARGET_TIME, f.lastModified());
+		assertEquals(TARGET_TIME, f.contentLastModified(), "what the link leads to was last changed then");
 	}
 
 	@Test

@@ -376,6 +376,11 @@ public class DelegatingFileSource implements FileSource {
 	}
 
 	@Override
+	public long contentLastModified() throws java.io.IOException {
+		return real.contentLastModified();
+	}
+
+	@Override
 	public long length() throws java.io.IOException {
 		return real.length();
 	}

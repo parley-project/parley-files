@@ -400,6 +400,17 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 * What open follows a symbolic link to: this file when it isn't a link, else the first file on
 	 * the way that isn't. Null for a loop of links.
 	 */
+	/**
+	 * When what this path leads to was last changed. For a file that is not a link it is {@link #lastModified()};
+	 * for a symbolic link {@link #lastModified()} is the link's own time, as lstat has it, and this is the time of
+	 * the file it leads to (0 if it leads nowhere). Use it to tell whether the content has changed, as
+	 * {@link #contentLength()} is the size of that content.
+	 */
+	public default long contentLastModified() throws IOException {
+		FileSource f = followLinks();
+		return f == null ? 0 : f.lastModified();   // a loop of links leads nowhere
+	}
+
 	private FileSource followLinks() throws IOException {
 		FileSource f = this;
 		for(int hops = 0; hops < 40; hops++) {

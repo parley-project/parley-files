@@ -53,12 +53,15 @@ public class MemoryLinkAttributesTest {
 		assertEquals(OLD, target.lastModified());
 		assertEquals(OLD, target.lastAccessTime());
 		assertEquals(OLD, target.creationTime());
+		assertEquals(OLD, link.contentLastModified(), "the content is the file's: when it changed is the file's time");
+		assertEquals(OLD, target.contentLastModified());
 	}
 
 	@Test
 	void symbolicLinkToNothingHasItsOwnTime() throws Exception {
 		FileSource link = f.createSymbolicLink(f.createFileSource("/d/dangling"), f.createFileSource("/d/nothing"));
 		assertTrue(link.lastModified() > OLD);
+		assertEquals(0, link.contentLastModified(), "it leads nowhere");
 	}
 
 	@Test
