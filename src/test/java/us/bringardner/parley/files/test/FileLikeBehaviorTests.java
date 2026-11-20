@@ -59,6 +59,21 @@ public abstract class FileLikeBehaviorTests {
 	}
 
 	/**
+	 * The permission bits a symbolic link has of its own (D78), as the system or server that holds it
+	 * shows them: a link's mode is not the same everywhere (rwxrwxrwx on Linux, the umask's on macOS).
+	 * The default asks the file system for a local file and says rwxrwxrwx (as on Linux) for the
+	 * others; a backend whose server is not Linux overrides it with what the server answers.
+	 *
+	 * @return the bits that are set; null means all nine
+	 */
+	protected java.util.Set<java.nio.file.attribute.PosixFilePermission> ownPermissionsOfALink(FileSource link) throws Exception {
+		if( link.getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory ) {
+			return Files.getPosixFilePermissions(java.nio.file.Paths.get(link.getAbsolutePath()), java.nio.file.LinkOption.NOFOLLOW_LINKS);
+		}
+		return null;
+	}
+
+	/**
 	 * Whether the backend can create symbolic links ({@link FileSourceFactory#createSymbolicLink}).
 	 * A backend whose protocol has no links says false, and the link tests are skipped for it.
 	 */
@@ -1054,10 +1069,7 @@ public abstract class FileLikeBehaviorTests {
 		FileSource link = symlink("ln.txt", "five.txt");
 		FileSource viaPath = sourceFor("ln.txt");
 		// the link's own bits, as ls -l shows them (D78): the system's for a local file, rwxrwxrwx (as on Linux) for the others
-		java.util.Set<java.nio.file.attribute.PosixFilePermission> own = null;
-		if( link.getFileSourceFactory() instanceof us.bringardner.parley.files.fileproxy.FileProxyFactory ) {
-			own = Files.getPosixFilePermissions(java.nio.file.Paths.get(link.getAbsolutePath()), java.nio.file.LinkOption.NOFOLLOW_LINKS);
-		}
+		java.util.Set<java.nio.file.attribute.PosixFilePermission> own = ownPermissionsOfALink(link);
 		String[] methods = {"canOwnerRead", "canOwnerWrite", "canOwnerExecute", "canGroupRead", "canGroupWrite",
 				"canGroupExecute", "canOtherRead", "canOtherWrite", "canOtherExecute"};
 		java.util.List<java.nio.file.attribute.PosixFilePermission> bits = java.util.List.of(
