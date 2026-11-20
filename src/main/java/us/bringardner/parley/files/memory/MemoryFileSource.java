@@ -1759,10 +1759,33 @@ public class MemoryFileSource implements FileSource {
 		return true;
 	}
 
+	/** The superuser, who may change owners and groups as root does on Unix (the user with id 0; not on Windows). */
+	private static boolean isSuperuser(FileSourceUser me) {
+		return !FileSourceFactory.isWindows() && me.getId() == 0;
+	}
+
+	/** Whether the user is in the group: the primary group counts as well as the others. */
+	private static boolean isInGroup(FileSourceUser me, GroupPrincipal group) {
+		GroupPrincipal primary = me.getGroup();
+		return me.hasGroup(group.getName()) || primary != null && primary.getName() != null && primary.getName().equals(group.getName());
+	}
+
+	private boolean isOwnedBy(FileSourceUser me) throws IOException {
+		UserPrincipal owner = getOwner();
+		return owner != null && owner.getName() != null && owner.getName().equalsIgnoreCase(me.getName());
+	}
+
 	@Override
 	public boolean setGroup(GroupPrincipal group1) throws IOException {
 		boolean ret = false;
 		if (group1 instanceof FileSourceGroup) {
+			// as on Unix: only the superuser may give a file to any group; its owner may give it to a group the owner is in
+			FileSourceUser me = getFileSourceFactory().whoAmI();
+			GroupPrincipal now = getGroup();
+			boolean same = now != null && now.getName() != null && now.getName().equals(group1.getName());
+			if( !same && !isSuperuser(me) && !(isOwnedBy(me) && isInGroup(me, group1)) ) {
+				return false;
+			}
 			// was also getOwner().setGroup(group), which changed the owner's
 			// primary group, and so the group of every file it owns
 			attributeNode().group = (FileSourceGroup) group1;
@@ -1776,6 +1799,12 @@ public class MemoryFileSource implements FileSource {
 	public boolean setOwner(UserPrincipal owner1) throws IOException {
 		boolean ret = false;
 		if (owner1 instanceof FileSourceUser) {
+			// as on Unix: only the superuser may give a file away
+			FileSourceUser current = getOwner();
+			boolean same = current != null && current.getName() != null && current.getName().equals(owner1.getName());
+			if( !same && !isSuperuser(getFileSourceFactory().whoAmI()) ) {
+				return false;
+			}
 			attributeNode().owner = (FileSourceUser) owner1;
 			ret = true;
 		}

@@ -117,6 +117,9 @@ public interface FileSource extends Serializable, Comparable<Object> {
 		if( followed != this ) {
 			return followed.canRead();
 		}
+		if( isSuperuser() ) {
+			return true;
+		}
 		switch (accessClass()) {
 		case 0: return canOwnerRead();
 		case 1: return canGroupRead();
@@ -132,6 +135,9 @@ public interface FileSource extends Serializable, Comparable<Object> {
 		}
 		if( followed != this ) {
 			return followed.canWrite();
+		}
+		if( isSuperuser() ) {
+			return true;
 		}
 		switch (accessClass()) {
 		case 0: return canOwnerWrite();
@@ -149,11 +155,23 @@ public interface FileSource extends Serializable, Comparable<Object> {
 		if( followed != this ) {
 			return followed.canExecute();
 		}
+		if( isSuperuser() ) {
+			// as on Unix: anything can be searched, and a file can be run if anyone can run it
+			return isDirectory() || canOwnerExecute() || canGroupExecute() || canOtherExecute();
+		}
 		switch (accessClass()) {
 		case 0: return canOwnerExecute();
 		case 1: return canGroupExecute();
 		default: return canOtherExecute();
 		}
+	}
+
+	/**
+	 * Whether the current user is the superuser, who is not held to the permission bits (as on Unix): the
+	 * user with id 0. There is no such user on Windows, where the file system's own rules decide.
+	 */
+	private boolean isSuperuser() {
+		return !FileSourceFactory.isWindows() && getFileSourceFactory().whoAmI().getId() == 0;
 	}
 
 	/** 0 = the current user owns the file, 1 = is in its group, 2 = other. */

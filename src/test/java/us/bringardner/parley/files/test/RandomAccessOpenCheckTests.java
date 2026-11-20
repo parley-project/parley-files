@@ -70,7 +70,7 @@ public class RandomAccessOpenCheckTests {
 	}
 
 	private static FileSource readOnlyFile() throws IOException {
-		MemoryFileSourceFactory factory = new MemoryFileSourceFactory();
+		MemoryFileSourceFactory factory = MemoryUsers.nonRoot();
 		factory.connect();
 		FileSource file = factory.createFileSource("/readOnly.bin");
 		try (OutputStream out = file.getOutputStream()) {

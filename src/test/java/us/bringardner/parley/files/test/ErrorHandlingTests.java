@@ -31,7 +31,7 @@ public class ErrorHandlingTests {
 
 	@BeforeEach
 	public void setup() throws IOException {
-		factory = new MemoryFileSourceFactory();
+		factory = MemoryUsers.nonRoot();
 		factory.connect();
 		assertTrue(factory.createFileSource("/d").mkdirs());
 	}
