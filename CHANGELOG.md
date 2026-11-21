@@ -2,6 +2,16 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-21: extended attributes, D101)
+
+- **Extended attributes on `FileSource`**: `isExtendedAttributesSupported()`, `getExtendedAttributeNames()`,
+  `getExtendedAttribute(name)` (null when there is none), `setExtendedAttribute(name, value)` and
+  `removeExtendedAttribute(name)` (false when there was none). Default methods: a provider that keeps none answers
+  false and the other four throw `UnsupportedOperationException`. Names are opaque text kept as given. Local files
+  keep them through `UserDefinedFileAttributeView` (the `user.` namespace on Unix, alternate streams on Windows, and
+  false where the file system has none); the memory provider keeps them with the file (a rename takes them along);
+  `DelegatingFileSource` passes them on. The NFS provider (parley-files-nfs) uses RFC 8276.
+
 ### Added (2026-11-21: local folders are watched by the operating system, D99)
 
 - **`FileProxyFactory.newWatchService()`** gives a service that lists a local folder as soon as the operating system
