@@ -7,6 +7,8 @@ import java.io.InterruptedIOException;
 import java.util.concurrent.TimeUnit;
 import java.nio.charset.Charset;
 
+import us.bringardner.parley.core.NamedExecutors;
+
 /**
  * Runs an external command and captures its output safely.
  * 
@@ -81,7 +83,7 @@ public final class ProcessRunner {
 	}
 
 	private static Thread drain(InputStream in, ByteArrayOutputStream sink, String name) {
-		Thread t = new Thread(() -> {
+		return NamedExecutors.start("ProcessRunner-"+name, () -> {
 			byte[] buf = new byte[8192];
 			try (InputStream is = in) {
 				int n;
@@ -93,9 +95,6 @@ public final class ProcessRunner {
 			} catch (IOException e) {
 				// process ended / stream closed
 			}
-		}, "ProcessRunner-"+name);
-		t.setDaemon(true);
-		t.start();
-		return t;
+		});
 	}
 }

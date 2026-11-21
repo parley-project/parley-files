@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import us.bringardner.parley.core.NamedExecutors;
+
 /**
  * {@code @cmd:COMMAND ARGS}: what a command prints, such as a password manager's CLI
  * ({@code @cmd:op read op://Dev/db/password}, {@code @cmd:pass show prod/db}). One trailing
@@ -116,9 +118,7 @@ public class CommandCredentialProvider implements CredentialProvider {
 			throw new CredentialException(ref, "can't run "+args.get(0), e);
 		}
 		Reader reader = new Reader(p.getInputStream());
-		Thread t = new Thread(reader, "cmd credential");
-		t.setDaemon(true);
-		t.start();
+		Thread t = NamedExecutors.start("cmd credential", reader);
 		try {
 			long timeout = timeout(request);
 			if( !p.waitFor(timeout, TimeUnit.MILLISECONDS)) {
