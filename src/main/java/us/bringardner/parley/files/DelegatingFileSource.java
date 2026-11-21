@@ -621,6 +621,31 @@ public class DelegatingFileSource implements FileSource {
 	}
 
 	@Override
+	public boolean isExtendedAttributesSupported() throws java.io.IOException {
+		return real.isExtendedAttributesSupported();
+	}
+
+	@Override
+	public java.util.List<String> getExtendedAttributeNames() throws java.io.IOException {
+		return real.getExtendedAttributeNames();
+	}
+
+	@Override
+	public byte[] getExtendedAttribute(String name) throws java.io.IOException {
+		return real.getExtendedAttribute(name);
+	}
+
+	@Override
+	public void setExtendedAttribute(String name, byte[] value) throws java.io.IOException {
+		real.setExtendedAttribute(name, value);
+	}
+
+	@Override
+	public boolean removeExtendedAttribute(String name) throws java.io.IOException {
+		return real.removeExtendedAttribute(name);
+	}
+
+	@Override
 	public us.bringardner.parley.files.ISeekableInputStream getSeekableInputStream() throws java.io.IOException {
 		return real.getSeekableInputStream();
 	}

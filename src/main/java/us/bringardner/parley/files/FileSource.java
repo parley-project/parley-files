@@ -37,6 +37,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
+import java.util.List;
 
 import us.bringardner.parley.files.lock.FileSourceLock;
 import us.bringardner.parley.files.lock.LockBackend;
@@ -723,6 +724,52 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	 */
 	public default String getLinkText() throws IOException {
 		return null;
+	}
+
+	/**
+	 * Extended attributes: small named byte values kept with a file (download origin, tags, checksums, ...). The names
+	 * are opaque text, kept exactly as given; on a local Unix file system they live in the user namespace, so
+	 * "origin" is stored as "user.origin". Providers that have nowhere to keep them answer false here and throw
+	 * UnsupportedOperationException from the other four methods, so callers can tell the cases apart without
+	 * catching anything.
+	 * 
+	 * @return true when this file can keep extended attributes
+	 */
+	public default boolean isExtendedAttributesSupported() throws IOException {
+		return false;
+	}
+
+	/**
+	 * @return the names of the extended attributes, in no particular order; empty when there are none
+	 * @throws UnsupportedOperationException when {@link #isExtendedAttributesSupported()} is false
+	 */
+	public default List<String> getExtendedAttributeNames() throws IOException {
+		throw new UnsupportedOperationException("Extended attributes are not supported");
+	}
+
+	/**
+	 * @return the value, or null when there is no attribute of that name
+	 * @throws UnsupportedOperationException when {@link #isExtendedAttributesSupported()} is false
+	 */
+	public default byte[] getExtendedAttribute(String name) throws IOException {
+		throw new UnsupportedOperationException("Extended attributes are not supported");
+	}
+
+	/**
+	 * Creates the attribute or replaces its value.
+	 * 
+	 * @throws UnsupportedOperationException when {@link #isExtendedAttributesSupported()} is false
+	 */
+	public default void setExtendedAttribute(String name, byte[] value) throws IOException {
+		throw new UnsupportedOperationException("Extended attributes are not supported");
+	}
+
+	/**
+	 * @return true when the attribute existed and is gone, false when there was none of that name
+	 * @throws UnsupportedOperationException when {@link #isExtendedAttributesSupported()} is false
+	 */
+	public default boolean removeExtendedAttribute(String name) throws IOException {
+		throw new UnsupportedOperationException("Extended attributes are not supported");
 	}
 
 	public abstract ISeekableInputStream getSeekableInputStream() throws IOException;

@@ -97,6 +97,8 @@ public class MemoryFileSource implements FileSource {
 	private List<MemoryFileSource> hardLinks = new ArrayList<>();
 	/** Children that exist (or have existing descendants / are links). Held strongly. */
 	private Map<String,MemoryFileSource> kidsMap = new TreeMap<>();
+	// extended attributes, shared by a node that takes over from a removed hard link or a renamed one; guarded by itself
+	private Map<String,byte[]> xattrs = new TreeMap<>();
 	/**
 	 * Children that were only looked up (createFileSource on a path that doesn't
 	 * exist). Held weakly so lookups don't grow the tree forever, while anyone
@@ -310,6 +312,7 @@ public class MemoryFileSource implements FileSource {
 		heir.canOtherWrite = canOtherWrite;
 		heir.canOtherExecute = canOtherExecute;
 		heir.owner = owner;
+		heir.xattrs = xattrs;
 		heir.group = group;
 		heir.lastModified = lastModified;
 		heir.lastAccessed = lastAccessed;
@@ -874,6 +877,7 @@ public class MemoryFileSource implements FileSource {
 		d.lastAccessed = lastAccessed;
 		d.createDate = createDate;
 		d.owner = owner;
+		d.xattrs = xattrs;
 		for (MemoryFileSource other : hardLinks) {
 			other.hardTarget = d;
 			d.hardLinks.add(other);
@@ -936,6 +940,7 @@ public class MemoryFileSource implements FileSource {
 						newFile.lastAccessed = lastAccessed;
 						newFile.createDate = createDate;
 						newFile.owner = owner;
+						newFile.xattrs = xattrs;
 						newFile.isRoot = isRoot;
 
 						// Move the children too (previously a renamed directory lost them).
@@ -1457,6 +1462,44 @@ public class MemoryFileSource implements FileSource {
 	@Override
 	public FileSource getLinkedTo() {
 		return symlinkTarget;
+	}
+
+	@Override
+	public boolean isExtendedAttributesSupported() {
+		return true;
+	}
+
+	@Override
+	public java.util.List<String> getExtendedAttributeNames() {
+		Map<String,byte[]> map = attributeNode().xattrs;
+		synchronized (map) {
+			return new ArrayList<>(map.keySet());
+		}
+	}
+
+	@Override
+	public byte[] getExtendedAttribute(String name) {
+		Map<String,byte[]> map = attributeNode().xattrs;
+		synchronized (map) {
+			byte[] v = map.get(name);
+			return v == null ? null : v.clone();
+		}
+	}
+
+	@Override
+	public void setExtendedAttribute(String name, byte[] value) {
+		Map<String,byte[]> map = attributeNode().xattrs;
+		synchronized (map) {
+			map.put(name, value.clone());
+		}
+	}
+
+	@Override
+	public boolean removeExtendedAttribute(String name) {
+		Map<String,byte[]> map = attributeNode().xattrs;
+		synchronized (map) {
+			return map.remove(name) != null;
+		}
 	}
 
 	@Override

@@ -1243,6 +1243,71 @@ public class FileProxy implements FileSource {
 		return Files.isSymbolicLink(path) ? Files.readSymbolicLink(path).toString() : null;
 	}
 
+	/**
+	 * The file's own user attributes (not a symbolic link's target's); null when the file system keeps none.
+	 */
+	private java.nio.file.attribute.UserDefinedFileAttributeView xattrView() {
+		Path path = target.toPath();
+		if( Files.isSymbolicLink(path) ) {
+			return null;
+		}
+		return Files.getFileAttributeView(path, java.nio.file.attribute.UserDefinedFileAttributeView.class);
+	}
+
+	private java.nio.file.attribute.UserDefinedFileAttributeView needXattrView() {
+		java.nio.file.attribute.UserDefinedFileAttributeView view = xattrView();
+		if( view == null ) {
+			throw new UnsupportedOperationException("Extended attributes are not supported for "+target);
+		}
+		return view;
+	}
+
+	@Override
+	public boolean isExtendedAttributesSupported() throws IOException {
+		java.nio.file.attribute.UserDefinedFileAttributeView view = xattrView();
+		if( view == null ) {
+			return false;
+		}
+		try {
+			view.list();
+			return true;
+		} catch (UnsupportedOperationException | java.nio.file.FileSystemException e) {
+			// a file system that has the view but not the feature (tmpfs without user xattrs, FAT) says so here
+			return false;
+		}
+	}
+
+	@Override
+	public java.util.List<String> getExtendedAttributeNames() throws IOException {
+		return new java.util.ArrayList<>(needXattrView().list());
+	}
+
+	@Override
+	public byte[] getExtendedAttribute(String name) throws IOException {
+		java.nio.file.attribute.UserDefinedFileAttributeView view = needXattrView();
+		if( !view.list().contains(name) ) {
+			return null;
+		}
+		java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(view.size(name));
+		view.read(name, buf);
+		return buf.array();
+	}
+
+	@Override
+	public void setExtendedAttribute(String name, byte[] value) throws IOException {
+		needXattrView().write(name, java.nio.ByteBuffer.wrap(value));
+	}
+
+	@Override
+	public boolean removeExtendedAttribute(String name) throws IOException {
+		java.nio.file.attribute.UserDefinedFileAttributeView view = needXattrView();
+		if( !view.list().contains(name) ) {
+			return false;
+		}
+		view.delete(name);
+		return true;
+	}
+
 	@Override
 	public FileSource getLinkedTo() {
 		FileSource ret = null;
