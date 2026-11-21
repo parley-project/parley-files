@@ -165,9 +165,13 @@ public class NioGapsTests {
 
 	@ParameterizedTest
 	@ValueSource(strings = { "local", "memory" })
-	public void watchServiceUnsupported(String kind) throws IOException {
+	public void watchServiceIsMadeAndClosed(String kind) throws IOException {
 		FileSystem fs = base(kind).getFileSystem();
-		assertThrows(UnsupportedOperationException.class, () -> fs.newWatchService());
+		// supported now (NioWatchTest watches a folder with it): entries added and removed
+		try (java.nio.file.WatchService w = fs.newWatchService()) {
+			assertNotNull(w);
+			org.junit.jupiter.api.Assertions.assertNull(w.poll());
+		}
 	}
 
 	@ParameterizedTest

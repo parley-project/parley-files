@@ -2,6 +2,14 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-21: watching a folder through java.nio.file, D98)
+
+- **`FileSystem.newWatchService()` and `Path.register(...)` work** for a FileSource file system (they threw
+  `UnsupportedOperationException`): a view of the factory's own `FileSourceFactory.newWatchService()`, so an
+  `nfs://` folder is watched by its change attribute. `ENTRY_CREATE` and `ENTRY_DELETE` are reported, the context is
+  the entry's name as a relative path; `ENTRY_MODIFY` is accepted and never reported (file content is not watched),
+  and `ENTRY_MODIFY` alone is refused. Registering a folder twice with one service gives two keys.
+
 ### Added (2026-11-21: watching a folder, D94)
 
 - **Watching a folder for entries added and removed**, as `java.nio.file.WatchService` does for a `Path`:

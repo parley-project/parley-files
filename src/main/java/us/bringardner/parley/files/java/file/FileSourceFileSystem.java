@@ -33,6 +33,8 @@ import java.nio.file.FileSystem;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.nio.file.FileSystems;
+import java.nio.file.WatchEvent.Kind;
+import java.nio.file.WatchEvent.Modifier;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.UserPrincipal;
@@ -235,13 +237,14 @@ public class FileSourceFileSystem extends FileSystem {
 	}
 
 	/**
-	 * Not supported: FileSources have no change notification. This throws
-	 * here, as the FileSystem contract allows, rather than returning a
-	 * WatchService whose every method (even close) threw RuntimeException.
+	 * A watch service for folders of any FileSource: the factory's own {@link FileSourceFactory#newWatchService()}
+	 * (polling unless the factory can tell of changes better), seen as a java.nio.file WatchService. It reports
+	 * ENTRY_CREATE and ENTRY_DELETE only, see {@link FileSourcePath#register(WatchService, Kind[], Modifier...)}.
 	 */
 	@Override
 	public WatchService newWatchService() throws IOException {
-		throw new UnsupportedOperationException("WatchService is not supported");
+		FileSourceFactory f = factory;
+		return new FileSourceNioWatchService(f == null ? new us.bringardner.parley.files.watch.PollingWatchService() : f.newWatchService());
 	}
 
 	
