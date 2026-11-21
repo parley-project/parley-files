@@ -932,6 +932,23 @@ public interface FileSource extends Serializable, Comparable<Object> {
 	}
 
 	/**
+	 * Watch this folder for entries added and removed, with a service from {@link FileSourceFactory#newWatchService()}:
+	 * {@code service.register(this, kinds)}.
+	 * @param service the service that tells of the changes
+	 * @param kinds what to be told of: {@link FileSourceWatchEvent.Kind#ENTRY_CREATE}, {@link FileSourceWatchEvent.Kind#ENTRY_DELETE}
+	 * or both (none means both)
+	 * @return the key; read its events when the service gives it
+	 * @throws java.nio.file.NotDirectoryException if this isn't a folder
+	 * @throws java.nio.file.ProviderMismatchException if the service can't watch this provider's folders
+	 * @throws java.nio.file.ClosedWatchServiceException if the service is closed
+	 * @throws IOException if the folder can't be read
+	 * @since 2.0.0
+	 */
+	default FileSourceWatchKey register(FileSourceWatchService service, FileSourceWatchEvent.Kind... kinds) throws IOException {
+		return service.register(this, kinds);
+	}
+
+	/**
 	 * What this file system can guarantee: its lock scope, whether create, mkdir and replace are
 	 * atomic, whether sync is durable, whether its operations are applied in one order. A file
 	 * system that doesn't say gets {@link FileSourceCapabilities#defaults(LockScope)}: what the
