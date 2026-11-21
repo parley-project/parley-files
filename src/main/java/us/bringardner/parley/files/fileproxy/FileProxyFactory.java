@@ -203,6 +203,19 @@ public class FileProxyFactory extends FileSourceFactory {
 
 
 
+	/**
+	 * Where the operating system tells of changes to a folder (Linux, Windows), a service that lists a folder at once when
+	 * it does, so a change is seen in milliseconds; elsewhere (macOS: the JDK's own service polls) the polling service.
+	 * The system property parley.files.watch.native = false asks for polling.
+	 */
+	@Override
+	public us.bringardner.parley.files.FileSourceWatchService newWatchService() throws IOException {
+		if( NativeWatchService.isAvailable() ) {
+			return new NativeWatchService();
+		}
+		return super.newWatchService();
+	}
+
 	@Override
 	public FileSource createFileSource(String fullPath) throws IOException {
 
