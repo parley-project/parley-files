@@ -330,6 +330,8 @@ try (FileSourceWatchService service = folder.getFileSourceFactory().newWatchServ
 The default service lists each watched folder every `parley.files.watch.pollInterval` milliseconds (default 2000) and
 compares; a provider may do better. `OVERFLOW` means look at the folder again.
 
+Local folders (`FileProxyFactory`) are watched by what the operating system says where the JDK tells of changes by itself (Linux, Windows): the folder is listed at once when the system reports a change, and every 30 seconds as a net. On macOS the JDK's own service only polls, so the 2 second polling service is used. `parley.files.watch.native=false` asks for polling everywhere.
+
 If the `parley.files.lockDirectory` system property is set, that directory is used for every path. Otherwise it is
 the first `.parley-locks` directory in the locked path or above it: an application marks the root it serves by
 creating `.parley-locks` there, and every process serving that root shares its locks. Without either,

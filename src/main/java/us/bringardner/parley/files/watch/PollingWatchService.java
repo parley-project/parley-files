@@ -113,6 +113,32 @@ public class PollingWatchService implements FileSourceWatchService {
 		return null;
 	}
 
+	/**
+	 * Look at a folder now, in the polling thread, for every key that watches it: for a service that is told by
+	 * something else that the folder changed (the file system's own notification), and polls only to be sure.
+	 * @param folder the folder that changed
+	 */
+	protected final void lookNow(FileSource folder) {
+		if( closed ) {
+			return;
+		}
+		try {
+			scheduler.execute(() -> {
+				for (PollKey key : keys) {
+					if( key.valid && key.folder.equals(folder) ) {
+						try {
+							look(key);
+						} catch (Throwable t) {
+							LOG.log(System.Logger.Level.WARNING, "Watching "+key.folder+" failed: "+t);
+						}
+					}
+				}
+			});
+		} catch (java.util.concurrent.RejectedExecutionException e) {
+			// closed
+		}
+	}
+
 	@Override
 	public FileSourceWatchKey register(FileSource folder, Kind... kinds) throws IOException {
 		Objects.requireNonNull(folder, "folder");

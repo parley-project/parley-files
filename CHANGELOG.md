@@ -2,6 +2,14 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-21: local folders are watched by the operating system, D99)
+
+- **`FileProxyFactory.newWatchService()`** gives a service that lists a local folder as soon as the operating system
+  says it changed (inotify on Linux, ReadDirectoryChangesW on Windows), with a 30 second poll as a net under it; events,
+  keys and `OVERFLOW` are those of the polling service. Where the JDK's own watch service only polls (macOS) the 2 second
+  polling service is kept. `parley.files.watch.native=false` asks for polling. New `PollingWatchService.lookNow(folder)`
+  (protected) for a service that is told of a change by something else.
+
 ### Changed (2026-11-21: threads from Parley, D96)
 
 - The threads of `ProcessRunner` (the output readers), `CommandCredentialProvider` (the reader) and the delete-on-exit
