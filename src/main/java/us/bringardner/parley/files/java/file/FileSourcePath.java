@@ -432,12 +432,19 @@ public class FileSourcePath implements Path {
 	}
 
 	/**
-	 * Watch services aren't supported (as {@link FileSourceFileSystem#newWatchService()}).
-	 * @throws UnsupportedOperationException always
+	 * Watch this folder with a watch service of {@link FileSourceFileSystem#newWatchService()}. ENTRY_CREATE and
+	 * ENTRY_DELETE are reported; ENTRY_MODIFY is accepted and never reported (a change to the content of a file is not
+	 * watched), and ENTRY_MODIFY alone is refused. The modifiers are ignored.
+	 * @throws ProviderMismatchException if the service isn't one of a FileSource file system
+	 * @throws UnsupportedOperationException for another kind, or for ENTRY_MODIFY alone
+	 * @throws java.nio.file.NotDirectoryException if this isn't a folder
 	 */
 	@Override
 	public WatchKey register(WatchService watcher, Kind<?>[] events, Modifier... modifiers) throws IOException {
-		throw new UnsupportedOperationException("WatchService is not supported");
+		if( !(watcher instanceof FileSourceNioWatchService) ) {
+			throw new ProviderMismatchException("Not a watch service of a FileSource file system: "+watcher);
+		}
+		return ((FileSourceNioWatchService) watcher).register(this, events);
 	}
 
 	/**
