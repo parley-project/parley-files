@@ -2,6 +2,11 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Changed (2026-11-21: threads from Parley, D96)
+
+- The threads of `ProcessRunner` (the output readers), `CommandCredentialProvider` (the reader) and the delete-on-exit
+  shutdown hook are made with parley-core's `NamedExecutors`, not `new Thread`. Names and daemon behavior are kept.
+
 ### Added (2026-11-21: watching a folder through java.nio.file, D98)
 
 - **`FileSystem.newWatchService()` and `Path.register(...)` work** for a FileSource file system (they threw

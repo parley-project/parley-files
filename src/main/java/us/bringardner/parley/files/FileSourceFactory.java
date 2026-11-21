@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.Collections;
 
+import us.bringardner.parley.core.NamedExecutors;
 import us.bringardner.parley.core.BaseObject;
 import us.bringardner.parley.core.util.LogHelper;
 import us.bringardner.parley.files.credentials.CredentialRef;
@@ -999,7 +1000,7 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 			}
 			pendingDeletes.add(this);
 			if( !deleteHookInstalled ) {
-				Runtime.getRuntime().addShutdownHook(new Thread(FileSourceFactory::deleteAllRegisteredFiles, "FileSource deleteOnExit"));
+				Runtime.getRuntime().addShutdownHook(NamedExecutors.newThread("FileSource deleteOnExit", FileSourceFactory::deleteAllRegisteredFiles));
 				deleteHookInstalled = true;
 			}
 		}
