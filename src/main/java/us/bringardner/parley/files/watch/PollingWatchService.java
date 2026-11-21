@@ -233,7 +233,7 @@ public class PollingWatchService implements FileSourceWatchService {
 	/** the closed marker wakes every taker, so it goes back for the next */
 	private PollKey unmarked(PollKey k) {
 		if( k == closedMarker ) {
-			ready.offer(closedMarker);
+			ready.add(closedMarker);
 			throw new ClosedWatchServiceException();
 		}
 		return k;
@@ -250,7 +250,7 @@ public class PollingWatchService implements FileSourceWatchService {
 			k.valid = false;
 		}
 		keys.clear();
-		ready.offer(closedMarker);
+		ready.add(closedMarker);
 	}
 
 	private final class PollKey implements FileSourceWatchKey {
@@ -292,7 +292,7 @@ public class PollingWatchService implements FileSourceWatchService {
 				}
 				if( !events.isEmpty() && !signalled ) {
 					signalled = true;
-					ready.offer(this);
+					ready.add(this);
 				}
 			}
 		}
@@ -327,7 +327,7 @@ public class PollingWatchService implements FileSourceWatchService {
 					if( events.isEmpty() ) {
 						signalled = false;
 					} else {
-						ready.offer(this);
+						ready.add(this);
 					}
 				}
 				return true;
