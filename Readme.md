@@ -313,6 +313,23 @@ if (root.getLockScope().compareTo(LockScope.HOST) < 0) {
 ```
 
 **Local files.** The operating system locks real files, so each locked file gets a lock file in a lock directory.
+## Watching a folder
+
+`folder.register(service, kinds...)` tells of the entries added to and removed from a folder, as Java's `WatchService`
+does for a `Path` (a rename is a delete and a create):
+
+```java
+try (FileSourceWatchService service = folder.getFileSourceFactory().newWatchService()) {
+    folder.register(service, Kind.ENTRY_CREATE, Kind.ENTRY_DELETE);
+    FileSourceWatchKey key = service.take();
+    for (FileSourceWatchEvent e : key.pollEvents()) { /* e.kind(), e.name() */ }
+    key.reset();
+}
+```
+
+The default service lists each watched folder every `parley.files.watch.pollInterval` milliseconds (default 2000) and
+compares; a provider may do better. `OVERFLOW` means look at the folder again.
+
 If the `parley.files.lockDirectory` system property is set, that directory is used for every path. Otherwise it is
 the first `.parley-locks` directory in the locked path or above it: an application marks the root it serves by
 creating `.parley-locks` there, and every process serving that root shares its locks. Without either,

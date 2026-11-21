@@ -3,6 +3,7 @@
 
 parley.files.defaultFactory
 parley.files.lockDirectory
+parley.files.watch.pollInterval
 parley.credentials.cmd.enabled
 parley.credentials.cmd.timeout
 parley.credentials.keyStore

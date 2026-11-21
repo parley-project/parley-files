@@ -2,6 +2,20 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-21: watching a folder, D94)
+
+- **Watching a folder for entries added and removed**, as `java.nio.file.WatchService` does for a `Path`:
+  `FileSourceFactory.newWatchService()` makes a `FileSourceWatchService`, `folder.register(service, kinds...)` returns a
+  `FileSourceWatchKey`, and the service gives (`take()`, `poll()`) the keys that have `FileSourceWatchEvent`s. The kinds are
+  `ENTRY_CREATE` and `ENTRY_DELETE` (a rename is both; `OVERFLOW` means look at the folder again). Only the folder's entries
+  are told, not what is in a file.
+- **`PollingWatchService`** (`us.bringardner.parley.files.watch`) is what every factory gives by default and
+  `FileSourceWatchService.polling(Duration)` gives for any provider: one `NamedThreadFactory` thread lists each watched
+  folder on an interval and compares names (so a coarse clock can't hide a change). The interval is the system property
+  `parley.files.watch.pollInterval` in milliseconds (default 2000, at least 50). A provider overrides `newWatchService()`
+  to do better, or subclasses `PollingWatchService` and overrides `changeStamp(folder)` so a folder is listed only when
+  a cheap stamp (a change counter) moves.
+
 ### Changed (2026-11-14: DelegatingFileSource passes through with no tree)
 
 - **`DelegatingFileSource` moves to `us.bringardner.parley.files`** (from `tree`), next to

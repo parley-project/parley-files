@@ -1083,6 +1083,20 @@ public abstract class FileSourceFactory extends BaseObject implements URLStreamH
 	public abstract FileSourceFactory createThreadSafeCopy();
 
 	/**
+	 * A service that tells of the entries added to and removed from the folders of this factory (see
+	 * {@link FileSourceWatchService}). The default lists each watched folder on an interval
+	 * ({@link us.bringardner.parley.files.watch.PollingWatchService}, system property
+	 * {@value us.bringardner.parley.files.watch.PollingWatchService#PROPERTY_POLL_INTERVAL}); a provider that can do better
+	 * (its file system tells of changes, or has a cheap way to see that a folder is unchanged) overrides this.
+	 * @return a new service, to be closed by the caller
+	 * @throws IOException if the service can't be made
+	 * @since 2.0.0
+	 */
+	public FileSourceWatchService newWatchService() throws IOException {
+		return new us.bringardner.parley.files.watch.PollingWatchService();
+	}
+
+	/**
 	 * Most FileSourceFactories represent a remote file system.
 	 * Typically some information is required such as the host
 	 * name of the remote server and a userId / password.  A FileSourceFactory 
