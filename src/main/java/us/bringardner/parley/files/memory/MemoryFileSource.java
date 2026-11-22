@@ -1465,40 +1465,75 @@ public class MemoryFileSource implements FileSource {
 	}
 
 	@Override
-	public boolean isExtendedAttributesSupported() {
-		return true;
-	}
-
-	@Override
-	public java.util.List<String> getExtendedAttributeNames() {
-		Map<String,byte[]> map = attributeNode().xattrs;
-		synchronized (map) {
-			return new ArrayList<>(map.keySet());
+	public java.nio.file.attribute.UserDefinedFileAttributeView getUserDefinedFileAttributeView() {
+		if( !exists() ) {
+			return null;
 		}
+		return new MemoryUserDefinedFileAttributeView(attributeNode().xattrs);
 	}
 
-	@Override
-	public byte[] getExtendedAttribute(String name) {
-		Map<String,byte[]> map = attributeNode().xattrs;
-		synchronized (map) {
-			byte[] v = map.get(name);
-			return v == null ? null : v.clone();
+	/** the user attributes of a memory file: a map the file shares with whatever takes over from it */
+	private static class MemoryUserDefinedFileAttributeView implements java.nio.file.attribute.UserDefinedFileAttributeView {
+		private final Map<String,byte[]> map;
+
+		MemoryUserDefinedFileAttributeView(Map<String,byte[]> map) {
+			this.map = map;
 		}
-	}
 
-	@Override
-	public void setExtendedAttribute(String name, byte[] value) {
-		Map<String,byte[]> map = attributeNode().xattrs;
-		synchronized (map) {
-			map.put(name, value.clone());
+		@Override
+		public String name() {
+			return "user";
 		}
-	}
 
-	@Override
-	public boolean removeExtendedAttribute(String name) {
-		Map<String,byte[]> map = attributeNode().xattrs;
-		synchronized (map) {
-			return map.remove(name) != null;
+		@Override
+		public List<String> list() {
+			synchronized (map) {
+				return new ArrayList<>(map.keySet());
+			}
+		}
+
+		private byte[] value(String name) throws java.nio.file.FileSystemException {
+			synchronized (map) {
+				byte[] v = map.get(name);
+				if( v == null ) {
+					throw new java.nio.file.FileSystemException(name, null, "No such attribute");
+				}
+				return v;
+			}
+		}
+
+		@Override
+		public int size(String name) throws java.nio.file.FileSystemException {
+			return value(name).length;
+		}
+
+		@Override
+		public int read(String name, java.nio.ByteBuffer dst) throws java.nio.file.FileSystemException {
+			byte[] v = value(name);
+			if( dst.remaining() < v.length ) {
+				throw new java.nio.file.FileSystemException(name, null, "The buffer is too small for the "+v.length+" bytes");
+			}
+			dst.put(v);
+			return v.length;
+		}
+
+		@Override
+		public int write(String name, java.nio.ByteBuffer src) {
+			byte[] v = new byte[src.remaining()];
+			src.get(v);
+			synchronized (map) {
+				map.put(name, v);
+			}
+			return v.length;
+		}
+
+		@Override
+		public void delete(String name) throws java.nio.file.FileSystemException {
+			synchronized (map) {
+				if( map.remove(name) == null ) {
+					throw new java.nio.file.FileSystemException(name, null, "No such attribute");
+				}
+			}
 		}
 	}
 

@@ -4,13 +4,14 @@
 
 ### Added (2026-11-21: extended attributes, D101)
 
-- **Extended attributes on `FileSource`**: `isExtendedAttributesSupported()`, `getExtendedAttributeNames()`,
-  `getExtendedAttribute(name)` (null when there is none), `setExtendedAttribute(name, value)` and
-  `removeExtendedAttribute(name)` (false when there was none). Default methods: a provider that keeps none answers
-  false and the other four throw `UnsupportedOperationException`. Names are opaque text kept as given. Local files
-  keep them through `UserDefinedFileAttributeView` (the `user.` namespace on Unix, alternate streams on Windows, and
-  false where the file system has none); the memory provider keeps them with the file (a rename takes them along);
-  `DelegatingFileSource` passes them on. The NFS provider (parley-files-nfs) uses RFC 8276.
+- **Extended attributes on `FileSource`**: one default method, `getUserDefinedFileAttributeView()`, which returns the
+  JDK's own `java.nio.file.attribute.UserDefinedFileAttributeView` (`list`, `size`, `read`, `write`, `delete`) or null
+  when the file can't keep them (the provider has nowhere to put them, the file system has none, the file isn't there
+  or is a symbolic link), as `Files.getFileAttributeView` answers. Names are opaque text kept as given. Local files
+  hand out the JDK's view (the `user.` namespace on Unix, alternate streams on Windows); the memory provider keeps them
+  with the file (a rename takes them along); `DelegatingFileSource` passes the view on; and
+  `Files.getFileAttributeView(path, UserDefinedFileAttributeView.class)` on a FileSource path gives it too. The NFS
+  provider (parley-files-nfs) uses RFC 8276.
 
 ### Added (2026-11-21: local folders are watched by the operating system, D99)
 

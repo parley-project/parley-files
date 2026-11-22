@@ -905,6 +905,14 @@ public class FileSourceFileSystemProvider extends FileSystemProvider {
 	@Override
 	public <V extends FileAttributeView> V getFileAttributeView(Path path, Class<V> type, LinkOption... options) {
 		validate(path);
+		if( type == java.nio.file.attribute.UserDefinedFileAttributeView.class ) {
+			// extended attributes (D101): the file's own view, null where it keeps none, as the JDK answers
+			try {
+				return (V) resolve(path, options).getUserDefinedFileAttributeView();
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		}
 		if( !type.isAssignableFrom(FileSourcePosixFileAttributeView.class) ) {
 			return null;
 		}
