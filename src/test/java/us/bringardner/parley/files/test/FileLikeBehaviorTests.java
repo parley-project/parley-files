@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceFactory;
 import us.bringardner.parley.files.fileproxy.SymbolicLinkSupport;
+import us.bringardner.parley.logging.testing.ErrorsExpected;
 
 /**
  * A FileSource acts like a java.io.File: it can do more, never less, so every question a File
@@ -797,6 +798,7 @@ public abstract class FileLikeBehaviorTests {
 	}
 
 	@Test
+	@ErrorsExpected
 	void openingForWriteWhatCantBeWritten() throws Exception {
 		for(String r : new String[] {"dir", "nodir/x.txt", "plain.txt/under"}) {
 			streamsAgree("open '" + r + "' for writing", () -> {
