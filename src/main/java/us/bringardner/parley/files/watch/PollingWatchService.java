@@ -44,6 +44,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import us.bringardner.parley.core.BaseObject;
 import us.bringardner.parley.core.NamedThreadFactory;
 import us.bringardner.parley.files.FileSource;
 import us.bringardner.parley.files.FileSourceWatchEvent;
@@ -66,7 +67,7 @@ import us.bringardner.parley.files.FileSourceWatchService;
  * milliseconds, default {@value #DEFAULT_POLL_INTERVAL} (at least {@value #MIN_POLL_INTERVAL}).
  * @since 2.0.0
  */
-public class PollingWatchService implements FileSourceWatchService {
+public class PollingWatchService extends BaseObject implements FileSourceWatchService {
 
 	public static final String PROPERTY_POLL_INTERVAL = "parley.files.watch.pollInterval";
 	public static final long DEFAULT_POLL_INTERVAL = 2000;
@@ -74,7 +75,6 @@ public class PollingWatchService implements FileSourceWatchService {
 	public static final int MAX_FAILURES = 5;
 	public static final int MAX_QUEUED = 512;
 
-	private static final System.Logger LOG = System.getLogger(PollingWatchService.class.getName());
 	private static final Kind[] BOTH = {Kind.ENTRY_CREATE, Kind.ENTRY_DELETE};
 
 	private final Duration interval;
@@ -129,7 +129,7 @@ public class PollingWatchService implements FileSourceWatchService {
 						try {
 							look(key);
 						} catch (Throwable t) {
-							LOG.log(System.Logger.Level.WARNING, "Watching "+key.folder+" failed: "+t);
+							logWarn("Watching "+key.folder+" failed: "+t);
 						}
 					}
 				}
@@ -192,7 +192,7 @@ public class PollingWatchService implements FileSourceWatchService {
 			try {
 				look(key);
 			} catch (Throwable t) {
-				LOG.log(System.Logger.Level.WARNING, "Watching "+key.folder+" failed: "+t);
+				logWarn("Watching "+key.folder+" failed: "+t);
 			}
 		}
 	}
@@ -202,7 +202,7 @@ public class PollingWatchService implements FileSourceWatchService {
 		Set<String> now;
 		try {
 			if( !folder.isDirectory() ) {
-				LOG.log(System.Logger.Level.DEBUG, "The watched folder "+folder+" is gone or isn't a folder now");
+				logDebug("The watched folder "+folder+" is gone or isn't a folder now");
 				key.cancel();
 				return;
 			}
@@ -215,11 +215,11 @@ public class PollingWatchService implements FileSourceWatchService {
 			key.stamp = stamp;
 		} catch (IOException | RuntimeException e) {
 			if( ++key.failures >= MAX_FAILURES ) {
-				LOG.log(System.Logger.Level.WARNING, "Watching "+folder+" ended: it could not be listed "+MAX_FAILURES
+				logWarn("Watching "+folder+" ended: it could not be listed "+MAX_FAILURES
 						+" times in a row ("+e+")");
 				key.cancel();
 			} else {
-				LOG.log(System.Logger.Level.DEBUG, "Listing "+folder+" for the watch failed: "+e);
+				logDebug("Listing "+folder+" for the watch failed: "+e);
 			}
 			return;
 		}

@@ -205,6 +205,22 @@
 			<!-- same core as parley-net needs (BJL-51/55); was bjl_core -->
 			<version>${project.version}</version>
 		</dependency>
+
+		<!-- The tests' logger (ParleyLogger) and its helper that changes a level and puts it back; the parent's surefire
+		     configuration sets the default level. Test scope only: libraries never bring a logger of their own. -->
+		<dependency>
+			<groupId>us.bringardner.parley</groupId>
+			<artifactId>parley-logging</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>us.bringardner.parley</groupId>
+			<artifactId>parley-logging</artifactId>
+			<version>${project.version}</version>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>us.bringardner.parley</groupId>
 			<artifactId>parley-io</artifactId>
