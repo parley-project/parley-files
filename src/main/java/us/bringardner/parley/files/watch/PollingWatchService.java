@@ -80,6 +80,8 @@ public class PollingWatchService extends BaseObject implements FileSourceWatchSe
 	private final Duration interval;
 	private final ScheduledExecutorService scheduler;
 	private final List<PollKey> keys = new CopyOnWriteArrayList<PollKey>();
+	/** serializes register so the same folder is not registered twice; keys has its own concurrency control */
+	private final Object registerLock = new Object();
 	/** the keys with events, and at the end the closed marker */
 	private final BlockingQueue<PollKey> ready = new LinkedBlockingQueue<PollKey>();
 	private final PollKey closedMarker = new PollKey(null, EnumSet.noneOf(Kind.class));
@@ -154,7 +156,7 @@ public class PollingWatchService extends BaseObject implements FileSourceWatchSe
 		if( wanted.isEmpty() ) {
 			wanted.addAll(Arrays.asList(BOTH));
 		}
-		synchronized (keys) {
+		synchronized (registerLock) {
 			for (PollKey k : keys) {
 				if( k.valid && k.folder.equals(folder) ) {
 					k.setKinds(wanted);
