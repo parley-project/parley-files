@@ -2,6 +2,16 @@
 
 ## parley-files 2.0.0 (unreleased)
 
+### Added (2026-11-28: replacing a file's contents safely)
+
+- **`FileSourceReplace`**: `replace(target, writer | bytes | source)` replaces a file's contents so a failure never
+  leaves it half written. Where the file exists and its file system says `atomicReplace()`, the new contents go to a
+  hidden file in the same folder, which gets the old file's permissions (`copyAccess`) and is renamed over it
+  (`renameTo(dest, true)`); on any failure the hidden file is deleted and the old file is as it was. Otherwise the
+  contents are written to the file itself. `isOneStep(target)` says which. Deciding whether the file may be replaced
+  (locking it, checking nobody changed it) is left to the caller. For the editors (`edit`, Scribe), which each had their
+  own copy of this.
+
 ### Added (2026-11-21: extended attributes, D101)
 
 - **Extended attributes on `FileSource`**: one default method, `getUserDefinedFileAttributeView()`, which returns the
